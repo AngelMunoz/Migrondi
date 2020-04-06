@@ -5,25 +5,14 @@ open System.IO
 open System.Data.SQLite
 open FSharp.Data.Dapper
 open Types
-open Database
 open System.Text.RegularExpressions
 
 
 module Migrations =
-    [<CLIMutable>]
-    type Migration =
-        { Id: int64
-          Name: string
-          Date: int64 }
+    let inline private (=>) (column: string) (value: 'T) = column, box value
+    let private versionPattern = Regex @"(V|v)[0-9]{1,}"
 
-    type MigrationFile =
-        { name: string
-          version: int
-          content: string }
-
-    let versionPattern = Regex @"(V|v)[0-9]{1,}"
-
-    let getMigrations() =
+    let private getMigrations() =
         let path = Path.Combine(".", "migrations")
         let dir = DirectoryInfo(path)
 
@@ -70,7 +59,6 @@ module Migrations =
                       "Version" => migration.version
                       "Date" => DateTimeOffset.Now.ToUnixTimeMilliseconds() ])
         }
-
 
 
     let private runMigrations (list: array<MigrationFile>) =
