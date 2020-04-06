@@ -357,3 +357,6 @@ MigrationBackup/
 .ionide/
 
 .db
+
+migrations/
+sqlator.json
