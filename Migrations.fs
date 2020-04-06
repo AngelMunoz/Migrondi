@@ -102,10 +102,7 @@ module Migrations =
     let getSqlatorConfiguration() =
         let dir = Directory.GetCurrentDirectory()
         let info = DirectoryInfo(dir)
-        let file = 
-            info.EnumerateFiles() 
-            |> Seq.tryFind 
-                (fun (f: FileInfo) -> f.Name = "sqlator.json")
+        let file = info.EnumerateFiles() |> Seq.tryFind (fun (f: FileInfo) -> f.Name = "sqlator.json")
 
         let content =
             match file with
@@ -123,7 +120,14 @@ module Migrations =
 
         let fullpath = Path.Combine(path, name)
         let filestr = File.Create(fullpath)
-        filestr.Close()
 
-        let content = [ "------------ UP --------------"; "------------ Down ------------" ]
-        File.AppendAllLines(fullpath, content)
+        let contentBytes =
+            let content =
+                "------------ UP --------------\n-- Write your Up migrations here\n\n"
+                + "------------ Down ------------\n-- Write how to revert the migration here"
+
+            let bytes = Text.Encoding.UTF8.GetBytes(content)
+            ReadOnlySpan<byte>(bytes)
+
+        filestr.Write contentBytes
+        filestr.Close()
