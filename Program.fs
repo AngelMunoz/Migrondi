@@ -1,7 +1,7 @@
 ﻿open CommandLine
 open FSharp.Data.Dapper
 open Sqlator.Options
-
+open Sqlator.Migrations
 
 [<EntryPoint>]
 let main argv =
@@ -12,7 +12,7 @@ let main argv =
   | :? Parsed<obj> as command ->
     match command.Value with 
     | :? NewOptions as newOptions ->
-            printfn "newOptions: %A" newOptions
+            runNewMigration newOptions
     | :? UpOptions as upOptions ->
             printfn "upOptions: %A" upOptions
     | :? DownOptions as downOptions ->

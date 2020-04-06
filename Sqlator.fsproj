@@ -5,8 +5,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
-    <Compile Include="Migrations.fs" />
     <Compile Include="Options.fs" />
+    <Compile Include="Migrations.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>

@@ -6,6 +6,9 @@ open System.Data.SQLite
 open FSharp.Data.Dapper
 open Types
 open System.Text.RegularExpressions
+open Options
+open System.Text.Json
+open System.Text.Json.Serialization
 
 
 module Migrations =
@@ -95,3 +98,32 @@ module Migrations =
             return! migrationsToRun |> Async.Sequential
         }
         |> Async.RunSynchronously
+
+    let getSqlatorConfiguration() =
+        let dir = Directory.GetCurrentDirectory()
+        let info = DirectoryInfo(dir)
+        let file = 
+            info.EnumerateFiles() 
+            |> Seq.tryFind 
+                (fun (f: FileInfo) -> f.Name = "sqlator.json")
+
+        let content =
+            match file with
+            | Some file -> File.ReadAllText(file.FullName)
+            | None -> failwith "sqlator.json file not found, aborting."
+
+        JsonSerializer.Deserialize<SqlatorConfig>(content)
+
+    let runNewMigration (options: NewOptions) =
+        let config = getSqlatorConfiguration()
+
+        let path = Path.GetFullPath(config.migrationsDir)
+        let timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds()
+        let name = sprintf "%s_%i.sql" options.name timestamp
+
+        let fullpath = Path.Combine(path, name)
+        let filestr = File.Create(fullpath)
+        filestr.Close()
+
+        let content = [ "------------ UP --------------"; "------------ Down ------------" ]
+        File.AppendAllLines(fullpath, content)
