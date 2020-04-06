@@ -1,7 +1,14 @@
 namespace Sqlator
 
 module Types =
-    type Todo =
+
+    [<CLIMutable>]
+    type Migration =
         { Id: int64
           Name: string
-          IsDone: bool }
+          Date: int64 }
+
+    type MigrationFile =
+        { name: string
+          version: int
+          content: string }
