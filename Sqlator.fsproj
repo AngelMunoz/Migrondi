@@ -5,11 +5,13 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
-    <Compile Include="Database.fs" />
     <Compile Include="Migrations.fs" />
+    <Compile Include="Options.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="CommandLineParser" Version="2.7.82" />
+    <PackageReference Include="CommandLineParser.FSharp" Version="2.7.82" />
     <PackageReference Include="Dapper" Version="2.0.30" />
     <PackageReference Include="FSharp.Data.Dapper" Version="2.0.0" />
     <PackageReference Include="System.Data.SQLite" Version="1.0.112.0" />
