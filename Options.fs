@@ -1,8 +1,9 @@
 namespace Sqlator
 
-open CommandLine
 
 module Options =
+    open CommandLine
+
     [<Verb("new", HelpText = "Creates a new Migration file.")>]
     type NewOptions =
         { [<Option('n', "name", Required = true, HelpText = "Friendly Name of the Migration you want to create.")>]
@@ -21,8 +22,8 @@ module Options =
     [<Verb("list", HelpText = "List the amount of migrations in the database.")>]
     type ListOptions =
         { [<Option('t', "total", Required = false, HelpText = "Shows every migration ran against the database.")>]
-          total: bool
+          total: bool option
           [<Option('m', "missing", Required = false, HelpText = "Shows the migrations that are pending to run.")>]
-          missing: bool
+          missing: bool option
           [<Option('l', "last", Required = false, HelpText = "Shows the last migration run agains the database.")>]
           last: int option }

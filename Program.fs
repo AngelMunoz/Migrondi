@@ -14,7 +14,7 @@ let main argv =
     | :? NewOptions as newOptions ->
             runNewMigration newOptions
     | :? UpOptions as upOptions ->
-            printfn "upOptions: %A" upOptions
+            runUpMigration upOptions
     | :? DownOptions as downOptions ->
             printfn "downOptions: %A" downOptions
     | :? ListOptions as listOptions ->

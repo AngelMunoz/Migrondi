@@ -2,104 +2,26 @@ namespace Sqlator
 
 open System
 open System.IO
-open System.Data.SQLite
+open Dapper
 open FSharp.Data.Dapper
 open Types
-open System.Text.RegularExpressions
 open Options
 open System.Text.Json
-open System.Text.Json.Serialization
-
+open System.Data.SQLite
 
 module Migrations =
     let inline private (=>) (column: string) (value: 'T) = column, box value
-    let private versionPattern = Regex @"(V|v)[0-9]{1,}"
 
-    let private getMigrations() =
-        let path = Path.Combine(".", "migrations")
-        let dir = DirectoryInfo(path)
+    let private getSeparator (migrationType: MigrationType) (timestamp: int64) =
+        let str =
+            match migrationType with
+            | MigrationType.Up -> "UP"
+            | MigrationType.Down -> "DOWN"
+        sprintf "------------ SQLATOR:%s:%i --------------" str timestamp
 
-        dir.EnumerateFiles()
-        |> Seq.toArray
-        |> Array.Parallel.map (fun file ->
-            let name = file.Name
-            let reader = file.OpenText()
-            let content = reader.ReadToEnd()
-            let splitname = name.Split('.')
-            let filenameerr = sprintf "file: %s does not comply with the \"V[number].[Name].sql\" nomenclature" name
+    let private getConnection (connStr: string) = SqliteConnection(new SQLiteConnection(connStr))
 
-            let version =
-                let v =
-                    if splitname.Length = 3 then splitname.[0] else failwith filenameerr
-                if versionPattern.IsMatch v then v.[1] else failwith filenameerr
-
-            { name = name
-              version =
-                  version
-                  |> Char.GetNumericValue
-                  |> int
-              content = content })
-        |> Array.sortBy (fun m -> m.version)
-
-    let private getConnection() = SqliteConnection(new SQLiteConnection("Data Source=Sqlator.db"))
-
-    let private getLastMigration() =
-        Async.Catch
-            (querySeqAsync<Migration> (getConnection)
-                 { script "Select * FROM Migrations ORDER BY Date DESC LIMIT 1;" })
-
-    let private vMigration (migration: MigrationFile) =
-        let migrationContent =
-            let insertStmn = "INSERT INTO Migrations (Name, Version, Date) VALUES(@Name, @Version, @Date);"
-            sprintf "BEGIN TRANSACTION;\n%s\n%s\nEND TRANSACTION;" migration.content insertStmn
-
-
-        querySingleAsync<int> getConnection {
-            script migrationContent
-            parameters
-                (dict
-                    [ "Name" => migration.name
-                      "Version" => migration.version
-                      "Date" => DateTimeOffset.Now.ToUnixTimeMilliseconds() ])
-        }
-
-
-    let private runMigrations (list: array<MigrationFile>) =
-        match Array.isEmpty list with
-        | false -> list |> Array.map vMigration
-        | true -> Array.empty
-
-    let asyncRunMigrations() =
-        async {
-            let! result = getLastMigration()
-            let migration =
-                match result with
-                | Choice1Of2 migration ->
-                    printfn "Migrations found"
-                    migration |> Seq.tryHead
-                | Choice2Of2 ex ->
-                    printfn "Migrations table not found, starting from scratch"
-                    None
-
-            let migrations = getMigrations()
-
-            let migrationsToRun =
-                match migration with
-                | None -> runMigrations migrations
-                | Some migration ->
-                    let index = migrations |> Array.findIndex (fun m -> m.name = migration.Name)
-                    match index + 1 = migrations.Length with
-                    | true -> Array.empty
-                    | false ->
-                        let pending = migrations |> Array.skip (index + 1)
-                        printfn "Running pending %i migrations" pending.Length
-                        runMigrations pending
-            printfn "Will run %i migrations" migrationsToRun.Length
-            return! migrationsToRun |> Async.Sequential
-        }
-        |> Async.RunSynchronously
-
-    let getSqlatorConfiguration() =
+    let private getSqlatorConfiguration() =
         let dir = Directory.GetCurrentDirectory()
         let info = DirectoryInfo(dir)
         let file = info.EnumerateFiles() |> Seq.tryFind (fun (f: FileInfo) -> f.Name = "sqlator.json")
@@ -110,6 +32,80 @@ module Migrations =
             | None -> failwith "sqlator.json file not found, aborting."
 
         JsonSerializer.Deserialize<SqlatorConfig>(content)
+
+    let private getMigrations (path: string) =
+        let dir = DirectoryInfo(path)
+
+        let fileMapping (file: FileInfo) =
+            let name = file.Name
+            let reader = file.OpenText()
+            let content = reader.ReadToEnd()
+            reader.Close()
+            let split = name.Split('_')
+            let filenameErr =
+                sprintf "File \"%s\" is not a valid migration name. The migration name should look like %s" name
+                    "[NAME]_[TIMESTAMP].sql example: NAME_0123456789.sql"
+
+            let (name, timestamp) =
+                match split.Length = 2 with
+                | true ->
+                    let secondSplit = split.[1].Split(".")
+                    match secondSplit.Length = 2 with
+                    | true -> split.[0], (secondSplit.[0] |> int64)
+                    | false -> failwith filenameErr
+                | false -> failwith filenameErr
+
+            let getSplitContent migrationType =
+                let separator = getSeparator migrationType timestamp
+                content.Split(separator)
+
+            let splitContent = getSplitContent MigrationType.Down
+
+            let upContent, downContent =
+                match splitContent.Length = 2 with
+                | true -> splitContent.[0], splitContent.[1]
+                | false ->
+                    failwith
+                        "The migration file does not contain UP, Down sql statements or it contains more than one section of one of those."
+
+            { name = name
+              timestamp = timestamp
+              upContent = upContent
+              downContent = downContent }
+
+        dir.EnumerateFiles()
+        |> Seq.filter (fun f -> f.Extension = ".sql")
+        |> Seq.toArray
+        |> Array.Parallel.map fileMapping
+        |> Array.sortBy (fun m -> m.timestamp)
+
+
+    let private doesMigrationsTableExists (connection: Connection) =
+
+        async {
+            let query =
+                querySeqAsync<Migration> (fun () -> connection)
+                    { script "Select * FROM Migrations ORDER BY Date DESC LIMIT 1;" }
+            let! getMigrationRecords = Async.Catch query
+            return match getMigrationRecords with
+                   | Choice1Of2 result -> true
+                   | Choice2Of2 exn ->
+                       printfn "%s" exn.Message
+                       false
+        }
+
+    let private createMigrationsTable (connection: Connection) =
+        let query =
+            querySingleAsync<int> (fun () -> connection) {
+                script """
+            CREATE TABLE IF NOT EXISTS Migrations (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name VARCHAR(255) NOT NULL,
+                Date INTEGER NOT NULL
+            );
+            """
+            }
+        Async.Catch query
 
     let runNewMigration (options: NewOptions) =
         let config = getSqlatorConfiguration()
@@ -123,11 +119,41 @@ module Migrations =
 
         let contentBytes =
             let content =
-                "------------ UP --------------\n-- Write your Up migrations here\n\n"
-                + "------------ Down ------------\n-- Write how to revert the migration here"
+                sprintf "------------ SQLATOR:UP:%i --------------\n-- Write your Up migrations here\n\n" timestamp
+                + (sprintf "------------ SQLATOR:DOWN:%i --------------\n-- Write how to revert the migration here"
+                       timestamp)
 
             let bytes = Text.Encoding.UTF8.GetBytes(content)
             ReadOnlySpan<byte>(bytes)
 
         filestr.Write contentBytes
         filestr.Close()
+
+
+    let ensureMigrationsTableExists (constr: string) =
+        let connection = getConnection constr
+        async {
+            let! migrationsTableExists = doesMigrationsTableExists connection
+            let tableExistsOrCreated =
+                let connection = getConnection constr
+                async {
+                    match migrationsTableExists with
+                    | false ->
+                        let! result = createMigrationsTable connection
+                        return match result with
+                               | Choice1Of2 result -> true
+                               | Choice2Of2 exn ->
+                                   printfn "%s" exn.Message
+                                   false
+                    | true -> return true
+                }
+            return! tableExistsOrCreated
+        }
+
+    let runUpMigration (options: UpOptions) =
+        let config = getSqlatorConfiguration()
+        let path = Path.GetFullPath(config.migrationsDir)
+        let migrations = getMigrations path
+        async {
+            let! created = ensureMigrationsTableExists config.connection
+            printfn "%A" created } |> Async.RunSynchronously

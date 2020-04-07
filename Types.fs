@@ -15,5 +15,11 @@ module Types =
 
     type MigrationFile =
         { name: string
-          version: int
-          content: string }
+          timestamp: int64
+          upContent: string
+          downContent: string }
+
+    [<RequireQualifiedAccess>]
+    type MigrationType =
+        | Up
+        | Down
