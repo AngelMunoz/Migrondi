@@ -96,7 +96,7 @@ module Migrations =
 
     let private createMigrationsTable (connection: Connection) =
         let query =
-            querySingleAsync<int> (fun () -> connection) {
+            querySingleOptionAsync (fun () -> connection) {
                 script """
             CREATE TABLE IF NOT EXISTS Migrations (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -107,7 +107,26 @@ module Migrations =
             }
         Async.Catch query
 
-    let runNewMigration (options: NewOptions) =
+    let private ensureMigrationsTableExists (constr: string) =
+        let connection = getConnection constr
+
+        let tableExistsOrCreated (tableExists: Async<bool>) =
+            let connection = getConnection constr
+            async {
+                let! tableExists = tableExists
+                match tableExists with
+                | false ->
+                    let! result = createMigrationsTable connection
+                    return match result with
+                           | Choice1Of2 result -> true
+                           | Choice2Of2 exn ->
+                               printfn "%s" exn.Message
+                               false
+                | true -> return true
+            }
+        tableExistsOrCreated (doesMigrationsTableExists connection)
+
+    let runMigrationsNew (options: NewOptions) =
         let config = getSqlatorConfiguration()
 
         let path = Path.GetFullPath(config.migrationsDir)
@@ -129,28 +148,7 @@ module Migrations =
         filestr.Write contentBytes
         filestr.Close()
 
-
-    let ensureMigrationsTableExists (constr: string) =
-        let connection = getConnection constr
-        async {
-            let! migrationsTableExists = doesMigrationsTableExists connection
-            let tableExistsOrCreated =
-                let connection = getConnection constr
-                async {
-                    match migrationsTableExists with
-                    | false ->
-                        let! result = createMigrationsTable connection
-                        return match result with
-                               | Choice1Of2 result -> true
-                               | Choice2Of2 exn ->
-                                   printfn "%s" exn.Message
-                                   false
-                    | true -> return true
-                }
-            return! tableExistsOrCreated
-        }
-
-    let runUpMigration (options: UpOptions) =
+    let runMigrationsUp (options: UpOptions) =
         let config = getSqlatorConfiguration()
         let path = Path.GetFullPath(config.migrationsDir)
         let migrations = getMigrations path

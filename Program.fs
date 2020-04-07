@@ -12,9 +12,9 @@ let main argv =
   | :? Parsed<obj> as command ->
     match command.Value with 
     | :? NewOptions as newOptions ->
-            runNewMigration newOptions
+            runMigrationsNew newOptions
     | :? UpOptions as upOptions ->
-            runUpMigration upOptions
+            runMigrationsUp upOptions
     | :? DownOptions as downOptions ->
             printfn "downOptions: %A" downOptions
     | :? ListOptions as listOptions ->
