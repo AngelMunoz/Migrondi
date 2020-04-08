@@ -29,6 +29,21 @@
             ],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
+            "console": "internalConsole",
+        },
+        {
+            "name": "Debug up -t 1",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Sqlator.dll",
+            "args": [
+                "up",
+                "-t",
+                "1"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
             "console": "internalConsole"
         }
     ]

@@ -98,11 +98,10 @@ module Migrations =
         let query =
             querySingleOptionAsync (fun () -> connection) {
                 script """
-            CREATE TABLE IF NOT EXISTS Migrations (
+            CREATE TABLE Migrations (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Name VARCHAR(255) NOT NULL,
-                Date INTEGER NOT NULL
-            );
+                Date INTEGER NOT NULL);
             """
             }
         Async.Catch query
@@ -126,6 +125,51 @@ module Migrations =
             }
         tableExistsOrCreated (doesMigrationsTableExists connection)
 
+    let private vMigration (migration: MigrationFile) (migrationType: MigrationType) (connection: string) =
+        let connection = getConnection connection
+
+        let content =
+            match migrationType with
+            | MigrationType.Up -> migration.upContent
+            | MigrationType.Down -> migration.downContent
+
+        let migrationContent =
+            let insertStmn = "INSERT INTO Migrations (Name, Date) VALUES(@Name, @Date);"
+            sprintf "BEGIN TRANSACTION;\n%s\n%s\nEND TRANSACTION;" content insertStmn
+
+
+        let query =
+            querySingleOptionAsync (fun () -> connection) {
+                script migrationContent
+                parameters
+                    (dict
+                        [ "Name" => migration.name
+                          "Date" => DateTimeOffset.Now.ToUnixTimeMilliseconds() ])
+            }
+
+        Async.Catch query
+
+    let private runMigrations (list: array<MigrationFile>) (migrationType: MigrationType) (connection: string) =
+        match Array.isEmpty list with
+        | false -> list |> Array.map (fun migrationFile -> vMigration migrationFile migrationType connection)
+        | true -> Array.empty
+
+    let private getPendingMigrations (migration: Migration option) (migrations: MigrationFile array) =
+        match migration with
+        | None -> migrations
+        | Some migration ->
+            let index = migrations |> Array.findIndex (fun m -> m.name = migration.Name)
+            match index + 1 = migrations.Length with
+            | true -> Array.empty
+            | false ->
+                let pending = migrations |> Array.skip (index + 1)
+                pending
+
+    let private getLastMigration (conStr: string) =
+        Async.Catch
+            (querySeqAsync<Migration> (fun () -> getConnection conStr)
+                 { script "Select * FROM Migrations ORDER BY Date DESC LIMIT 1;" })
+
     let runMigrationsNew (options: NewOptions) =
         let config = getSqlatorConfiguration()
 
@@ -148,10 +192,40 @@ module Migrations =
         filestr.Write contentBytes
         filestr.Close()
 
+
     let runMigrationsUp (options: UpOptions) =
         let config = getSqlatorConfiguration()
         let path = Path.GetFullPath(config.migrationsDir)
-        let migrations = getMigrations path
         async {
             let! created = ensureMigrationsTableExists config.connection
-            printfn "%A" created } |> Async.RunSynchronously
+            if not created then failwith "Could not create the Database/Migrations table"
+            let! lastMigration = getLastMigration config.connection
+            let migration =
+                match lastMigration with
+                | Choice1Of2 migration ->
+                    printfn "Migrations found"
+                    migration |> Seq.tryHead
+                | Choice2Of2 ex ->
+                    printfn "Migrations table not found, starting from scratch"
+                    None
+
+            let migrations = getMigrations path
+            let pendingMigrations = getPendingMigrations migration migrations
+
+            let migrationsToRun =
+                match options.total |> Option.ofNullable with
+                | Some total ->
+                    let total =
+                        match total >= pendingMigrations.Length with
+                        | true -> pendingMigrations.Length - 1
+                        | false -> total
+                    match Array.isEmpty pendingMigrations with
+                    | true -> Array.empty
+                    | false -> pendingMigrations |> Array.take total
+                | None -> pendingMigrations
+
+            return! runMigrations migrationsToRun MigrationType.Up config.connection |> Async.Sequential
+        }
+        |> Async.RunSynchronously
+        |> Array.map (fun query -> printfn "%A" query)
+        |> ignore
