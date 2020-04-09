@@ -133,18 +133,26 @@ module Migrations =
             | MigrationType.Up -> migration.upContent
             | MigrationType.Down -> migration.downContent
 
+        let insertStmn =
+            match migrationType with
+            | MigrationType.Up -> "INSERT INTO Migrations (Name, Date) VALUES(@Name, @Date);"
+            | MigrationType.Down -> "DELETE FROM Migrations WHERE Name = '@Name';"
+
         let migrationContent =
-            let insertStmn = "INSERT INTO Migrations (Name, Date) VALUES(@Name, @Date);"
             sprintf "BEGIN TRANSACTION;\n%s\n%s\nEND TRANSACTION;" content insertStmn
 
+        let queryParams =
+            match migrationType with
+            | MigrationType.Up ->
+                dict
+                    [ "Name" => migration.name
+                      "Date" => DateTimeOffset.Now.ToUnixTimeMilliseconds() ]
+            | MigrationType.Down -> dict [ "Name" => migration.name ]
 
         let query =
             querySingleOptionAsync (fun () -> connection) {
                 script migrationContent
-                parameters
-                    (dict
-                        [ "Name" => migration.name
-                          "Date" => DateTimeOffset.Now.ToUnixTimeMilliseconds() ])
+                parameters queryParams
             }
 
         Async.Catch query
@@ -154,8 +162,8 @@ module Migrations =
         | false -> list |> Array.map (fun migrationFile -> vMigration migrationFile migrationType connection)
         | true -> Array.empty
 
-    let private getPendingMigrations (migration: Migration option) (migrations: MigrationFile array) =
-        match migration with
+    let private getPendingMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
+        match lastMigration with
         | None -> migrations
         | Some migration ->
             let index = migrations |> Array.findIndex (fun m -> m.name = migration.Name)
@@ -164,6 +172,10 @@ module Migrations =
             | false ->
                 let pending = migrations |> Array.skip (index + 1)
                 pending
+
+    let private getRanMigrations (lastMigration: Migration) (migrations: MigrationFile array) =
+        let lastRanIndex = migrations |> Array.findIndex (fun m -> m.name = lastMigration.Name)
+        migrations.[0..lastRanIndex]
 
     let private getLastMigration (conStr: string) =
         Async.Catch
@@ -225,6 +237,43 @@ module Migrations =
                 | None -> pendingMigrations
 
             return! runMigrations migrationsToRun MigrationType.Up config.connection |> Async.Sequential
+        }
+        |> Async.RunSynchronously
+        |> Array.map (fun query -> printfn "%A" query)
+        |> ignore
+
+    let runMigrationsDown (options: DownOptions) =
+        let config = getSqlatorConfiguration()
+        let path = Path.GetFullPath(config.migrationsDir)
+        async {
+            let! lastMigration = getLastMigration config.connection
+            let migration =
+                let message = "Database seems empty, try to run migrations first."
+                match lastMigration with
+                | Choice1Of2 migration ->
+                    match migration |> Seq.tryHead with
+                    | Some m -> m
+                    | None -> failwith message
+                | Choice2Of2 ex ->
+                    printfn "%s" ex.Message
+                    failwith message
+
+            let migrations = getMigrations path
+            let alreadyRanMigrations = getRanMigrations migration migrations |> Array.rev
+
+            let amountToRunDown =
+                match options.total |> Option.ofNullable with
+                | Some number ->
+                    match number > alreadyRanMigrations.Length with
+                    | true ->
+                        printfn "Total [%i] provided exceeds the amount of migrations in the database (%i)" number
+                            alreadyRanMigrations.Length
+                        alreadyRanMigrations.Length
+                    | false -> number
+                | None -> alreadyRanMigrations.Length
+
+            return! runMigrations (alreadyRanMigrations |> Array.take amountToRunDown) MigrationType.Down
+                        config.connection |> Async.Sequential
         }
         |> Async.RunSynchronously
         |> Array.map (fun query -> printfn "%A" query)

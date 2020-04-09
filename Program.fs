@@ -16,7 +16,7 @@ let main argv =
     | :? UpOptions as upOptions ->
             runMigrationsUp upOptions
     | :? DownOptions as downOptions ->
-            printfn "downOptions: %A" downOptions
+            runMigrationsDown downOptions
     | :? ListOptions as listOptions ->
             printfn "listOptions: %A" listOptions
     | _ -> failwith "Unexpected parsing result"
