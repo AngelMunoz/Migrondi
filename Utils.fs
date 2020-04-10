@@ -1,0 +1,158 @@
+namespace Sqlator
+
+open Types
+open System.Data.SQLite
+open System.Data.SqlClient
+open FSharp.Data.Dapper
+open System.IO
+open System.Text.Json
+open System
+open Npgsql
+open System.Data
+
+module internal Utils =
+    module Operators =
+        /// custom tuple box operator, takes a string that represents a column of a table
+        /// and boxes the value on the right
+        let inline (=>) (column: string) (value: 'T) = column, box value
+
+    /// gives the separator string used inside the migrations file
+    let getSeparator (migrationType: MigrationType) (timestamp: int64) =
+        let str =
+            match migrationType with
+            | MigrationType.Up -> "UP"
+            | MigrationType.Down -> "DOWN"
+        sprintf "------------ SQLATOR:%s:%i --------------" str timestamp
+
+
+    let createNewMigrationFile path name =
+        let timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds()
+        let name = sprintf "%s_%i.sql" name timestamp
+        let fullpath = Path.Combine(path, name)
+
+        let contentBytes =
+            let content =
+                sprintf "------------ SQLATOR:UP:%i --------------\n-- Write your Up migrations here\n\n" timestamp
+                + (sprintf "------------ SQLATOR:DOWN:%i --------------\n-- Write how to revert the migration here"
+                       timestamp)
+
+            Text.Encoding.UTF8.GetBytes(content)
+
+        let file = File.Create(fullpath)
+
+        file, contentBytes
+
+
+    /// Gets the configuration for the execution of a command
+    /// <exception cref="FileNotFoundException">
+    /// Thrown when the "sqlator.json" configuration file is not found
+    /// </exception
+    let getSqlatorConfiguration() =
+        let dir = Directory.GetCurrentDirectory()
+        let info = DirectoryInfo(dir)
+        let file = info.EnumerateFiles() |> Seq.tryFind (fun (f: FileInfo) -> f.Name = "sqlator.json")
+
+        let content =
+            match file with
+            | Some file -> File.ReadAllText(file.FullName)
+            | None -> raise (FileNotFoundException "sqlator.json file not found, aborting.")
+
+        let config = JsonSerializer.Deserialize<SqlatorConfig>(content)
+
+        match config.driver with
+        | "MSSQL"
+        | "mssql"
+        | "SQLite"
+        | "sqlite"
+        | "Postrgres"
+        | "postgres" -> config
+        | others ->
+            let drivers = "MSSQL | mssql | SQLite | sqlite | Postrgres | postgres"
+            raise
+                (ArgumentException
+                    (sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers))
+
+    let getPathAndConfig() =
+        let config = getSqlatorConfiguration()
+        let path = Path.GetDirectoryName config.migrationsDir
+        if String.IsNullOrEmpty path then
+            raise
+                (ArgumentException
+                    "Path seems to be empty, please check that you have provided the correct path to your migrations directory")
+        path, config
+
+
+    let getMigrations (path: string) =
+        let dir = DirectoryInfo(path)
+
+        let fileMapping (file: FileInfo) =
+            let name = file.Name
+            let reader = file.OpenText()
+            let content = reader.ReadToEnd()
+            reader.Close()
+            let split = name.Split('_')
+            let filenameErr =
+                sprintf "File \"%s\" is not a valid migration name. The migration name should look like %s" name
+                    "[NAME]_[TIMESTAMP].sql example: NAME_0123456789.sql"
+
+            let (name, timestamp) =
+                match split.Length = 2 with
+                | true ->
+                    let secondSplit = split.[1].Split(".")
+                    match secondSplit.Length = 2 with
+                    | true -> split.[0], (secondSplit.[0] |> int64)
+                    | false -> failwith filenameErr
+                | false -> failwith filenameErr
+
+            let getSplitContent migrationType =
+                let separator = getSeparator migrationType timestamp
+                content.Split(separator)
+
+            let splitContent = getSplitContent MigrationType.Down
+
+            let upContent, downContent =
+                match splitContent.Length = 2 with
+                | true -> splitContent.[0], splitContent.[1]
+                | false ->
+                    failwith
+                        "The migration file does not contain UP, Down sql statements or it contains more than one section of one of those."
+
+            { name = name
+              timestamp = timestamp
+              upContent = upContent
+              downContent = downContent }
+
+        dir.EnumerateFiles()
+        |> Seq.filter (fun f -> f.Extension = ".sql")
+        |> Seq.toArray
+        |> Array.Parallel.map fileMapping
+        |> Array.sortBy (fun m -> m.timestamp)
+
+    let migrationName (migration: MigrationSource) =
+        match migration with
+        | MigrationSource.File migration -> sprintf "%s_%i.sql" migration.name migration.timestamp
+        | MigrationSource.Database migration -> sprintf "%s_%i.sql" migration.Name migration.Timestamp
+
+    let getPendingMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
+        match lastMigration with
+        | None -> migrations
+        | Some migration ->
+            let index = migrations |> Array.findIndex (fun m -> m.name = migration.Name)
+            match index + 1 = migrations.Length with
+            | true -> Array.empty
+            | false ->
+                let pending = migrations |> Array.skip (index + 1)
+                pending
+
+    let getAppliedMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
+        match lastMigration with
+        | Some lastMigration ->
+            let lastRanIndex = migrations |> Array.findIndex (fun m -> m.name = lastMigration.Name)
+            migrations.[0..lastRanIndex]
+        | None -> Array.empty
+
+    /// gets a new sqlite connection based on the connection string
+    let getConnection (driver: Driver) (connectionString: string): Connection =
+        match driver with
+        | Sqlite -> SqliteConnection(new SQLiteConnection(connectionString))
+        | Mssql -> SqlServerConnection(new SqlConnection(connectionString))
