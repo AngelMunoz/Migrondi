@@ -1,91 +1,19 @@
 namespace Sqlator
 
 open System
-open System.IO
-open Dapper
 open FSharp.Data.Dapper
 open Types
 open Options
-open System.Text.Json
-open System.Data.SQLite
+open Utils
+open Utils.Operators
 
 module Migrations =
-    let inline private (=>) (column: string) (value: 'T) = column, box value
 
-    let private getSeparator (migrationType: MigrationType) (timestamp: int64) =
-        let str =
-            match migrationType with
-            | MigrationType.Up -> "UP"
-            | MigrationType.Down -> "DOWN"
-        sprintf "------------ SQLATOR:%s:%i --------------" str timestamp
-
-    let private getConnection (connStr: string) = SqliteConnection(new SQLiteConnection(connStr))
-
-    let private getSqlatorConfiguration() =
-        let dir = Directory.GetCurrentDirectory()
-        let info = DirectoryInfo(dir)
-        let file = info.EnumerateFiles() |> Seq.tryFind (fun (f: FileInfo) -> f.Name = "sqlator.json")
-
-        let content =
-            match file with
-            | Some file -> File.ReadAllText(file.FullName)
-            | None -> failwith "sqlator.json file not found, aborting."
-
-        JsonSerializer.Deserialize<SqlatorConfig>(content)
-
-    let private getMigrations (path: string) =
-        let dir = DirectoryInfo(path)
-
-        let fileMapping (file: FileInfo) =
-            let name = file.Name
-            let reader = file.OpenText()
-            let content = reader.ReadToEnd()
-            reader.Close()
-            let split = name.Split('_')
-            let filenameErr =
-                sprintf "File \"%s\" is not a valid migration name. The migration name should look like %s" name
-                    "[NAME]_[TIMESTAMP].sql example: NAME_0123456789.sql"
-
-            let (name, timestamp) =
-                match split.Length = 2 with
-                | true ->
-                    let secondSplit = split.[1].Split(".")
-                    match secondSplit.Length = 2 with
-                    | true -> split.[0], (secondSplit.[0] |> int64)
-                    | false -> failwith filenameErr
-                | false -> failwith filenameErr
-
-            let getSplitContent migrationType =
-                let separator = getSeparator migrationType timestamp
-                content.Split(separator)
-
-            let splitContent = getSplitContent MigrationType.Down
-
-            let upContent, downContent =
-                match splitContent.Length = 2 with
-                | true -> splitContent.[0], splitContent.[1]
-                | false ->
-                    failwith
-                        "The migration file does not contain UP, Down sql statements or it contains more than one section of one of those."
-
-            { name = name
-              timestamp = timestamp
-              upContent = upContent
-              downContent = downContent }
-
-        dir.EnumerateFiles()
-        |> Seq.filter (fun f -> f.Extension = ".sql")
-        |> Seq.toArray
-        |> Array.Parallel.map fileMapping
-        |> Array.sortBy (fun m -> m.timestamp)
-
-
-    let private doesMigrationsTableExists (connection: Connection) =
-
+    let private asyncDoesMigrationsTableExists (connection: Connection) =
         async {
             let query =
                 querySeqAsync<Migration> (fun () -> connection)
-                    { script "Select * FROM Migrations ORDER BY Date DESC LIMIT 1;" }
+                    { script "Select * FROM Migrations ORDER BY Timestamp DESC LIMIT 1;" }
             let! getMigrationRecords = Async.Catch query
             return match getMigrationRecords with
                    | Choice1Of2 result -> true
@@ -94,40 +22,40 @@ module Migrations =
                        false
         }
 
-    let private createMigrationsTable (connection: Connection) =
+    let private asyncCreateMigrationsTable (connection: Connection) =
         let query =
             querySingleOptionAsync (fun () -> connection) {
                 script """
             CREATE TABLE Migrations (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 Name VARCHAR(255) NOT NULL,
-                Date INTEGER NOT NULL);
+                Timestamp INTEGER NOT NULL);
             """
             }
         Async.Catch query
 
-    let private ensureMigrationsTableExists (constr: string) =
-        let connection = getConnection constr
+    let private asyncEnsureMigrationsTableExists (driver: Driver) (constr: string) =
+        async {
+            let connection = getConnection driver constr
+            let! tableExists = asyncDoesMigrationsTableExists connection
+            match tableExists with
+            | false ->
+                let connection = getConnection driver constr
+                let! result = asyncCreateMigrationsTable connection
+                return match result with
+                       | Choice1Of2 _ -> true
+                       | Choice2Of2 exn ->
+                           printfn "%s" exn.Message
+                           false
+            | true -> return true
+        }
 
-        let tableExistsOrCreated (tableExists: Async<bool>) =
-            let connection = getConnection constr
-            async {
-                let! tableExists = tableExists
-                match tableExists with
-                | false ->
-                    let! result = createMigrationsTable connection
-                    return match result with
-                           | Choice1Of2 result -> true
-                           | Choice2Of2 exn ->
-                               printfn "%s" exn.Message
-                               false
-                | true -> return true
-            }
-        tableExistsOrCreated (doesMigrationsTableExists connection)
-
-    let private vMigration (migration: MigrationFile) (migrationType: MigrationType) (connection: string) =
-        let connection = getConnection connection
-
+    let private asyncApplyMigration
+        (driver: Driver)
+        (connection: string)
+        (migrationType: MigrationType)
+        (migration: MigrationFile)
+        =
         let content =
             match migrationType with
             | MigrationType.Up -> migration.upContent
@@ -135,8 +63,8 @@ module Migrations =
 
         let insertStmn =
             match migrationType with
-            | MigrationType.Up -> "INSERT INTO Migrations (Name, Date) VALUES(@Name, @Date);"
-            | MigrationType.Down -> "DELETE FROM Migrations WHERE Name = '@Name';"
+            | MigrationType.Up -> "INSERT INTO Migrations (Name, Timestamp) VALUES(@Name, @Timestamp);"
+            | MigrationType.Down -> "DELETE FROM Migrations WHERE Timestamp = @Timestamp;"
 
         let migrationContent =
             sprintf "BEGIN TRANSACTION;\n%s\n%s\nEND TRANSACTION;" content insertStmn
@@ -146,135 +74,171 @@ module Migrations =
             | MigrationType.Up ->
                 dict
                     [ "Name" => migration.name
-                      "Date" => DateTimeOffset.Now.ToUnixTimeMilliseconds() ]
-            | MigrationType.Down -> dict [ "Name" => migration.name ]
+                      "Timestamp" => migration.timestamp ]
+            | MigrationType.Down -> dict [ "Timestamp" => migration.timestamp ]
 
-        let query =
-            querySingleOptionAsync (fun () -> connection) {
-                script migrationContent
-                parameters queryParams
-            }
+        querySingleOptionAsync (fun () -> getConnection driver connection) {
+            script migrationContent
+            parameters queryParams
+        }
 
-        Async.Catch query
-
-    let private runMigrations (list: array<MigrationFile>) (migrationType: MigrationType) (connection: string) =
-        match Array.isEmpty list with
-        | false -> list |> Array.map (fun migrationFile -> vMigration migrationFile migrationType connection)
+    let private asyncRunMigrations
+        (driver: Driver)
+        (connection: string)
+        (migrationType: MigrationType)
+        (migrationFiles: array<MigrationFile>)
+        =
+        let asyncApplyMigrationWithConnectionAndType = asyncApplyMigration driver connection migrationType
+        match Array.isEmpty migrationFiles with
+        | false -> migrationFiles |> Array.map asyncApplyMigrationWithConnectionAndType
         | true -> Array.empty
 
-    let private getPendingMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
-        match lastMigration with
-        | None -> migrations
-        | Some migration ->
-            let index = migrations |> Array.findIndex (fun m -> m.name = migration.Name)
-            match index + 1 = migrations.Length with
-            | true -> Array.empty
-            | false ->
-                let pending = migrations |> Array.skip (index + 1)
-                pending
-
-    let private getRanMigrations (lastMigration: Migration) (migrations: MigrationFile array) =
-        let lastRanIndex = migrations |> Array.findIndex (fun m -> m.name = lastMigration.Name)
-        migrations.[0..lastRanIndex]
-
-    let private getLastMigration (conStr: string) =
+    let private asyncGetLastMigration (driver: Driver) (connection: string) =
         Async.Catch
-            (querySeqAsync<Migration> (fun () -> getConnection conStr)
-                 { script "Select * FROM Migrations ORDER BY Date DESC LIMIT 1;" })
+            (querySeqAsync<Migration> (fun () -> getConnection driver connection)
+                 { script "Select * FROM Migrations ORDER BY Timestamp DESC LIMIT 1;" })
 
     let runMigrationsNew (options: NewOptions) =
-        let config = getSqlatorConfiguration()
+        let (path, _) = getPathAndConfig()
 
-        let path = Path.GetFullPath(config.migrationsDir)
-        let timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds()
-        let name = sprintf "%s_%i.sql" options.name timestamp
+        let file, bytes = createNewMigrationFile path options.name
 
-        let fullpath = Path.Combine(path, name)
-        let filestr = File.Create(fullpath)
+        file.Write(ReadOnlySpan<byte>(bytes))
+        file.Close()
 
-        let contentBytes =
-            let content =
-                sprintf "------------ SQLATOR:UP:%i --------------\n-- Write your Up migrations here\n\n" timestamp
-                + (sprintf "------------ SQLATOR:DOWN:%i --------------\n-- Write how to revert the migration here"
-                       timestamp)
+    let asyncRunMigrationsUp (options: UpOptions) =
+        let operation =
+            async {
+                let (path, config) = getPathAndConfig()
+                let driver = Driver.FromString config.driver
+                let! created = asyncEnsureMigrationsTableExists driver config.connection
+                if not created then raise (UnauthorizedAccessException "Could not create the Database/Migrations table")
+                let! lastMigration = asyncGetLastMigration driver config.connection
+                let migration =
+                    match lastMigration with
+                    | Choice1Of2 migration ->
+                        printfn "Migrations found"
+                        migration |> Seq.tryHead
+                    | Choice2Of2 ex ->
+                        printfn "Migrations table not found, starting from scratch"
+                        None
 
-            let bytes = Text.Encoding.UTF8.GetBytes(content)
-            ReadOnlySpan<byte>(bytes)
+                let migrations = getMigrations path
+                let pendingMigrations = getPendingMigrations migration migrations
 
-        filestr.Write contentBytes
-        filestr.Close()
+                let migrationsToRun =
+                    match options.total |> Option.ofNullable with
+                    | Some total ->
+                        let total =
+                            match total >= pendingMigrations.Length with
+                            | true -> pendingMigrations.Length - 1
+                            | false -> total
+                        match Array.isEmpty pendingMigrations with
+                        | true -> Array.empty
+                        | false -> pendingMigrations |> Array.take total
+                    | None -> pendingMigrations
 
-
-    let runMigrationsUp (options: UpOptions) =
-        let config = getSqlatorConfiguration()
-        let path = Path.GetFullPath(config.migrationsDir)
-        async {
-            let! created = ensureMigrationsTableExists config.connection
-            if not created then failwith "Could not create the Database/Migrations table"
-            let! lastMigration = getLastMigration config.connection
-            let migration =
-                match lastMigration with
-                | Choice1Of2 migration ->
-                    printfn "Migrations found"
-                    migration |> Seq.tryHead
-                | Choice2Of2 ex ->
-                    printfn "Migrations table not found, starting from scratch"
-                    None
-
-            let migrations = getMigrations path
-            let pendingMigrations = getPendingMigrations migration migrations
-
-            let migrationsToRun =
-                match options.total |> Option.ofNullable with
-                | Some total ->
-                    let total =
-                        match total >= pendingMigrations.Length with
-                        | true -> pendingMigrations.Length - 1
-                        | false -> total
-                    match Array.isEmpty pendingMigrations with
-                    | true -> Array.empty
-                    | false -> pendingMigrations |> Array.take total
-                | None -> pendingMigrations
-
-            return! runMigrations migrationsToRun MigrationType.Up config.connection |> Async.Sequential
-        }
-        |> Async.RunSynchronously
-        |> Array.map (fun query -> printfn "%A" query)
-        |> ignore
+                return! asyncRunMigrations driver config.connection MigrationType.Up migrationsToRun |> Async.Sequential
+            }
+        Async.Catch operation
 
     let runMigrationsDown (options: DownOptions) =
-        let config = getSqlatorConfiguration()
-        let path = Path.GetFullPath(config.migrationsDir)
-        async {
-            let! lastMigration = getLastMigration config.connection
-            let migration =
-                let message = "Database seems empty, try to run migrations first."
-                match lastMigration with
-                | Choice1Of2 migration ->
-                    match migration |> Seq.tryHead with
-                    | Some m -> m
-                    | None -> failwith message
-                | Choice2Of2 ex ->
-                    printfn "%s" ex.Message
-                    failwith message
+        let operation =
+            async {
+                let (path, config) = getPathAndConfig()
+                let driver = Driver.FromString config.driver
+                let! lastMigration = asyncGetLastMigration driver config.connection
+                let migration =
+                    match lastMigration with
+                    | Choice1Of2 migration -> migration |> Seq.tryHead
+                    | Choice2Of2 ex ->
+                        printfn "%s" ex.Message
+                        raise (InvalidOperationException "Database seems empty, try to run migrations first.")
 
-            let migrations = getMigrations path
-            let alreadyRanMigrations = getRanMigrations migration migrations |> Array.rev
+                let migrations = getMigrations path
+                let alreadyRanMigrations = getAppliedMigrations migration migrations |> Array.rev
 
-            let amountToRunDown =
-                match options.total |> Option.ofNullable with
-                | Some number ->
-                    match number > alreadyRanMigrations.Length with
-                    | true ->
-                        printfn "Total [%i] provided exceeds the amount of migrations in the database (%i)" number
+                let amountToRunDown =
+                    match options.total |> Option.ofNullable with
+                    | Some number ->
+                        match number > alreadyRanMigrations.Length with
+                        | true ->
+                            printfn "Total [%i] provided exceeds the amount of migrations in the database (%i)" number
+                                alreadyRanMigrations.Length
                             alreadyRanMigrations.Length
-                        alreadyRanMigrations.Length
-                    | false -> number
-                | None -> alreadyRanMigrations.Length
+                        | false -> number
+                    | None -> alreadyRanMigrations.Length
 
-            return! runMigrations (alreadyRanMigrations |> Array.take amountToRunDown) MigrationType.Down
-                        config.connection |> Async.Sequential
-        }
-        |> Async.RunSynchronously
-        |> Array.map (fun query -> printfn "%A" query)
-        |> ignore
+                return! asyncRunMigrations driver config.connection MigrationType.Down
+                            (alreadyRanMigrations |> Array.take amountToRunDown) |> Async.Sequential
+            }
+        Async.Catch operation
+
+    let runMigrationsList (options: ListOptions) =
+        let operation =
+            async {
+                let (path, config) = getPathAndConfig()
+
+                let all =
+                    match options.all |> Option.ofNullable with
+                    | Some total -> total
+                    | None -> false
+
+                let missing =
+                    match options.missing |> Option.ofNullable with
+                    | Some missing -> missing
+                    | None -> false
+
+                let last =
+                    match options.last |> Option.ofNullable with
+                    | Some last -> last
+                    | None -> false
+
+                let migrations = getMigrations path
+                let! lastMigration = asyncGetLastMigration (Driver.FromString config.driver) config.connection
+                let migration =
+                    match lastMigration with
+                    | Choice1Of2 migration -> migration |> Seq.tryHead
+                    | Choice2Of2 ex -> None
+
+                match last, all, missing with
+                | (true, _, _) ->
+                    match migration with
+                    | Some migration ->
+                        printfn "Last migration in the database is %s"
+                            (migrationName (MigrationSource.Database migration))
+                    | None -> printfn "No migrations have been run in the database"
+                | (_, true, true) ->
+                    let pendingMigrations = getPendingMigrations migration migrations
+
+                    let migrations =
+                        pendingMigrations
+                        |> Array.map
+                            (MigrationSource.File
+                             >> migrationName
+                             >> sprintf "%s\n")
+                        |> fun arr -> String.Join("", arr)
+                    printfn "Missing migrations:\n%s" migrations
+                | (_, true, false) ->
+                    let alreadyRan = getAppliedMigrations migration migrations
+
+                    let migrations =
+                        alreadyRan
+                        |> Array.map
+                            (MigrationSource.File
+                             >> migrationName
+                             >> sprintf "%s\n")
+                        |> fun arr -> String.Join("", arr)
+
+                    printfn "Migrations that have been ran:\n%s" migrations
+                | (_, _, _) ->
+                    printfn "This flag combination is not supported"
+                    let combinations = """
+                        --last true
+                        --all true --missing true
+                        --all true --missing false
+                        """
+                    printfn "Suported comibations are: %s" combinations
+            }
+
+        Async.Catch operation

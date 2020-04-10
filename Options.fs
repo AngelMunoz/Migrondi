@@ -23,9 +23,9 @@ module Options =
 
     [<Verb("list", HelpText = "List the amount of migrations in the database.")>]
     type ListOptions =
-        { [<Option('t', "total", Required = false, HelpText = "Shows every migration ran against the database.")>]
-          total: Nullable<bool>
+        { [<Option('a', "all", Required = false, HelpText = "Shows every migration ran against the database.")>]
+          all: Nullable<bool>
           [<Option('m', "missing", Required = false, HelpText = "Shows the migrations that are pending to run.")>]
           missing: Nullable<bool>
           [<Option('l', "last", Required = false, HelpText = "Shows the last migration run agains the database.")>]
-          last: int option }
+          last: Nullable<bool> }
