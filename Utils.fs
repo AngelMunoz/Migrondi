@@ -7,7 +7,6 @@ open FSharp.Data.Dapper
 open System.IO
 open System.Text.Json
 open System
-open Npgsql
 open System.Data
 
 module internal Utils =
