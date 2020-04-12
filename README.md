@@ -19,7 +19,12 @@ to use this tool you need to supply a Json configuration file
 ```
 - connection
 
-    This is a IDbConnection compatible connection string
+    This is a IDbConnection compatible connection string (you can find examples in the follwing links)
+    - [SqlServer](https://www.connectionstrings.com/sql-server/)
+    - [SQLite](https://www.connectionstrings.com/sqlite/)
+    - [MySQL](https://www.connectionstrings.com/mysql/)
+    - [PostgreSQL](https://www.connectionstrings.com/postgresql/)
+    
 - migrationsDir
     
     this is an absolute or relative path to where the migrations will be stored ***Note***: please include the trailing slash to prevent writing on the directory above of the one you pointed to.
