@@ -25,7 +25,7 @@ to use this tool you need to supply a Json configuration file
     this is an absolute or relative path to where the migrations will be stored ***Note***: please include the trailing slash to prevent writing on the directory above of the one you pointed to.
 - driver
     
-    any of the following "SQLite" "sqlite" "MSSQL" "mssql"
+    any of the following "mssql" "sqlite" "mysql" "postgres"
 ```
 Sqlator 0.1.0
 Copyright (C) 2020 Angel D. Munoz
@@ -50,10 +50,10 @@ ERROR(S):
 To create a new migration file run `Sqlator.exe new -n CreateTodosTable` where `CreateTodosTable` is the name of your migration, you can replace that name with your migration name it will create a new file with a name like this:
 `SampleMigration_1586550686936.sql` with the following contents
 ```sql
------------- SQLATOR:UP:1586550686936 --------------
+-- ---------- SQLATOR:UP:1586550686936 --------------
 -- Write your Up migrations here
 
------------- SQLATOR:DOWN:1586550686936 --------------
+-- ---------- SQLATOR:DOWN:1586550686936 --------------
 -- Write how to revert the migration here
 ```
 Please do not remove the `SQLATOR:UP:TIMESTAMP` and `SQLATOR:DOWN:TIMESTAMP` comments these are used to differentiate what to run when you run the `up` or `down` commands.
