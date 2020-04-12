@@ -1,6 +1,7 @@
 namespace Sqlator
 
 open System
+open RepoDb.Attributes
 
 module Types =
 
@@ -11,10 +12,11 @@ module Types =
           driver: string }
 
     [<CLIMutable>]
+    [<Map("migration")>]
     type Migration =
-        { Id: int64
-          Name: string
-          Timestamp: int64 }
+        { id: int64
+          name: string
+          timestamp: int64 }
 
     type MigrationFile =
         { name: string
@@ -27,18 +29,21 @@ module Types =
         | Up
         | Down
 
+    [<RequireQualifiedAccess>]
     type Driver =
         | Mssql
         | Sqlite
+        | Postgresql
+        | Mysql
 
         static member FromString(driver: string) =
-            match driver with
-            | "MSSQL"
+            match driver.ToLowerInvariant() with
             | "mssql" -> Mssql
-            | "SQLite"
             | "sqlite" -> Sqlite
+            | "postgres" -> Postgresql
+            | "mysql" -> Mysql
             | others ->
-                let drivers = "MSSQL | mssql | SQLite | sqlite"
+                let drivers = "mssql | sqlite | postgres | mysql"
                 raise
                     (ArgumentException
                         (sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers))
