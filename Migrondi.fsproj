@@ -30,6 +30,5 @@
     <PackageReference Include="RepoDb.PostgreSql" Version="1.0.6" />
     <PackageReference Include="RepoDb.Sqlite" Version="1.0.9" />
     <PackageReference Include="RepoDb.Sqlserver" Version="1.0.6" />
-    <PackageReference Include="TaskBuilder.fs" Version="2.1.0" />
   </ItemGroup>
 </Project>
