@@ -2,31 +2,26 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
-    <Description>
-      This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
-    </Description>
-    <Version>0.1.0</Version>
-    <Title>Sqlator</Title>
-    <Authors>Angel D. Munoz</Authors>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <RepositoryUrl>https://github.com/AngelMunoz/Sqlator</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
     <Compile Include="Options.fs" />
     <Compile Include="Utils.fs" />
+    <Compile Include="Queries.fs" />
     <Compile Include="Migrations.fs" />
     <Compile Include="Program.fs" />
+    <None Include="LICENSE" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.7.82" />
     <PackageReference Include="CommandLineParser.FSharp" Version="2.7.82" />
-    <PackageReference Include="Dapper" Version="2.0.30" />
-    <PackageReference Include="FSharp.Data.Dapper" Version="2.0.0" />
-    <PackageReference Include="System.Data.SqlClient" Version="4.8.1" />
-    <PackageReference Include="System.Data.SQLite" Version="1.0.112.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="LICENSE" Pack="true" PackagePath="$(PackageLicenseFile)"/>
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="1.1.1" />
+    <PackageReference Include="Microsoft.Data.SQLite" Version="3.1.3" />
+    <PackageReference Include="RepoDb" Version="1.10.11" />
+    <PackageReference Include="RepoDb.MySql" Version="1.0.9" />
+    <PackageReference Include="RepoDb.PostgreSql" Version="1.0.6" />
+    <PackageReference Include="RepoDb.Sqlite" Version="1.0.9" />
+    <PackageReference Include="RepoDb.Sqlserver" Version="1.0.6" />
+    <PackageReference Include="TaskBuilder.fs" Version="2.1.0" />
   </ItemGroup>
 </Project>
