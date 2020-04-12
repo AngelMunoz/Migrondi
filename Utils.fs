@@ -3,11 +3,12 @@ namespace Sqlator
 open Types
 open System.Data.SQLite
 open System.Data.SqlClient
-open FSharp.Data.Dapper
 open System.IO
 open System.Text.Json
 open System
 open System.Data
+open Npgsql
+open MySql.Data.MySqlClient
 
 module internal Utils =
     module Operators =
@@ -21,18 +22,18 @@ module internal Utils =
             match migrationType with
             | MigrationType.Up -> "UP"
             | MigrationType.Down -> "DOWN"
-        sprintf "------------ SQLATOR:%s:%i --------------" str timestamp
+        sprintf "-- ---------- SQLATOR:%s:%i --------------" str timestamp
 
 
-    let createNewMigrationFile path name =
+    let createNewMigrationFile (path: string) (name: string) =
         let timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds()
-        let name = sprintf "%s_%i.sql" name timestamp
+        let name = sprintf "%s_%i.sql" (name.Trim()) timestamp
         let fullpath = Path.Combine(path, name)
 
         let contentBytes =
             let content =
-                sprintf "------------ SQLATOR:UP:%i --------------\n-- Write your Up migrations here\n\n" timestamp
-                + (sprintf "------------ SQLATOR:DOWN:%i --------------\n-- Write how to revert the migration here"
+                sprintf "-- ---------- SQLATOR:UP:%i --------------\n-- Write your Up migrations here\n\n" timestamp
+                + (sprintf "-- ---------- SQLATOR:DOWN:%i --------------\n-- Write how to revert the migration here"
                        timestamp)
 
             Text.Encoding.UTF8.GetBytes(content)
@@ -59,26 +60,25 @@ module internal Utils =
         let config = JsonSerializer.Deserialize<SqlatorConfig>(content)
 
         match config.driver with
-        | "MSSQL"
         | "mssql"
-        | "SQLite"
         | "sqlite"
-        | "Postrgres"
-        | "postgres" -> config
+        | "postgres"
+        | "mysql" -> config
         | others ->
-            let drivers = "MSSQL | mssql | SQLite | sqlite | Postrgres | postgres"
+            let drivers = "mssql | sqlite | postgres | mysql"
             raise
                 (ArgumentException
                     (sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers))
 
-    let getPathAndConfig() =
+    let getPathConfigAndDriver() =
         let config = getSqlatorConfiguration()
         let path = Path.GetDirectoryName config.migrationsDir
+        let driver = Driver.FromString config.driver
         if String.IsNullOrEmpty path then
             raise
                 (ArgumentException
                     "Path seems to be empty, please check that you have provided the correct path to your migrations directory")
-        path, config
+        path, config, driver
 
 
     let getMigrations (path: string) =
@@ -130,13 +130,13 @@ module internal Utils =
     let migrationName (migration: MigrationSource) =
         match migration with
         | MigrationSource.File migration -> sprintf "%s_%i.sql" migration.name migration.timestamp
-        | MigrationSource.Database migration -> sprintf "%s_%i.sql" migration.Name migration.Timestamp
+        | MigrationSource.Database migration -> sprintf "%s_%i.sql" migration.name migration.timestamp
 
     let getPendingMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
         match lastMigration with
         | None -> migrations
         | Some migration ->
-            let index = migrations |> Array.findIndex (fun m -> m.name = migration.Name)
+            let index = migrations |> Array.findIndex (fun m -> m.name = migration.name)
             match index + 1 = migrations.Length with
             | true -> Array.empty
             | false ->
@@ -146,12 +146,14 @@ module internal Utils =
     let getAppliedMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
         match lastMigration with
         | Some lastMigration ->
-            let lastRanIndex = migrations |> Array.findIndex (fun m -> m.name = lastMigration.Name)
+            let lastRanIndex = migrations |> Array.findIndex (fun m -> m.name = lastMigration.name)
             migrations.[0..lastRanIndex]
         | None -> Array.empty
 
     /// gets a new sqlite connection based on the connection string
-    let getConnection (driver: Driver) (connectionString: string): Connection =
+    let getConnection (driver: Driver) (connectionString: string): IDbConnection =
         match driver with
-        | Sqlite -> SqliteConnection(new SQLiteConnection(connectionString))
-        | Mssql -> SqlServerConnection(new SqlConnection(connectionString))
+        | Driver.Mssql -> new SqlConnection(connectionString) :> IDbConnection
+        | Driver.Sqlite -> new SQLiteConnection(connectionString) :> IDbConnection
+        | Driver.Mysql -> new MySqlConnection(connectionString) :> IDbConnection
+        | Driver.Postgresql -> new NpgsqlConnection(connectionString) :> IDbConnection
