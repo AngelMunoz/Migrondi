@@ -9,7 +9,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Sqlator.dll",
+            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
                 "-n",
                 "SampleMigration "
@@ -23,7 +23,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Sqlator.dll",
+            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
                 "up"
             ],
@@ -36,7 +36,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Sqlator.dll",
+            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
                 "up",
                 "-t",
@@ -51,7 +51,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Sqlator.dll",
+            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
                 "down"
             ],
@@ -64,7 +64,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Sqlator.dll",
+            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
                 "down",
                 "-t",

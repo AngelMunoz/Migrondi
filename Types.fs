@@ -1,4 +1,4 @@
-namespace Sqlator
+namespace Migrondi
 
 open System
 open RepoDb.Attributes
@@ -6,7 +6,7 @@ open RepoDb.Attributes
 module Types =
 
     [<CLIMutable>]
-    type SqlatorConfig =
+    type MigrondiConfig =
         { connection: string
           migrationsDir: string
           driver: string }

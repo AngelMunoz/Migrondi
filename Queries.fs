@@ -1,4 +1,4 @@
-namespace Sqlator
+namespace Migrondi
 
 open System.Collections.Generic
 open System.Data

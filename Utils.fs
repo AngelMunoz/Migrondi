@@ -1,4 +1,4 @@
-namespace Sqlator
+namespace Migrondi
 
 open Types
 open System.Data.SQLite
@@ -22,7 +22,7 @@ module internal Utils =
             match migrationType with
             | MigrationType.Up -> "UP"
             | MigrationType.Down -> "DOWN"
-        sprintf "-- ---------- SQLATOR:%s:%i --------------" str timestamp
+        sprintf "-- ---------- MIGRONDI:%s:%i --------------" str timestamp
 
 
     let createNewMigrationFile (path: string) (name: string) =
@@ -32,8 +32,8 @@ module internal Utils =
 
         let contentBytes =
             let content =
-                sprintf "-- ---------- SQLATOR:UP:%i --------------\n-- Write your Up migrations here\n\n" timestamp
-                + (sprintf "-- ---------- SQLATOR:DOWN:%i --------------\n-- Write how to revert the migration here"
+                sprintf "-- ---------- MIGRONDI:UP:%i --------------\n-- Write your Up migrations here\n\n" timestamp
+                + (sprintf "-- ---------- MIGRONDI:DOWN:%i --------------\n-- Write how to revert the migration here"
                        timestamp)
 
             Text.Encoding.UTF8.GetBytes(content)
@@ -45,19 +45,19 @@ module internal Utils =
 
     /// Gets the configuration for the execution of a command
     /// <exception cref="FileNotFoundException">
-    /// Thrown when the "sqlator.json" configuration file is not found
+    /// Thrown when the "migrondi.json" configuration file is not found
     /// </exception
-    let getSqlatorConfiguration() =
+    let getMigrondiConfiguration() =
         let dir = Directory.GetCurrentDirectory()
         let info = DirectoryInfo(dir)
-        let file = info.EnumerateFiles() |> Seq.tryFind (fun (f: FileInfo) -> f.Name = "sqlator.json")
+        let file = info.EnumerateFiles() |> Seq.tryFind (fun (f: FileInfo) -> f.Name = "migrondi.json")
 
         let content =
             match file with
             | Some file -> File.ReadAllText(file.FullName)
-            | None -> raise (FileNotFoundException "sqlator.json file not found, aborting.")
+            | None -> raise (FileNotFoundException "migrondi.json file not found, aborting.")
 
-        let config = JsonSerializer.Deserialize<SqlatorConfig>(content)
+        let config = JsonSerializer.Deserialize<MigrondiConfig>(content)
 
         match config.driver with
         | "mssql"
@@ -71,7 +71,7 @@ module internal Utils =
                     (sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers))
 
     let getPathConfigAndDriver() =
-        let config = getSqlatorConfiguration()
+        let config = getMigrondiConfiguration()
         let path = Path.GetDirectoryName config.migrationsDir
         let driver = Driver.FromString config.driver
         if String.IsNullOrEmpty path then

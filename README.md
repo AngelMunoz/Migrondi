@@ -1,4 +1,4 @@
-# Sqlator
+# Migrondi
 This is a pretty simple SQL Migrations tool that I've been live coding for the last week (Apr 6 - Apr 10)
 
 This provides a way to execute SQL migrations against a database
@@ -12,7 +12,7 @@ without any parameters it will give you the following screen
 to use this tool you need to supply a Json configuration file
 ```json
 {
-  "connection": "Data Source=Sqlator.db",
+  "connection": "Data Source=Migrondi.db",
   "migrationsDir": "./migrations/",
   "driver": "sqlite"
 }
@@ -32,7 +32,7 @@ to use this tool you need to supply a Json configuration file
     
     any of the following "mssql" "sqlite" "mysql" "postgres"
 ```
-Sqlator 0.1.0
+Migrondi 0.1.0
 Copyright (C) 2020 Angel D. Munoz
 
 ERROR(S):
@@ -52,7 +52,7 @@ ERROR(S):
 ```
 
 ### New
-To create a new migration file run `Sqlator.exe new -n CreateTodosTable` where `CreateTodosTable` is the name of your migration, you can replace that name with your migration name it will create a new file with a name like this:
+To create a new migration file run `Migrondi.exe new -n CreateTodosTable` where `CreateTodosTable` is the name of your migration, you can replace that name with your migration name it will create a new file with a name like this:
 `SampleMigration_1586550686936.sql` with the following contents
 ```sql
 -- ---------- SQLATOR:UP:1586550686936 --------------
@@ -64,17 +64,17 @@ To create a new migration file run `Sqlator.exe new -n CreateTodosTable` where `
 Please do not remove the `SQLATOR:UP:TIMESTAMP` and `SQLATOR:DOWN:TIMESTAMP` comments these are used to differentiate what to run when you run the `up` or `down` commands.
 
 ### Up
-To run your migrations against your database use the "up" command `Sqlator.exe up` you can use `-t <number>` to specify how many migrations you want to run
+To run your migrations against your database use the "up" command `Migrondi.exe up` you can use `-t <number>` to specify how many migrations you want to run
 
 ### Down
-To rollback your migrations from your database use the "down" command `Sqlator.exe down` you can use `-t <number>` to specify how many migrations you want to roll back
+To rollback your migrations from your database use the "down" command `Migrondi.exe down` you can use `-t <number>` to specify how many migrations you want to roll back
 
 ### List
-If you want to list migrations you can use the command "list" `Sqlator.exe list` with the following flag combinations
+If you want to list migrations you can use the command "list" `Migrondi.exe list` with the following flag combinations
 
-- `Sqlator.exe list --last true`
-- `Sqlator.exe list --all true --missing true`
-- `Sqlator.exe list --all true --missing false`
+- `Migrondi.exe list --last true`
+- `Migrondi.exe list --all true --missing true`
+- `Migrondi.exe list --all true --missing false`
 
 these will give you these outputs
 

@@ -2,6 +2,14 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
+    <Description>
+      This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
+    </Description>
+    <Version>0.3.0</Version>
+    <Title>Migrondi</Title>
+    <Authors>Angel D. Munoz</Authors>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <RepositoryUrl>https://github.com/AngelMunoz/Migrondi</RepositoryUrl>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />

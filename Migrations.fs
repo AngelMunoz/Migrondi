@@ -1,4 +1,4 @@
-namespace Sqlator
+namespace Migrondi
 
 open System
 open System.Data
@@ -9,7 +9,7 @@ open Queries
 
 module Migrations =
 
-    let runMigrationsNew (path: string, _: SqlatorConfig, _: Driver) (options: NewOptions) =
+    let runMigrationsNew (path: string, _: MigrondiConfig, _: Driver) (options: NewOptions) =
         let file, bytes = createNewMigrationFile path options.name
 
         file.Write(ReadOnlySpan<byte>(bytes))
@@ -17,7 +17,7 @@ module Migrations =
 
     let runMigrationsUp
         (connection: IDbConnection)
-        (path: string, config: SqlatorConfig, driver: Driver)
+        (path: string, config: MigrondiConfig, driver: Driver)
         (options: UpOptions)
         =
         let created = ensureMigrationsTable driver connection
@@ -43,7 +43,7 @@ module Migrations =
 
     let runMigrationsDown
         (connection: IDbConnection)
-        (path: string, config: SqlatorConfig, driver: Driver)
+        (path: string, config: MigrondiConfig, driver: Driver)
         (options: DownOptions)
         =
         let migration = getLastMigration connection
@@ -64,7 +64,10 @@ module Migrations =
 
         runMigrations driver connection MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
 
-    let runMigrationsList (connection: IDbConnection) (path: string, _: SqlatorConfig, _: Driver) (options: ListOptions) =
+    let runMigrationsList
+        (connection: IDbConnection)
+        (path: string, _: MigrondiConfig, _: Driver)
+        (options: ListOptions) =
         let all =
             match options.all |> Option.ofNullable with
             | Some total -> total

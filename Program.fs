@@ -1,8 +1,8 @@
 ﻿open CommandLine
-open Sqlator.Types
-open Sqlator.Options
-open Sqlator.Migrations
-open Sqlator.Utils
+open Migrondi.Types
+open Migrondi.Options
+open Migrondi.Migrations
+open Migrondi.Utils
 open FSharp.Control.Tasks.V2
 
 let initializeDriver driver = 
@@ -25,7 +25,7 @@ let main argv =
         printfn "%s" ex.Message
         exit(1)
     | :? System.Text.Json.JsonException->
-        printfn "Failed to parse the sqlator.json file, please check for trailing commas and that the properties have the correct name"
+        printfn "Failed to parse the migrondi.json file, please check for trailing commas and that the properties have the correct name"
         exit(1)
   initializeDriver driver
   let connection = getConnection driver config.connection
