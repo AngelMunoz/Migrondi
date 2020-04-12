@@ -1,3 +1,5 @@
+![.NET Core](https://github.com/AngelMunoz/Migrondi/workflows/.NET%20Core/badge.svg?branch=master)
+
 # Migrondi
 This is a pretty simple SQL Migrations tool that I've been live coding for the last week (Apr 6 - Apr 10)
 
