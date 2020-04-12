@@ -3,7 +3,6 @@ open Migrondi.Types
 open Migrondi.Options
 open Migrondi.Migrations
 open Migrondi.Utils
-open FSharp.Control.Tasks.V2
 
 let initializeDriver driver = 
     match driver with
