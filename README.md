@@ -11,7 +11,7 @@ Grab the binary from the releases page or build from source
 without any parameters it will give you the following screen
 
 ### Config File
-to use this tool you need to supply a Json configuration file
+to use this tool you need to supply a Json configuration file (the name must be `migrondi.json`)
 ```json
 {
   "connection": "Data Source=Migrondi.db",
