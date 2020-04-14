@@ -16,6 +16,43 @@ module internal Utils =
         /// and boxes the value on the right
         let inline (=>) (column: string) (value: 'T) = column, box value
 
+    let checkExistsPathAndMigrationsDir (path: string) (migrationsDir: string) =
+        let migrondiFile = Path.Combine(path, "migrondi.json")
+        File.Exists migrondiFile, Directory.Exists migrationsDir
+
+    let getInitPathAndMigrationsPath (path: string) =
+        let path =
+            Path.GetFullPath(if String.IsNullOrEmpty path then "." else path)
+
+        let migrationsPath =
+            let mpath = sprintf "migrations%c" Path.DirectorySeparatorChar
+            Path.Combine(path, mpath)
+
+        path, migrationsPath
+
+    let createMigrationsDir (path: string) =
+        let path =
+            if Path.EndsInDirectorySeparator path
+            then path
+            else sprintf "%s%c" path Path.DirectorySeparatorChar
+        if Directory.Exists path then DirectoryInfo(path) else Directory.CreateDirectory path
+
+    let createMigrondiConfJson (path: string) (migrationsDir: string) =
+        let fullpath = Path.Combine(path, "migrondi.json")
+
+        let contentBytes =
+            let opts = JsonSerializerOptions()
+            opts.WriteIndented <- true
+            opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+            JsonSerializer.SerializeToUtf8Bytes<MigrondiConfig>
+                ({ connection = "Data Source=migrondi.db"
+                   migrationsDir = migrationsDir
+                   driver = "sqlite" }, opts)
+
+        let file = File.Create(fullpath)
+
+        file, contentBytes
+
     /// gives the separator string used inside the migrations file
     let getSeparator (migrationType: MigrationType) (timestamp: int64) =
         let str =
@@ -57,7 +94,11 @@ module internal Utils =
             | Some file -> File.ReadAllText(file.FullName)
             | None -> raise (FileNotFoundException "migrondi.json file not found, aborting.")
 
-        let config = JsonSerializer.Deserialize<MigrondiConfig>(content)
+        let config =
+            let opts = JsonSerializerOptions()
+            opts.AllowTrailingCommas <- true
+            opts.ReadCommentHandling <- JsonCommentHandling.Skip
+            JsonSerializer.Deserialize<MigrondiConfig>(content, opts)
 
         match config.driver with
         | "mssql"
@@ -73,6 +114,7 @@ module internal Utils =
     let getPathConfigAndDriver() =
         let config = getMigrondiConfiguration()
         let path = Path.GetDirectoryName config.migrationsDir
+        if not (Directory.Exists(path)) then Directory.CreateDirectory(path) |> ignore
         let driver = Driver.FromString config.driver
         if String.IsNullOrEmpty path then
             raise

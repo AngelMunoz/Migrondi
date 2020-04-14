@@ -1,10 +1,13 @@
 namespace Migrondi
 
-
-
 module Options =
     open System
     open CommandLine
+
+    [<Verb("init", HelpText = "Creates basic files and directories to start using migrondi.")>]
+    type InitOptions =
+        { [<Option('p', "path", Required = false, HelpText = "Where should the migrondi.json should be created")>]
+          path: string }
 
     [<Verb("new", HelpText = "Creates a new Migration file.")>]
     type NewOptions =

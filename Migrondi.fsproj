@@ -5,7 +5,7 @@
     <Description>
       This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
     </Description>
-    <Version>0.3.0</Version>
+    <Version>0.4.0</Version>
     <Title>Migrondi</Title>
     <Authors>Angel D. Munoz</Authors>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>

@@ -9,6 +9,19 @@ open Queries
 
 module Migrations =
 
+    let runMigrationsInit (opts: InitOptions) =
+        let path, migrationsPath = getInitPathAndMigrationsPath opts.path
+        match checkExistsPathAndMigrationsDir path migrationsPath with
+        | (true, _) -> raise (ArgumentException "\"migrondi.json\" already exists, aborting.")
+        | _ ->
+            createMigrationsDir migrationsPath |> ignore
+            let file, content = createMigrondiConfJson path migrationsPath
+            file.Write(ReadOnlySpan<byte>(content))
+            printfn "Created %s and %s" file.Name migrationsPath
+            file.Close()
+
+
+
     let runMigrationsNew (path: string, _: MigrondiConfig, _: Driver) (options: NewOptions) =
         let file, bytes = createNewMigrationFile path options.name
 

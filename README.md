@@ -10,8 +10,17 @@ Grab the binary from the releases page or build from source
 
 without any parameters it will give you the following screen
 
+### Init
+If you are starting from scratch you can run the init command to create the migrondi files and directories needed for the rest of the commands to work properly
+```
+PS C:\Users\x\Migrondi> ./Migrondi.exe init
+Created C:\Users\x\Migrondi\migrondi.json and C:\Users\x\Migrondi\migrations\
+PS C:\Users\x\Migrondi>
+```
+Then you can adapt the configuration as needed
+
 ### Config File
-to use this tool you need to supply a Json configuration file (the name must be `migrondi.json`)
+to use this tool you need to supply a JSON configuration file (the name must be `migrondi.json`)
 ```json
 {
   "connection": "Data Source=Migrondi.db",
@@ -26,19 +35,23 @@ to use this tool you need to supply a Json configuration file (the name must be 
     - [SQLite](https://www.connectionstrings.com/sqlite/)
     - [MySQL](https://www.connectionstrings.com/mysql/)
     - [PostgreSQL](https://www.connectionstrings.com/postgresql/)
-    
+
 - migrationsDir
     
-    this is an absolute or relative path to where the migrations will be stored ***Note***: please include the trailing slash to prevent writing on the directory above of the one you pointed to.
+    this is an absolute or relative path to where the migrations will be stored ***Note***: please include the trailing slash to prevent writing on the directory above of the one you pointed to. (if you use the init command, this is created for you)
+
 - driver
-    
+
     any of the following "mssql" "sqlite" "mysql" "postgres"
+
 ```
-Migrondi 0.1.0
+Migrondi 0.4.0
 Copyright (C) 2020 Angel D. Munoz
 
 ERROR(S):
   No verb selected.
+
+  init       Creates basic files and directories to start using migrondi.
 
   new        Creates a new Migration file.
 
@@ -57,13 +70,13 @@ ERROR(S):
 To create a new migration file run `Migrondi.exe new -n CreateTodosTable` where `CreateTodosTable` is the name of your migration, you can replace that name with your migration name it will create a new file with a name like this:
 `SampleMigration_1586550686936.sql` with the following contents
 ```sql
--- ---------- SQLATOR:UP:1586550686936 --------------
+-- ---------- MIGRONDI:UP:1586550686936 --------------
 -- Write your Up migrations here
 
--- ---------- SQLATOR:DOWN:1586550686936 --------------
+-- ---------- MIGRONDI:DOWN:1586550686936 --------------
 -- Write how to revert the migration here
 ```
-Please do not remove the `SQLATOR:UP:TIMESTAMP` and `SQLATOR:DOWN:TIMESTAMP` comments these are used to differentiate what to run when you run the `up` or `down` commands.
+Please do not remove the `MIGRONDI:UP:TIMESTAMP` and `MIGRONDI:DOWN:TIMESTAMP` comments these are used to differentiate what to run when you run the `up` or `down` commands.
 
 ### Up
 To run your migrations against your database use the "up" command `Migrondi.exe up` you can use `-t <number>` to specify how many migrations you want to run
