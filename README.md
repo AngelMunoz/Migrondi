@@ -1,9 +1,9 @@
 ![.NET Core](https://github.com/AngelMunoz/Migrondi/workflows/.NET%20Core/badge.svg?branch=master)
 
 # Migrondi
-This is a pretty simple SQL Migrations tool that I've been live coding for the last week (Apr 6 - Apr 10)
+This is a pretty simple SQL Migrations tool that I've been live coding for the last week (Apr 6 - Apr 10) Migrondi provides a way to execute SQL migrations against a database
 
-This provides a way to execute SQL migrations against a database
+> You don't need a dotnet project/toolchain etc to use this, if you are using node/java/python/ruby that's completely fine this project works directly with your database and you shouldn't even need to have .net installed at all
 
 ## Usage
 Grab the binary from the releases page or build from source
