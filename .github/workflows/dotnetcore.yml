@@ -18,7 +18,10 @@ jobs:
       with:
         dotnet-version: 3.1.101
     - name: Install dependencies
-      run: dotnet restore
+      run: dotnet restore src
     - name: Build
-      run: dotnet build --configuration Release --no-restore
+      run: dotnet build src --configuration Release --no-restore
+    - name: Tests
+      run: dotnet test src/Migrondi.Tests --no-restore --verbosity normal
+
 
