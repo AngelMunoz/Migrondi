@@ -10,7 +10,7 @@ open System.Data
 open Npgsql
 open MySql.Data.MySqlClient
 
-module internal Utils =
+module Utils =
     module Operators =
         /// custom tuple box operator, takes a string that represents a column of a table
         /// and boxes the value on the right
@@ -24,9 +24,7 @@ module internal Utils =
         let path =
             Path.GetFullPath(if String.IsNullOrEmpty path then "." else path)
 
-        let migrationsPath =
-            let mpath = sprintf "migrations%c" Path.DirectorySeparatorChar
-            Path.Combine(path, mpath)
+        let migrationsPath = Path.Combine(path, "migrations", Path.DirectorySeparatorChar.ToString())
 
         path, migrationsPath
 
