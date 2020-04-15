@@ -8,8 +8,6 @@ This is a pretty simple SQL Migrations tool that I've been live coding for the l
 ## Usage
 Grab the binary from the releases page or build from source
 
-without any parameters it will give you the following screen
-
 ### Init
 If you are starting from scratch you can run the init command to create the migrondi files and directories needed for the rest of the commands to work properly
 ```
