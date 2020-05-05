@@ -6,7 +6,7 @@ This is a pretty simple SQL Migrations tool that I've been live coding for the l
 > You don't need a dotnet project/toolchain etc to use this, if you are using node/java/python/ruby that's completely fine this project works directly with your database and you shouldn't even need to have .net installed at all. If you want a brief tutorial/explanation you can check this post in [dev.to](https://dev.to/tunaxor/migrondi-simple-sql-migrations-tool-30lm)
 
 ## Usage
-Grab the binary from the releases page or build from source
+Grab the binary from the releases page or build from source and put it on your `PATH`, that way the command is available globally
 
 ## .net users
 you can now install this as a global/local tool as well
