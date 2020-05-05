@@ -8,6 +8,12 @@ This is a pretty simple SQL Migrations tool that I've been live coding for the l
 ## Usage
 Grab the binary from the releases page or build from source
 
+## .net users
+you can now install this as a global/local tool as well
+```
+dotnet tool install --global Migrondi --version 0.4.0
+```
+
 ### Init
 If you are starting from scratch you can run the init command to create the migrondi files and directories needed for the rest of the commands to work properly
 ```

@@ -5,11 +5,18 @@
     <Description>
       This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
     </Description>
+    <Summary>
+      This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
+    </Summary>
     <Version>0.4.0</Version>
     <Title>Migrondi</Title>
     <Authors>Angel D. Munoz</Authors>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    <RepositoryUrl>https://github.com/AngelMunoz/Migrondi</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <ProjectUrl>https://github.com/AngelMunoz/Migrondi</ProjectUrl>
+    <RepositoryUrl>https://github.com/AngelMunoz/Migrondi.git</RepositoryUrl>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>migrondi</ToolCommandName>
+    <PackageOutputPath>../../dist</PackageOutputPath>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
@@ -18,7 +25,6 @@
     <Compile Include="Queries.fs" />
     <Compile Include="Migrations.fs" />
     <Compile Include="Program.fs" />
-    <None Include="LICENSE" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.7.82" />
