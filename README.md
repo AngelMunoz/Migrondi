@@ -11,7 +11,7 @@ Grab the binary from the releases page or build from source and put it on your `
 ## .net users
 you can now install this as a global/local tool as well
 ```
-dotnet tool install --global Migrondi --version 0.4.0
+dotnet tool install --global Migrondi --version 0.4.1
 ```
 
 ### Init
