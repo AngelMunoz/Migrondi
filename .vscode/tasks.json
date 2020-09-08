@@ -9,6 +9,25 @@
             "type": "shell",
             "args": [
                 "build",
+                "./src/Migrondi/Migrondi.fsproj",
+                // Ask dotnet build to generate full paths for file names.
+                "/property:GenerateFullPaths=true",
+                // Do not generate summary otherwise it leads to duplicate errors in Problems panel
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "silent"
+            },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build:tests",
+            "command": "dotnet",
+            "type": "shell",
+            "args": [
+                "build",
+                "./src/Migrondi.Tests/Migrondi.Tests.fsproj",
                 // Ask dotnet build to generate full paths for file names.
                 "/property:GenerateFullPaths=true",
                 // Do not generate summary otherwise it leads to duplicate errors in Problems panel

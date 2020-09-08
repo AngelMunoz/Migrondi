@@ -5,12 +5,26 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug Init Command",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "args": [
+                "init"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
             "name": "Debug New Command",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
+                "new",
                 "-n",
                 "SampleMigration "
             ],
@@ -23,7 +37,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
                 "up"
             ],
@@ -36,7 +50,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
                 "up",
                 "-t",
@@ -51,7 +65,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
                 "down"
             ],
@@ -64,7 +78,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
             "args": [
                 "down",
                 "-t",
