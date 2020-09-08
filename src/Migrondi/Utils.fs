@@ -22,9 +22,15 @@ module Utils =
 
     let getInitPathAndMigrationsPath (path: string) =
         let path =
-            Path.GetFullPath(if String.IsNullOrEmpty path then "." else path)
+            Path.GetFullPath(if String.IsNullOrEmpty path then "./" else path)
 
-        let migrationsPath = Path.Combine(path, "migrations", Path.DirectorySeparatorChar.ToString())
+        let migrationsPath =
+            let currentPath =
+                Path.Combine(path, "migrations")
+                + (Path.DirectorySeparatorChar |> string)
+
+            Path.GetRelativePath(path, currentPath)
+
 
         path, migrationsPath
 
@@ -33,6 +39,7 @@ module Utils =
             if Path.EndsInDirectorySeparator path
             then path
             else sprintf "%s%c" path Path.DirectorySeparatorChar
+
         if Directory.Exists path then DirectoryInfo(path) else Directory.CreateDirectory path
 
     let createMigrondiConfJson (path: string) (migrationsDir: string) =
@@ -45,7 +52,8 @@ module Utils =
             JsonSerializer.SerializeToUtf8Bytes<MigrondiConfig>
                 ({ connection = "Data Source=migrondi.db"
                    migrationsDir = migrationsDir
-                   driver = "sqlite" }, opts)
+                   driver = "sqlite" },
+                 opts)
 
         let file = File.Create(fullpath)
 
@@ -57,12 +65,17 @@ module Utils =
             match migrationType with
             | MigrationType.Up -> "UP"
             | MigrationType.Down -> "DOWN"
+
         sprintf "-- ---------- MIGRONDI:%s:%i --------------" str timestamp
 
 
     let createNewMigrationFile (path: string) (name: string) =
-        let timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds()
-        let name = sprintf "%s_%i.sql" (name.Trim()) timestamp
+        let timestamp =
+            DateTimeOffset.Now.ToUnixTimeMilliseconds()
+
+        let name =
+            sprintf "%s_%i.sql" (name.Trim()) timestamp
+
         let fullpath = Path.Combine(path, name)
 
         let contentBytes =
@@ -82,10 +95,13 @@ module Utils =
     /// <exception cref="FileNotFoundException">
     /// Thrown when the "migrondi.json" configuration file is not found
     /// </exception
-    let getMigrondiConfiguration() =
+    let getMigrondiConfiguration () =
         let dir = Directory.GetCurrentDirectory()
         let info = DirectoryInfo(dir)
-        let file = info.EnumerateFiles() |> Seq.tryFind (fun (f: FileInfo) -> f.Name = "migrondi.json")
+
+        let file =
+            info.EnumerateFiles()
+            |> Seq.tryFind (fun (f: FileInfo) -> f.Name = "migrondi.json")
 
         let content =
             match file with
@@ -109,10 +125,13 @@ module Utils =
                 (ArgumentException
                     (sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers))
 
-    let getPathConfigAndDriver() =
-        let config = getMigrondiConfiguration()
-        let path = Path.GetDirectoryName config.migrationsDir
-        if not (Directory.Exists(path)) then Directory.CreateDirectory(path) |> ignore
+    let getPathConfigAndDriver () =
+        let config = getMigrondiConfiguration ()
+
+        let path = Path.GetFullPath config.migrationsDir
+
+        if not (Directory.Exists(path))
+        then Directory.CreateDirectory(path) |> ignore
         let driver = Driver.FromString config.driver
         if String.IsNullOrEmpty path then
             raise
@@ -130,8 +149,11 @@ module Utils =
             let content = reader.ReadToEnd()
             reader.Close()
             let split = name.Split('_')
+
             let filenameErr =
-                sprintf "File \"%s\" is not a valid migration name. The migration name should look like %s" name
+                sprintf
+                    "File \"%s\" is not a valid migration name. The migration name should look like %s"
+                    name
                     "[NAME]_[TIMESTAMP].sql example: NAME_0123456789.sql"
 
             let (name, timestamp) =
@@ -176,7 +198,10 @@ module Utils =
         match lastMigration with
         | None -> migrations
         | Some migration ->
-            let index = migrations |> Array.findIndex (fun m -> m.name = migration.name)
+            let index =
+                migrations
+                |> Array.findIndex (fun m -> m.name = migration.name)
+
             match index + 1 = migrations.Length with
             | true -> Array.empty
             | false ->
@@ -186,7 +211,10 @@ module Utils =
     let getAppliedMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
         match lastMigration with
         | Some lastMigration ->
-            let lastRanIndex = migrations |> Array.findIndex (fun m -> m.name = lastMigration.name)
+            let lastRanIndex =
+                migrations
+                |> Array.findIndex (fun m -> m.name = lastMigration.name)
+
             migrations.[0..lastRanIndex]
         | None -> Array.empty
 
