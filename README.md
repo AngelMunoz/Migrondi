@@ -2,21 +2,37 @@
 
 # Migrondi
 
-This is a pretty simple SQL Migrations tool that I've been live coding for the last week (Apr 6 - Apr 10) Migrondi provides a way to execute SQL migrations against a database
+Migrondi is a SQL Migrations tool designed to be simple and execute simple migrations. Write SQL and execute SQL against your database.
 
-> You don't need a dotnet project/toolchain etc to use this, if you are using node/java/python/ruby that's completely fine this project works directly with your database and you shouldn't even need to have .net installed at all. If you want a brief tutorial/explanation you can check this post in [dev.to](https://dev.to/tunaxor/migrondi-simple-sql-migrations-tool-30lm)
+> ***NOTE***: You don't need a dotnet **project** or **toolchain** etc to use this, if you are using node, java, python, ruby, or something else that's completely fine this project works directly with your database and **you don't even need to have .NET installed at all**. If you want a brief tutorial/explanation you can check this post in [dev.to](https://dev.to/tunaxor/migrondi-simple-sql-migrations-tool-30lm)
 
-## Usage
 
-Grab the binary from the releases page or build from source and put it on your `PATH`, that way the command is available globally
+Migrondi Runs on `Linux-x64`, `Linux-arm64`, `Windows-x64`, and `MacOS`**
 
-## .net users
+> ** MacOS binaries are not provided yet, but if you're using dotnet, then you can install it as a dotnet tool
+
+
+## Install
+
+### For Non .NET users
+Grab the binary from the releases page or build from source and put it on your `PATH`, that way the command is available globally e.g.
+
+```bash
+# you can put this at the end of your ~/.bashrc
+# $HOME/Apps/migrondi is a directory where you have downloaded your "Migrondi" binary
+export MIGRONDI_HOME="$HOME/Apps/migrondi"
+export PATH="$PATH:$MIGRONDI_HOME"
+```
+
+### For .NET users
 
 you can now install this as a global/local tool as well
 
 ```
 dotnet tool install --global Migrondi --version 0.4.2
 ```
+
+## Usage
 
 ### Init
 
