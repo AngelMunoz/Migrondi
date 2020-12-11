@@ -11,14 +11,18 @@ module Migrations =
 
     let runMigrationsInit (opts: InitOptions) =
         let path, migrationsPath = getInitPathAndMigrationsPath opts.path
+
         match checkExistsPathAndMigrationsDir path migrationsPath with
-        | (true, _) -> raise (ArgumentException "\"migrondi.json\" already exists, aborting.")
+        | (true, _) -> raise (ArgumentException """"migrondi.json" already exists, aborting.""")
         | _ ->
             createMigrationsDir migrationsPath |> ignore
-            let file, content = createMigrondiConfJson path migrationsPath
+
+            let file, content =
+                createMigrondiConfJson path migrationsPath
+
             file.Write(ReadOnlySpan<byte>(content))
-            printfn "Created %s and %s" file.Name migrationsPath
-            file.Close()
+            printfn $"Created %s{file.Name} and %s{migrationsPath}"
+            file.Dispose()
 
 
 
@@ -26,19 +30,24 @@ module Migrations =
         let file, bytes = createNewMigrationFile path options.name
 
         file.Write(ReadOnlySpan<byte>(bytes))
-        file.Close()
+        printfn $"""Created: {file.Name}"""
+        file.Dispose()
 
-    let runMigrationsUp
-        (connection: IDbConnection)
-        (path: string, config: MigrondiConfig, driver: Driver)
-        (options: UpOptions)
-        =
+    let runMigrationsUp (connection: IDbConnection)
+                        (path: string, config: MigrondiConfig, driver: Driver)
+                        (options: UpOptions)
+                        =
         let created = ensureMigrationsTable driver connection
-        if not created then raise (UnauthorizedAccessException "Could not create the Database/Migrations table")
+
+        if not created
+        then raise (UnauthorizedAccessException "Could not create the Database/Migrations table")
+
         let migration = getLastMigration connection
 
         let migrations = getMigrations path
-        let pendingMigrations = getPendingMigrations migration migrations
+
+        let pendingMigrations =
+            getPendingMigrations migration migrations
 
         let migrationsToRun =
             match options.total |> Option.ofNullable with
@@ -47,6 +56,7 @@ module Migrations =
                     match total >= pendingMigrations.Length with
                     | true -> pendingMigrations.Length - 1
                     | false -> total
+
                 match Array.isEmpty pendingMigrations with
                 | true -> Array.empty
                 | false -> pendingMigrations |> Array.take total
@@ -54,33 +64,38 @@ module Migrations =
 
         runMigrations driver connection MigrationType.Up migrationsToRun
 
-    let runMigrationsDown
-        (connection: IDbConnection)
-        (path: string, config: MigrondiConfig, driver: Driver)
-        (options: DownOptions)
-        =
+    let runMigrationsDown (connection: IDbConnection)
+                          (path: string, _: MigrondiConfig, driver: Driver)
+                          (options: DownOptions)
+                          =
         let migration = getLastMigration connection
 
         let migrations = getMigrations path
-        let alreadyRanMigrations = getAppliedMigrations migration migrations |> Array.rev
+
+        let alreadyRanMigrations =
+            getAppliedMigrations migration migrations
+            |> Array.rev
 
         let amountToRunDown =
             match options.total |> Option.ofNullable with
             | Some number ->
                 match number > alreadyRanMigrations.Length with
                 | true ->
-                    printfn "Total [%i] provided exceeds the amount of migrations in the database (%i)" number
+                    printfn
+                        "Total [%i] provided exceeds the amount of migrations in the database (%i)"
+                        number
                         alreadyRanMigrations.Length
+
                     alreadyRanMigrations.Length
                 | false -> number
             | None -> alreadyRanMigrations.Length
 
         runMigrations driver connection MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
 
-    let runMigrationsList
-        (connection: IDbConnection)
-        (path: string, _: MigrondiConfig, _: Driver)
-        (options: ListOptions) =
+    let runMigrationsList (connection: IDbConnection)
+                          (path: string, _: MigrondiConfig, _: Driver)
+                          (options: ListOptions)
+                          =
         let all =
             match options.all |> Option.ofNullable with
             | Some total -> total
@@ -106,7 +121,8 @@ module Migrations =
                 printfn "Last migration in the database is %s" (migrationName (MigrationSource.Database migration))
             | None -> printfn "No migrations have been run in the database"
         | (_, true, true) ->
-            let pendingMigrations = getPendingMigrations migration migrations
+            let pendingMigrations =
+                getPendingMigrations migration migrations
 
             let migrations =
                 pendingMigrations
@@ -115,9 +131,11 @@ module Migrations =
                      >> migrationName
                      >> sprintf "%s\n")
                 |> fun arr -> String.Join("", arr)
+
             printfn "Missing migrations:\n%s" migrations
         | (_, true, false) ->
-            let alreadyRan = getAppliedMigrations migration migrations
+            let alreadyRan =
+                getAppliedMigrations migration migrations
 
             let migrations =
                 alreadyRan
@@ -130,9 +148,7 @@ module Migrations =
             printfn "Migrations that have been ran:\n%s" migrations
         | (_, _, _) ->
             printfn "This flag combination is not supported"
-            let combinations = """
-                    --last true
-                    --all true --missing true
-                    --all true --missing false
-                    """
-            printfn "Suported comibations are: %s" combinations
+            let l1 = "--last true"
+            let l2 = "--all true --missing true"
+            let l3 = "--all true --missing false"
+            printfn $"Suported comibations are:\n{l1}\n{l2}\n{l3}"

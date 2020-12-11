@@ -44,6 +44,7 @@ module Types =
             | "mysql" -> Mysql
             | others ->
                 let drivers = "mssql | sqlite | postgres | mysql"
+
                 raise
                     (ArgumentException
                         (sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers))

@@ -49,6 +49,7 @@ module Utils =
             let opts = JsonSerializerOptions()
             opts.WriteIndented <- true
             opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+
             JsonSerializer.SerializeToUtf8Bytes<MigrondiConfig>
                 ({ connection = "Data Source=migrondi.db"
                    migrationsDir = migrationsDir
@@ -80,9 +81,18 @@ module Utils =
 
         let contentBytes =
             let content =
-                sprintf "-- ---------- MIGRONDI:UP:%i --------------\n-- Write your Up migrations here\n\n" timestamp
-                + (sprintf "-- ---------- MIGRONDI:DOWN:%i --------------\n-- Write how to revert the migration here"
-                       timestamp)
+                let l1 =
+                    $"-- ---------- MIGRONDI:UP:%i{timestamp} --------------"
+
+                let l2 = $"-- Write your Up migrations here"
+
+                let l3 =
+                    $"-- ---------- MIGRONDI:DOWN:%i{timestamp} --------------"
+
+                let l4 =
+                    $"-- Write how to revert the migration here"
+
+                $"{l1}\n{l2}\n\n{l3}\n{l4}\n\n"
 
             Text.Encoding.UTF8.GetBytes(content)
 
@@ -112,6 +122,7 @@ module Utils =
             let opts = JsonSerializerOptions()
             opts.AllowTrailingCommas <- true
             opts.ReadCommentHandling <- JsonCommentHandling.Skip
+            opts.IgnoreNullValues <- true
             JsonSerializer.Deserialize<MigrondiConfig>(content, opts)
 
         match config.driver with
@@ -121,9 +132,10 @@ module Utils =
         | "mysql" -> config
         | others ->
             let drivers = "mssql | sqlite | postgres | mysql"
+
             raise
                 (ArgumentException
-                    (sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers))
+                    ($"""The driver selected "%s{others}" does not match the available drivers "%s{drivers}"."""))
 
     let getPathConfigAndDriver () =
         let config = getMigrondiConfiguration ()
@@ -132,11 +144,14 @@ module Utils =
 
         if not (Directory.Exists(path))
         then Directory.CreateDirectory(path) |> ignore
+
         let driver = Driver.FromString config.driver
+
         if String.IsNullOrEmpty path then
             raise
                 (ArgumentException
                     "Path seems to be empty, please check that you have provided the correct path to your migrations directory")
+
         path, config, driver
 
 
@@ -151,15 +166,22 @@ module Utils =
             let split = name.Split('_')
 
             let filenameErr =
-                sprintf
-                    "File \"%s\" is not a valid migration name. The migration name should look like %s"
-                    name
+                let l1 =
+                    """File "%s{name}" is not a valid migration name."""
+
+                let example =
                     "[NAME]_[TIMESTAMP].sql example: NAME_0123456789.sql"
+
+                let l2 =
+                    $"The migration name should look like %s{example}"
+
+                $"{l1}\n{l2}"
 
             let (name, timestamp) =
                 match split.Length = 2 with
                 | true ->
                     let secondSplit = split.[1].Split(".")
+
                     match secondSplit.Length = 2 with
                     | true -> split.[0], (secondSplit.[0] |> int64)
                     | false -> failwith filenameErr
