@@ -1,102 +1,174 @@
-﻿open CommandLine
+﻿namespace Migrondi
+
+open CommandLine
 open Migrondi.Types
 open Migrondi.Options
 open Migrondi.Migrations
 open Migrondi.Utils
+open System.Data
 
-let initializeDriver driver = 
-    match driver with
-    | Driver.Mssql -> RepoDb.SqlServerBootstrap.Initialize()
-    | Driver.Sqlite -> RepoDb.SqLiteBootstrap.Initialize()
-    | Driver.Mysql -> RepoDb.MySqlBootstrap.Initialize()
-    | Driver.Postgresql -> RepoDb.PostgreSqlBootstrap.Initialize()
 
-[<EntryPoint>]
-let main argv =
-  let result = CommandLine.Parser.Default.ParseArguments<InitOptions, NewOptions, UpOptions, DownOptions, ListOptions>(argv)
-  match result with
-  | :? Parsed<obj> as command ->
-    match command.Value with 
-    | :? InitOptions as initOptions ->
+module Main =
+    let initializeDriver driver =
+        match driver with
+        | Driver.Mssql -> RepoDb.SqlServerBootstrap.Initialize()
+        | Driver.Sqlite -> RepoDb.SqLiteBootstrap.Initialize()
+        | Driver.Mysql -> RepoDb.MySqlBootstrap.Initialize()
+        | Driver.Postgresql -> RepoDb.PostgreSqlBootstrap.Initialize()
+
+    let tryRunInit init =
         try
-            runMigrationsInit initOptions
+            runMigrationsInit init
+            Ok()
+        with ex -> Result.Error ex
+
+    let tryRunNew (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>) newOptions =
+
+        try
+            match getConfig () with
+            | Ok config ->
+                runMigrationsNew config newOptions
+                Ok()
+            | Error ex -> Result.Error ex
+        with :? System.UnauthorizedAccessException ->
+            Result.Error
+                (exn "Failed to write migration to disk\nCheck that you have sufficient permission on the directory")
+
+    let tryRunUp (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
+                 (getConnection: Driver -> string -> IDbConnection)
+                 upOptions
+                 =
+        try
+            match getConfig () with
+            | Ok (path, config, driver) ->
+                initializeDriver driver
+                let connection = getConnection driver config.connection
+
+                let result =
+                    (runMigrationsUp connection (path, config, driver) upOptions)
+                        .Length
+
+                connection.Close()
+                Ok result
+
+            | Error err -> Result.Error err
+        with
+        | :? System.UnauthorizedAccessException as ex ->
+            let l1 = "Failed to write migration to disk"
+
+            let l2 =
+                "Check that you have sufficient permission on the directory"
+
+            let l3 = ex.Message
+            Result.Error(exn $"{l1}\n{l2}\n{l3}")
+        | ex -> Result.Error ex
+
+    let tryRunDown (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
+                   (getConnection: Driver -> string -> IDbConnection)
+                   downOptions
+                   =
+        try
+            match getConfig () with
+            | Ok (path, config, driver) ->
+                initializeDriver driver
+                let connection = getConnection driver config.connection
+
+                let result =
+                    (runMigrationsDown connection (path, config, driver) downOptions)
+                        .Length
+
+                connection.Close()
+                Ok result
+            | Error err -> Result.Error err
+        with ex -> Result.Error ex
+
+    let tryRunList (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
+                   (getConnection: Driver -> string -> IDbConnection)
+                   listOptions
+                   =
+        try
+            match getConfig () with
+            | Ok (path, config, driver) ->
+                initializeDriver driver
+                let connection = getConnection driver config.connection
+                runMigrationsList connection (path, config, driver) listOptions
+                connection.Close()
+                Ok()
+            | Error err -> Result.Error err
+        with
+        | :? System.UnauthorizedAccessException ->
+            Result.Error
+                (exn "Failed to read migrations directory\nCheck that you have sufficient permission on the directory")
+        | ex -> Result.Error ex
+
+    let tryGetConfig () =
+        try
+            Ok(getPathConfigAndDriver ())
         with
         | :? System.IO.FileNotFoundException
-            | :? System.ArgumentException
-            | :? System.ArgumentNullException
-            | :? System.IO.DirectoryNotFoundException
-            | :? System.IO.IOException
-            | :? System.IO.PathTooLongException
-            | :? System.NotSupportedException
-            | :? System.UnauthorizedAccessException as ex ->
-                printfn "%s" ex.Message
-    | _ ->
-        let (path, config, driver) = 
-            try
-                getPathConfigAndDriver()
-            with
-            | :? System.IO.FileNotFoundException
-            | :? System.ArgumentException
-            | :? System.ArgumentNullException
-            | :? System.IO.DirectoryNotFoundException
-            | :? System.IO.IOException
-            | :? System.IO.PathTooLongException
-            | :? System.NotSupportedException
-            | :? System.UnauthorizedAccessException as ex ->
-                printfn "%s" ex.Message
-                exit(1)
-            | :? System.Text.Json.JsonException->
-                printfn "Failed to parse the migrondi.json file, please check for trailing commas and that the properties have the correct name"
-                exit(1)
-        initializeDriver driver
-        let connection = getConnection driver config.connection
-        match command.Value with
-        | :? NewOptions as newOptions ->
-            try 
-                runMigrationsNew (path, config, driver) newOptions
-            with
-            | :? System.UnauthorizedAccessException ->
-                    printfn "Failed to write migration to disk"
-                    printfn "Check that you have sufficient permission on the directory"
-        | :? UpOptions as upOptions ->
-            try 
-                let result = runMigrationsUp connection (path,config, driver) upOptions
-                printfn "Migrations Applied: %i" result.Length
-            with
-            | :? System.UnauthorizedAccessException as ex ->
-                 printfn "Failed to write migration to disk"
-                 printfn "Check that you have sufficient permission on the directory"
-                 printfn "%s" ex.Message
-                 exit(1)
-            | :? System.ArgumentException as ex ->
-                 printfn "%s" ex.Message
-                 exit(1)
-            | ex ->
-                 printfn "Unexpected Exception %s" ex.Message
-                 exit(1)
-        | :? DownOptions as downOptions ->
-            try
-                let result = runMigrationsDown connection (path, config, driver) downOptions
-                printfn "Rolled back %i migrations" result.Length
-            with 
-            | :? System.InvalidOperationException as ex ->
-                 printfn "%s" ex.Message
-                 exit(1)
-            | ex ->
-                 printfn "Unexpected Exception %s" ex.Message
-                 exit(1)
-        | :? ListOptions as listOptions ->
-            try
-                runMigrationsList connection (path, config, driver) listOptions
-            with 
-            | :? System.UnauthorizedAccessException as ex ->
-                 printfn "Failed to read migrations directory"
-                 printfn "Check that you have sufficient permission on the directory"
-            | ex ->
-                    printfn "Unexpected Exception %s" ex.Message
-        | _ -> invalidOp "Unexpected parsing result"
-        connection.Close()
-  | :? NotParsed<obj> as notParsed ->
-    printfn "Not Parsed: %A" (notParsed.Errors |> Seq.map(fun err -> err.Tag))
-  | _ -> invalidOp "Unexpected parsing result"
-  0
+        | :? System.ArgumentException
+        | :? System.ArgumentNullException
+        | :? System.IO.DirectoryNotFoundException
+        | :? System.IO.IOException
+        | :? System.IO.PathTooLongException
+        | :? System.NotSupportedException
+        | :? System.UnauthorizedAccessException as ex -> Result.Error ex
+        | :? System.Text.Json.JsonException ->
+            Result.Error
+                (exn
+                    "Failed to parse the migrondi.json file, please check for trailing commas and that the properties have the correct name")
+
+
+
+    [<EntryPoint>]
+    let main argv =
+        let result =
+            CommandLine.Parser.Default.ParseArguments<InitOptions, NewOptions, UpOptions, DownOptions, ListOptions>
+                (argv)
+
+        match result with
+        | :? (NotParsed<obj>) -> 1
+        | :? (Parsed<obj>) as command ->
+            match command.Value with
+            | :? NewOptions as newOptions ->
+                match tryRunNew tryGetConfig newOptions with
+                | Ok _ -> 0
+                | Error err ->
+                    eprintfn $"{err.Message}"
+                    1
+            | :? UpOptions as upOptions ->
+                match tryRunUp tryGetConfig getConnection upOptions with
+                | Ok amount ->
+                    printfn $"Migrations Applied: %i{amount}"
+                    0
+                | Error err ->
+                    eprintfn $"{err.Message}"
+                    1
+            | :? DownOptions as downOptions ->
+                match tryRunDown tryGetConfig getConnection downOptions with
+                | Ok amount ->
+                    printfn $"Rolled back %i{amount} migrations"
+                    0
+                | Error err ->
+                    eprintfn $"{err.Message}"
+                    1
+            | :? ListOptions as listOptions ->
+                match tryRunList tryGetConfig getConnection listOptions with
+                | Ok _ -> 0
+                | Error err ->
+                    eprintfn $"{err.Message}"
+                    1
+            | :? InitOptions as initOptions ->
+                let result = tryRunInit initOptions
+
+                match result with
+                | Ok _ -> 0
+                | Error err ->
+                    eprintfn $"{err.Message}"
+                    1
+            | _ ->
+                eprintfn "Unexpected parsing result"
+                1
+        | _ ->
+            eprintfn "Unexpected parsing result"
+            1
