@@ -67,22 +67,27 @@ let main argv =
                  printfn "Failed to write migration to disk"
                  printfn "Check that you have sufficient permission on the directory"
                  printfn "%s" ex.Message
+                 exit(1)
             | :? System.ArgumentException as ex ->
                  printfn "%s" ex.Message
+                 exit(1)
             | ex ->
-                    printfn "Unexpected Exception %s" ex.Message
+                 printfn "Unexpected Exception %s" ex.Message
+                 exit(1)
         | :? DownOptions as downOptions ->
             try
-                let result = runMigrationsDown connection (path,config, driver) downOptions
+                let result = runMigrationsDown connection (path, config, driver) downOptions
                 printfn "Rolled back %i migrations" result.Length
             with 
             | :? System.InvalidOperationException as ex ->
                  printfn "%s" ex.Message
+                 exit(1)
             | ex ->
-                    printfn "Unexpected Exception %s" ex.Message
+                 printfn "Unexpected Exception %s" ex.Message
+                 exit(1)
         | :? ListOptions as listOptions ->
             try
-                runMigrationsList connection (path,config, driver) listOptions
+                runMigrationsList connection (path, config, driver) listOptions
             with 
             | :? System.UnauthorizedAccessException as ex ->
                  printfn "Failed to read migrations directory"
