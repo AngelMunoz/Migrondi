@@ -10,23 +10,21 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet: [ '3.1.x', '5.0.x' ]
 
     steps:
     - uses: actions/checkout@v2
-    - name: Install dependencies
+    - name: Setup dotnet
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: '5.0.x'
-    - run: dotnet restore src
-    - name: Build
-      uses: actions/setup-dotnet@v1
-      with:
-        dotnet-version: '5.0.x'
-    - run: dotnet build src --configuration Release --no-restore
-    - name: Tests
+    - name: Setup dotnet
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: '3.1.x'
+    - run: dotnet build src --configuration Release
     - run: dotnet test src/Migrondi.Tests --verbosity normal
 
 
