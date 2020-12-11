@@ -13,15 +13,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Setup .NET Core
+    - name: Install dependencies
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: '5.0.x'
-    - name: Install dependencies
     - run: dotnet restore src
     - name: Build
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: '5.0.x'
     - run: dotnet build src --configuration Release --no-restore
     - name: Tests
+      uses: actions/setup-dotnet@v1
       with:
         dotnet-version: '3.1.x'
     - run: dotnet test src/Migrondi.Tests --no-restore --verbosity normal
