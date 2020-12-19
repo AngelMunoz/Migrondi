@@ -9,6 +9,7 @@ open System
 open System.Data
 open Npgsql
 open MySql.Data.MySqlClient
+open System.Text.RegularExpressions
 
 module Utils =
     module Operators =
@@ -72,7 +73,7 @@ module Utils =
 
     let createNewMigrationFile (path: string) (name: string) =
         let timestamp =
-            DateTimeOffset.Now.ToUnixTimeMilliseconds()
+            System.DateTimeOffset.Now.ToUnixTimeMilliseconds()
 
         let name =
             sprintf "%s_%i.sql" (name.Trim()) timestamp
@@ -154,16 +155,14 @@ module Utils =
 
         path, config, driver
 
-
     let getMigrations (path: string) =
         let dir = DirectoryInfo(path)
-
+        
         let fileMapping (file: FileInfo) =
             let name = file.Name
             let reader = file.OpenText()
             let content = reader.ReadToEnd()
             reader.Close()
-            let split = name.Split('_')
 
             let filenameErr =
                 let l1 =
@@ -177,15 +176,18 @@ module Utils =
 
                 $"{l1}\n{l2}"
 
-            let (name, timestamp) =
-                match split.Length = 2 with
-                | true ->
-                    let secondSplit = split.[1].Split(".")
+            // matches any name that ends with a timestamp.sql
+            let migrationNamePattern = "(.+)_([0-9]+).(sql|SQL)"
+            
+            let (|Regex|_|) pattern input =
+                let m = Regex.Match(input, pattern)
+                if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
+                else None
 
-                    match secondSplit.Length = 2 with
-                    | true -> split.[0], (secondSplit.[0] |> int64)
-                    | false -> failwith filenameErr
-                | false -> failwith filenameErr
+            let (name, timestamp) =
+                match name with
+                | Regex migrationNamePattern [ filename; timestamp; _ ] -> (filename, timestamp |> int64)
+                | _ -> failwith filenameErr
 
             let getSplitContent migrationType =
                 let separator = getSeparator migrationType timestamp
