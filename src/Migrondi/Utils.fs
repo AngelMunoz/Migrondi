@@ -73,7 +73,7 @@ module Utils =
 
     let createNewMigrationFile (path: string) (name: string) =
         let timestamp =
-            System.DateTimeOffset.Now.ToUnixTimeMilliseconds()
+            DateTimeOffset.Now.ToUnixTimeMilliseconds()
 
         let name =
             sprintf "%s_%i.sql" (name.Trim()) timestamp
