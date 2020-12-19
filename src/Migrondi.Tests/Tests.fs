@@ -109,7 +109,7 @@ type TestUtils() =
     member this.CreateNewMigrationFile_WithComplexNameTest() =
         let randomName n = 
             let r = Random()
-            let chars = Array.concat([[|'a' .. 'z'|]; [|'A' .. 'Z'|]; [|'0' .. '9'|]])
+            let chars = Array.concat([[|'a' .. 'z'|]; [|'A' .. 'Z'|]; [|'0' .. '9'|]; [|'!'; '@'; ' '; '_'; '#'; '%'|]])
             let sz = Array.length chars in
             String(Array.init n (fun _ -> chars.[r.Next sz]))
 
