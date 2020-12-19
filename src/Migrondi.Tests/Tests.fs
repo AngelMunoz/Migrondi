@@ -104,3 +104,27 @@ type TestUtils() =
         Assert.IsTrue(file.Name.Contains ".sql")
         Assert.IsTrue(content.Contains "MIGRONDI:UP")
         Assert.IsTrue(content.Contains "MIGRONDI:DOWN")
+
+    [<TestMethod>]
+    member this.CreateNewMigrationFile_WithComplexNameTest() =
+        let randomName n = 
+            let r = Random()
+            let chars = Array.concat([[|'a' .. 'z'|]; [|'A' .. 'Z'|]; [|'0' .. '9'|]; [|'!'; '@'; ' '; '_'; '#'; '%'|]])
+            let sz = Array.length chars in
+            String(Array.init n (fun _ -> chars.[r.Next sz]))
+
+        let name = randomName 20
+        let tempPath =
+            Path.Combine(Path.GetTempPath(), name)
+
+        Directory.CreateDirectory tempPath |> ignore
+
+        let file, content =
+            createNewMigrationFile tempPath name
+
+        let content = Encoding.UTF8.GetString content
+        Assert.IsTrue(file.Name.Contains name)
+        Assert.IsTrue(file.Name.Contains "_")
+        Assert.IsTrue(file.Name.Contains ".sql")
+        Assert.IsTrue(content.Contains "MIGRONDI:UP")
+        Assert.IsTrue(content.Contains "MIGRONDI:DOWN")
