@@ -4,17 +4,16 @@
 
 Migrondi is a SQL Migrations tool designed to be simple and execute simple migrations. Write SQL and execute SQL against your database.
 
-> ***NOTE***: You don't need a dotnet **project** or **toolchain** etc to use this, if you are using node, java, python, ruby, or something else that's completely fine this project works directly with your database and **you don't even need to have .NET installed at all**. If you want a brief tutorial/explanation you can check this post in [dev.to](https://dev.to/tunaxor/migrondi-simple-sql-migrations-tool-30lm)
+> **_NOTE_**: You don't need a dotnet **project** or **toolchain** etc to use this, if you are using node, java, python, ruby, or something else that's completely fine this project works directly with your database and **you don't even need to have .NET installed at all**. If you want a brief tutorial/explanation you can check this post in [dev.to](https://dev.to/tunaxor/migrondi-simple-sql-migrations-tool-30lm)
 
+Migrondi Runs on `Linux-x64`, `Linux-arm64`, `Windows-x64`, and `MacOS`\*\*
 
-Migrondi Runs on `Linux-x64`, `Linux-arm64`, `Windows-x64`, and `MacOS`**
-
-> ** MacOS binaries are not provided yet, but if you're using dotnet, then you can install it as a dotnet tool
-
+> \*\* MacOS binaries are not provided yet, but if you're using dotnet, then you can install it as a dotnet tool
 
 ## Install
 
 ### For Non .NET users
+
 Grab the binary from the releases page or build from source and put it on your `PATH`, that way the command is available globally e.g.
 
 ```bash
@@ -29,7 +28,7 @@ export PATH="$PATH:$MIGRONDI_HOME"
 you can now install this as a global/local tool as well
 
 ```
-dotnet tool install --global Migrondi --version 0.4.2
+dotnet tool install --global Migrondi
 ```
 
 ## Usage
@@ -37,6 +36,12 @@ dotnet tool install --global Migrondi --version 0.4.2
 ### Init
 
 If you are starting from scratch you can run the init command to create the migrondi files and directories needed for the rest of the commands to work properly
+
+```
+~/Migrondi $ ./Migrondi init
+Created /home/x/Migrondi/migrondi.json and /home/x/Migrondi/migrations
+~/Migrondi $
+```
 
 ```
 PS C:\Users\x\Migrondi> ./Migrondi.exe init
@@ -76,11 +81,8 @@ to use this tool you need to supply a JSON configuration file (the name must be 
   any of the following "mssql" "sqlite" "mysql" "postgres"
 
 ```
-Migrondi 0.4.0
+Migrondi 0.5.0
 Copyright (C) 2020 Angel D. Munoz
-
-ERROR(S):
-  No verb selected.
 
   init       Creates basic files and directories to start using migrondi.
 
