@@ -8,7 +8,8 @@ Migrondi is a SQL Migrations tool designed to be simple and execute simple migra
 
 Migrondi Runs on `Linux-x64`, `Linux-arm64`, `Windows-x64`, and `MacOS`\*\*
 
-> \*\* MacOS binaries are not provided yet, but if you're using dotnet, then you can install it as a dotnet tool
+> \*\* MacOS binaries are not provided yet you can easily build from source, check the command at the bottom.
+> If you're using dotnet, then you can install it as a dotnet tool
 
 ## Install
 
