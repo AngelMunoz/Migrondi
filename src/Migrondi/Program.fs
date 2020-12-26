@@ -31,8 +31,9 @@ module Main =
                 Ok()
             | Error ex -> Result.Error ex
         with :? System.UnauthorizedAccessException ->
-            Result.Error
-                (exn "Failed to write migration to disk\nCheck that you have sufficient permission on the directory")
+            Result.Error(
+                exn "Failed to write migration to disk\nCheck that you have sufficient permission on the directory"
+            )
 
     let tryRunUp (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
                  (getConnection: Driver -> string -> IDbConnection)
@@ -97,8 +98,9 @@ module Main =
             | Error err -> Result.Error err
         with
         | :? System.UnauthorizedAccessException ->
-            Result.Error
-                (exn "Failed to read migrations directory\nCheck that you have sufficient permission on the directory")
+            Result.Error(
+                exn "Failed to read migrations directory\nCheck that you have sufficient permission on the directory"
+            )
         | ex -> Result.Error ex
 
     let tryGetConfig () =
@@ -114,17 +116,19 @@ module Main =
         | :? System.NotSupportedException
         | :? System.UnauthorizedAccessException as ex -> Result.Error ex
         | :? System.Text.Json.JsonException ->
-            Result.Error
-                (exn
-                    "Failed to parse the migrondi.json file, please check for trailing commas and that the properties have the correct name")
+            Result.Error(
+                exn
+                    "Failed to parse the migrondi.json file, please check for trailing commas and that the properties have the correct name"
+            )
 
 
 
     [<EntryPoint>]
     let main argv =
         let result =
-            CommandLine.Parser.Default.ParseArguments<InitOptions, NewOptions, UpOptions, DownOptions, ListOptions>
-                (argv)
+            CommandLine.Parser.Default.ParseArguments<InitOptions, NewOptions, UpOptions, DownOptions, ListOptions>(
+                argv
+            )
 
         match result with
         | :? (NotParsed<obj>) -> 1
@@ -139,7 +143,11 @@ module Main =
             | :? UpOptions as upOptions ->
                 match tryRunUp tryGetConfig getConnection upOptions with
                 | Ok amount ->
-                    printfn $"Migrations Applied: %i{amount}"
+                    match upOptions.dryRun |> Option.ofNullable with
+                    | Some true -> printfn $"Total Migrations To Run: %i{amount}"
+                    | Some false
+                    | _ -> printfn $"Migrations Applied: %i{amount}"
+
                     0
                 | Error err ->
                     eprintfn $"{err.Message}"
@@ -147,7 +155,11 @@ module Main =
             | :? DownOptions as downOptions ->
                 match tryRunDown tryGetConfig getConnection downOptions with
                 | Ok amount ->
-                    printfn $"Rolled back %i{amount} migrations"
+                    match downOptions.dryRun |> Option.ofNullable with
+                    | Some true -> printfn $"Total Migrations To Run: %i{amount}"
+                    | Some false
+                    | _ -> printfn $"Rolled back %i{amount} migrations"
+
                     0
                 | Error err ->
                     eprintfn $"{err.Message}"

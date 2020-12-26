@@ -17,12 +17,22 @@ module Options =
     [<Verb("up", HelpText = "Runs the migrations against the database.")>]
     type UpOptions =
         { [<Option('t', "total", Required = false, HelpText = "Amount of migrations to run up.")>]
-          total: Nullable<int> }
+          total: Nullable<int>
+          [<Option('d',
+                   "dry-run",
+                   Required = false,
+                   HelpText = "Prints to the console what is going to be run against the database")>]
+          dryRun: Nullable<bool> }
 
     [<Verb("down", HelpText = "Rolls back migrations from the database.")>]
     type DownOptions =
         { [<Option('t', "total", Required = false, HelpText = "Amount of migrations to run down.")>]
-          total: Nullable<int> }
+          total: Nullable<int>
+          [<Option('d',
+                   "dry-run",
+                   Required = false,
+                   HelpText = "Prints to the console what is going to be run against the database")>]
+          dryRun: Nullable<bool> }
 
     [<Verb("list", HelpText = "List the amount of migrations in the database.")>]
     type ListOptions =

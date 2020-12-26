@@ -27,7 +27,8 @@ module Migrations =
 
 
     let runMigrationsNew (path: string, _: MigrondiConfig, _: Driver) (options: NewOptions) =
-        let file, bytes = createNewMigrationFile path options.name
+        let file, bytes =
+            createNewMigrationFile path options.name
 
         file.Write(ReadOnlySpan<byte>(bytes))
         printfn $"""Created: {file.Name}"""
@@ -62,7 +63,10 @@ module Migrations =
                 | false -> pendingMigrations |> Array.take total
             | None -> pendingMigrations
 
-        runMigrations driver connection MigrationType.Up migrationsToRun
+        match options.dryRun |> Option.ofNullable with
+        | Some true -> dryRunMigrations driver MigrationType.Up migrationsToRun
+        | Some false
+        | _ -> runMigrations driver connection MigrationType.Up migrationsToRun
 
     let runMigrationsDown (connection: IDbConnection)
                           (path: string, _: MigrondiConfig, driver: Driver)
@@ -90,7 +94,10 @@ module Migrations =
                 | false -> number
             | None -> alreadyRanMigrations.Length
 
-        runMigrations driver connection MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
+        match options.dryRun |> Option.ofNullable with
+        | Some true -> dryRunMigrations driver MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
+        | Some false
+        | _ -> runMigrations driver connection MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
 
     let runMigrationsList (connection: IDbConnection)
                           (path: string, _: MigrondiConfig, _: Driver)
@@ -126,10 +133,11 @@ module Migrations =
 
             let migrations =
                 pendingMigrations
-                |> Array.map
-                    (MigrationSource.File
-                     >> migrationName
-                     >> sprintf "%s\n")
+                |> Array.map (
+                    MigrationSource.File
+                    >> migrationName
+                    >> sprintf "%s\n"
+                )
                 |> fun arr -> String.Join("", arr)
 
             printfn "Missing migrations:\n%s" migrations
@@ -139,10 +147,11 @@ module Migrations =
 
             let migrations =
                 alreadyRan
-                |> Array.map
-                    (MigrationSource.File
-                     >> migrationName
-                     >> sprintf "%s\n")
+                |> Array.map (
+                    MigrationSource.File
+                    >> migrationName
+                    >> sprintf "%s\n"
+                )
                 |> fun arr -> String.Join("", arr)
 
             printfn "Migrations that have been ran:\n%s" migrations
