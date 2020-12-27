@@ -9,7 +9,8 @@ module Types =
     type MigrondiConfig =
         { connection: string
           migrationsDir: string
-          driver: string }
+          driver: string
+          style: string option }
 
     [<CLIMutable>]
     [<Map("migration")>]
@@ -20,6 +21,7 @@ module Types =
 
     type MigrationFile =
         { name: string
+          ext: string
           timestamp: int64
           upContent: string
           downContent: string }
@@ -45,9 +47,11 @@ module Types =
             | others ->
                 let drivers = "mssql | sqlite | postgres | mysql"
 
-                raise
-                    (ArgumentException
-                        (sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers))
+                raise (
+                    ArgumentException(
+                        sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers
+                    )
+                )
 
     [<RequireQualifiedAccess>]
     type MigrationSource =
