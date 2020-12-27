@@ -4,6 +4,7 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Debug Init Command",
             "type": "coreclr",
@@ -61,7 +62,22 @@
             "console": "internalConsole"
         },
         {
-            "name": "Debug DOWN Command",
+            "name": "Debug up --dry-run",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "args": [
+                "up",
+                "--dry-run",
+                "true"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        },
+        {
+            "name": "Debug down",
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
@@ -72,6 +88,21 @@
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "console": "internalConsole",
+        },
+        {
+            "name": "Debug down --dry-run",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "args": [
+                "down",
+                "--dry-run",
+                "true"
+            ],
+            "cwd": "${workspaceFolder}",
+            "stopAtEntry": false,
+            "console": "internalConsole"
         },
         {
             "name": "Debug down -t 1",
