@@ -8,6 +8,10 @@ open Utils
 open Queries
 
 module Migrations =
+    let private isSql (style: string option) =
+        style
+        |> Option.map (fun style -> style.ToLowerInvariant() <> "fsx")
+        |> Option.defaultValue false
 
     let runMigrationsInit (opts: InitOptions) =
         let path, migrationsPath = getInitPathAndMigrationsPath opts.path
@@ -26,9 +30,21 @@ module Migrations =
 
 
 
-    let runMigrationsNew (path: string, _: MigrondiConfig, _: Driver) (options: NewOptions) =
+    let runMigrationsNew (path: string, config: MigrondiConfig, _: Driver) (options: NewOptions) =
+        let style =
+            config.style
+            |> Option.map
+                (fun style ->
+                    match style.ToLowerInvariant() with
+                    | "fsx"
+                    | "sql" -> style
+                    | invalid ->
+                        printfn $"[%s{invalid}] is not a valid migration style defaulting to 'sql'"
+                        "sql")
+            |> Option.defaultValue "sql"
+
         let file, bytes =
-            createNewMigrationFile path options.name
+            createNewMigrationFile style path options.name
 
         file.Write(ReadOnlySpan<byte>(bytes))
         printfn $"""Created: {file.Name}"""
@@ -45,7 +61,7 @@ module Migrations =
 
         let migration = getLastMigration connection
 
-        let migrations = getMigrations path
+        let migrations = getMigrations (isSql config.style) path
 
         let pendingMigrations =
             getPendingMigrations migration migrations
@@ -69,12 +85,12 @@ module Migrations =
         | _ -> runMigrations driver connection MigrationType.Up migrationsToRun
 
     let runMigrationsDown (connection: IDbConnection)
-                          (path: string, _: MigrondiConfig, driver: Driver)
+                          (path: string, config: MigrondiConfig, driver: Driver)
                           (options: DownOptions)
                           =
         let migration = getLastMigration connection
 
-        let migrations = getMigrations path
+        let migrations = getMigrations (isSql config.style) path
 
         let alreadyRanMigrations =
             getAppliedMigrations migration migrations
@@ -100,7 +116,7 @@ module Migrations =
         | _ -> runMigrations driver connection MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
 
     let runMigrationsList (connection: IDbConnection)
-                          (path: string, _: MigrondiConfig, _: Driver)
+                          (path: string, config: MigrondiConfig, _: Driver)
                           (options: ListOptions)
                           =
         let all =
@@ -118,7 +134,7 @@ module Migrations =
             | Some last -> last
             | None -> false
 
-        let migrations = getMigrations path
+        let migrations = getMigrations (isSql config.style) path
         let migration = getLastMigration connection
 
         match last, all, missing with

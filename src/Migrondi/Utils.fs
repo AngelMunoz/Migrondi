@@ -5,6 +5,7 @@ open System.Data.SQLite
 open System.Data.SqlClient
 open System.IO
 open System.Text.Json
+open System.Text.Json.Serialization
 open System
 open System.Data
 open Npgsql
@@ -23,7 +24,7 @@ module Utils =
 
     let getInitPathAndMigrationsPath (path: string) =
         let path =
-            Path.GetFullPath(if String.IsNullOrEmpty path then "./" else path)
+            Path.GetFullPath((if String.IsNullOrEmpty path then "./" else path))
 
         let migrationsPath =
             let currentPath =
@@ -50,12 +51,16 @@ module Utils =
             let opts = JsonSerializerOptions()
             opts.WriteIndented <- true
             opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+            opts.IgnoreNullValues <- true
+            opts.Converters.Add(JsonFSharpConverter())
 
-            JsonSerializer.SerializeToUtf8Bytes<MigrondiConfig>
-                ({ connection = "Data Source=migrondi.db"
-                   migrationsDir = migrationsDir
-                   driver = "sqlite" },
-                 opts)
+            JsonSerializer.SerializeToUtf8Bytes<MigrondiConfig>(
+                { connection = "Data Source=migrondi.db"
+                  migrationsDir = migrationsDir
+                  driver = "sqlite"
+                  style = None },
+                opts
+            )
 
         let file = File.Create(fullpath)
 
@@ -71,29 +76,50 @@ module Utils =
         sprintf "-- ---------- MIGRONDI:%s:%i --------------" str timestamp
 
 
-    let createNewMigrationFile (path: string) (name: string) =
+    let createNewMigrationFile (style: string) (path: string) (name: string) =
         let timestamp =
             DateTimeOffset.Now.ToUnixTimeMilliseconds()
 
         let name =
-            sprintf "%s_%i.sql" (name.Trim()) timestamp
+            sprintf "%s_%i.%s" (name.Trim()) timestamp (style.ToLowerInvariant())
 
         let fullpath = Path.Combine(path, name)
 
         let contentBytes =
             let content =
-                let l1 =
-                    $"-- ---------- MIGRONDI:UP:%i{timestamp} --------------"
+                match style with
+                | "fsx" ->
+                    let l1 = "// you can use any library you want"
 
-                let l2 = $"-- Write your Up migrations here"
+                    let l2 = """// #r "nuget: <YourLibrary>" """
 
-                let l3 =
-                    $"-- ---------- MIGRONDI:DOWN:%i{timestamp} --------------"
+                    let l3 =
+                        "/// **if you rename `Up` and `Down` please rename them as well in the list at the bottom**"
 
-                let l4 =
-                    $"-- Write how to revert the migration here"
+                    let l4 =
+                        """let Up: string list = [(* "create table todos(...);" *)]"""
 
-                $"{l1}\n{l2}\n\n{l3}\n{l4}\n\n"
+                    let l5 =
+                        """let Down: string list = [(* "drop table todos;" *)]"""
+
+                    let l6 =
+                        "/// ***NOTE***: Do not remove the following line"
+
+                    let l7 = """[Up; Down]"""
+                    $"{l1}\n{l2}\n\n{l3}\n{l4}\n\n{l5}\n\n{l6}\n{l7}"
+                | _ ->
+                    let l1 =
+                        $"-- ---------- MIGRONDI:UP:%i{timestamp} --------------"
+
+                    let l2 = $"-- Write your Up migrations here"
+
+                    let l3 =
+                        $"-- ---------- MIGRONDI:DOWN:%i{timestamp} --------------"
+
+                    let l4 =
+                        $"-- Write how to revert the migration here"
+
+                    $"{l1}\n{l2}\n\n{l3}\n{l4}\n\n"
 
             Text.Encoding.UTF8.GetBytes(content)
 
@@ -121,9 +147,10 @@ module Utils =
 
         let config =
             let opts = JsonSerializerOptions()
+            opts.Converters.Add(JsonFSharpConverter())
             opts.AllowTrailingCommas <- true
-            opts.ReadCommentHandling <- JsonCommentHandling.Skip
             opts.IgnoreNullValues <- true
+            opts.ReadCommentHandling <- JsonCommentHandling.Skip
             JsonSerializer.Deserialize<MigrondiConfig>(content, opts)
 
         match config.driver with
@@ -134,9 +161,11 @@ module Utils =
         | others ->
             let drivers = "mssql | sqlite | postgres | mysql"
 
-            raise
-                (ArgumentException
-                    ($"""The driver selected "%s{others}" does not match the available drivers "%s{drivers}"."""))
+            raise (
+                ArgumentException(
+                    $"""The driver selected "%s{others}" does not match the available drivers "%s{drivers}"."""
+                )
+            )
 
     let getPathConfigAndDriver () =
         let config = getMigrondiConfiguration ()
@@ -149,15 +178,16 @@ module Utils =
         let driver = Driver.FromString config.driver
 
         if String.IsNullOrEmpty path then
-            raise
-                (ArgumentException
-                    "Path seems to be empty, please check that you have provided the correct path to your migrations directory")
+            raise (
+                ArgumentException
+                    "Path seems to be empty, please check that you have provided the correct path to your migrations directory"
+            )
 
         path, config, driver
 
-    let getMigrations (path: string) =
+    let getMigrations (isSql: bool) (path: string) =
         let dir = DirectoryInfo(path)
-        
+
         let fileMapping (file: FileInfo) =
             let name = file.Name
             let reader = file.OpenText()
@@ -177,11 +207,13 @@ module Utils =
                 $"{l1}\n{l2}"
 
             // matches any name that ends with a timestamp.sql
-            let migrationNamePattern = "(.+)_([0-9]+).(sql|SQL)"
-            
+            let migrationNamePattern = "(.+)_([0-9]+).(sql|SQL|fsx)"
+
             let (|Regex|_|) pattern input =
                 let m = Regex.Match(input, pattern)
-                if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
+
+                if m.Success
+                then Some(List.tail [ for g in m.Groups -> g.Value ])
                 else None
 
             let (name, timestamp) =
@@ -189,34 +221,39 @@ module Utils =
                 | Regex migrationNamePattern [ filename; timestamp; _ ] -> (filename, timestamp |> int64)
                 | _ -> failwith filenameErr
 
-            let getSplitContent migrationType =
-                let separator = getSeparator migrationType timestamp
-                content.Split(separator)
-
-            let splitContent = getSplitContent MigrationType.Down
 
             let upContent, downContent =
-                match splitContent.Length = 2 with
-                | true -> splitContent.[0], splitContent.[1]
-                | false ->
-                    failwith
-                        "The migration file does not contain UP, Down sql statements or it contains more than one section of one of those."
+                if isSql then
+                    let getSplitContent migrationType =
+                        let separator = getSeparator migrationType timestamp
+                        content.Split(separator)
+
+                    let splitContent = getSplitContent MigrationType.Down
+
+                    match splitContent.Length = 2 with
+                    | true -> splitContent.[0], splitContent.[1]
+                    | false ->
+                        failwith
+                            "The migration file does not contain UP, Down sql statements or it contains more than one section of one of those."
+                else
+                    ScriptedContent.getContentFromScripts file
 
             { name = name
+              ext = file.Extension
               timestamp = timestamp
               upContent = upContent
               downContent = downContent }
 
         dir.EnumerateFiles()
-        |> Seq.filter (fun f -> f.Extension = ".sql")
+        |> Seq.filter (fun f -> f.Extension = ".sql" || f.Extension = ".fsx")
         |> Seq.toArray
-        |> Array.Parallel.map fileMapping
+        |> Array.map fileMapping
         |> Array.sortBy (fun m -> m.timestamp)
 
     let migrationName (migration: MigrationSource) =
         match migration with
-        | MigrationSource.File migration -> sprintf "%s_%i.sql" migration.name migration.timestamp
-        | MigrationSource.Database migration -> sprintf "%s_%i.sql" migration.name migration.timestamp
+        | MigrationSource.File migration -> sprintf "%s_%i.%s" migration.name migration.timestamp migration.ext
+        | MigrationSource.Database migration -> sprintf "%s_%i" migration.name migration.timestamp
 
     let getPendingMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
         match lastMigration with
@@ -224,7 +261,7 @@ module Utils =
         | Some migration ->
             let index =
                 migrations
-                |> Array.findIndex (fun m -> m.name = migration.name)
+                |> Array.findIndex (fun m -> m.name.Contains(migration.name))
 
             match index + 1 = migrations.Length with
             | true -> Array.empty
@@ -237,7 +274,7 @@ module Utils =
         | Some lastMigration ->
             let lastRanIndex =
                 migrations
-                |> Array.findIndex (fun m -> m.name = lastMigration.name)
+                |> Array.findIndex (fun m -> m.name.Contains(lastMigration.name))
 
             migrations.[0..lastRanIndex]
         | None -> Array.empty
