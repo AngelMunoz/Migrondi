@@ -23,7 +23,7 @@ module ScriptedContent =
         use stdErr = new StringWriter()
 
         use session =
-            FsiEvaluationSession.Create(defConfig, argv, stdIn, stdOut, stdErr)
+            FsiEvaluationSession.Create(defConfig, argv, stdIn, stdOut, stdErr, true)
 
 
         let interaction =
