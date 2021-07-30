@@ -8,15 +8,19 @@
     <Summary>
       This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
     </Summary>
-    <Version>0.6.0</Version>
+    <Version>0.6.1</Version>
     <Title>Migrondi</Title>
-    <Authors>Angel D. Munoz</Authors>
+    <Authors>Angel Munoz and contributors</Authors>
+    <Copyright>Copyright 2020 Angel D. Munoz.</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <ProjectUrl>https://github.com/AngelMunoz/Migrondi</ProjectUrl>
     <RepositoryUrl>https://github.com/AngelMunoz/Migrondi.git</RepositoryUrl>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>migrondi</ToolCommandName>
-    <PackageOutputPath>../../dist</PackageOutputPath>
+    <PackageOutputPath>..\..\dist</PackageOutputPath>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <WarnOn>3390;$(WarnOn)</WarnOn>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
@@ -27,14 +31,21 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="CommandLineParser" Version="2.7.82" />
-    <PackageReference Include="CommandLineParser.FSharp" Version="2.7.82" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="1.1.1" />
-    <PackageReference Include="Microsoft.Data.SQLite" Version="3.1.3" />
-    <PackageReference Include="RepoDb" Version="1.10.11" />
-    <PackageReference Include="RepoDb.MySql" Version="1.0.9" />
-    <PackageReference Include="RepoDb.PostgreSql" Version="1.0.6" />
-    <PackageReference Include="RepoDb.Sqlite" Version="1.0.9" />
-    <PackageReference Include="RepoDb.Sqlserver" Version="1.0.6" />
+    <PackageReference Include="CommandLineParser" Version="2.8.0" />
+    <PackageReference Include="CommandLineParser.FSharp" Version="2.8.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="3.0.0" />
+    <PackageReference Include="Microsoft.Data.SQLite" Version="5.0.8" />
+    <PackageReference Include="RepoDb" Version="1.12.7" />
+    <PackageReference Include="RepoDb.MySql" Version="1.1.4" />
+    <PackageReference Include="RepoDb.PostgreSql" Version="1.1.3" />
+    <PackageReference Include="RepoDb.Sqlite" Version="1.1.3" />
+    <PackageReference Include="RepoDb.Sqlserver" Version="1.1.3" />
+    <!-- prevent downgrades -->
+    <PackageReference Include="System.IO.FileSystem" Version="4.3.0" />
+    <PackageReference Include="System.Net.Primitives" Version="4.3.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)\..\..\LICENSE" Pack="true" PackagePath="LICENSE" />
+    <None Include="$(MSBuildThisFileDirectory)\..\..\README.md" Pack="true" PackagePath="README.md"/>
   </ItemGroup>
 </Project>
