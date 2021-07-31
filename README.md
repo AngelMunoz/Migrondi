@@ -6,11 +6,7 @@ Migrondi is a SQL Migrations tool designed to be simple and execute simple migra
 
 > **_NOTE_**: You don't need a dotnet **project** or **toolchain** etc to use this, if you are using node, java, python, ruby, or something else that's completely fine this project works directly with your database and **you don't even need to have .NET installed at all**. If you want a brief tutorial/explanation you can check this post in [dev.to](https://dev.to/tunaxor/migrondi-simple-sql-migrations-tool-30lm)
 
-Migrondi Runs on `Linux-x64`, `Linux-arm64`, `Windows-x64`, and `MacOS`\*\*
-
-> \*\* MacOS binaries are not provided yet you can easily build from source, check the command at the bottom.
-> If you're using dotnet, then you can install it as a dotnet tool
-
+Migrondi Runs on `Linux-x64`, `Linux-arm64`, `Windows-x64`, and `MacOS-x64` (intel based)
 ## Install
 
 ### For Non .NET users
