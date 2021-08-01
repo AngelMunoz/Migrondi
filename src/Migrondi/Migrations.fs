@@ -6,6 +6,7 @@ open Types
 open Options
 open Utils
 open Queries
+open UserInterface
 
 module Migrations =
 
@@ -21,7 +22,7 @@ module Migrations =
                 createMigrondiConfJson path migrationsPath
 
             file.Write(ReadOnlySpan<byte>(content))
-            printfn $"Created %s{file.Name} and %s{migrationsPath}"
+            successPrint $"Created %s{file.Name} and %s{migrationsPath}"
             file.Dispose()
 
 
@@ -31,7 +32,7 @@ module Migrations =
             createNewMigrationFile path options.name
 
         file.Write(ReadOnlySpan<byte>(bytes))
-        printfn $"""Created: {file.Name}"""
+        successPrint $"""Created: {file.Name}"""
         file.Dispose()
 
     let runMigrationsUp (connection: IDbConnection)
@@ -85,10 +86,8 @@ module Migrations =
             | Some number ->
                 match number > alreadyRanMigrations.Length with
                 | true ->
-                    printfn
-                        "Total [%i] provided exceeds the amount of migrations in the database (%i)"
-                        number
-                        alreadyRanMigrations.Length
+                    successPrint
+                        $"Total [{number}] provided exceeds the amount of migrations in the database ({alreadyRanMigrations.Length})"
 
                     alreadyRanMigrations.Length
                 | false -> number
@@ -125,8 +124,10 @@ module Migrations =
         | (true, _, _) ->
             match migration with
             | Some migration ->
-                printfn "Last migration in the database is %s" (migrationName (MigrationSource.Database migration))
-            | None -> printfn "No migrations have been run in the database"
+                migrationName (MigrationSource.Database migration)
+                |> (fun name -> successPrint $"Last migration in the database is {name}")
+                
+            | None -> successPrint "No migrations have been run in the database"
         | (_, true, true) ->
             let pendingMigrations =
                 getPendingMigrations migration migrations
@@ -140,7 +141,7 @@ module Migrations =
                 )
                 |> fun arr -> String.Join("", arr)
 
-            printfn "Missing migrations:\n%s" migrations
+            successPrint $"Missing migrations:\n{migrations}"
         | (_, true, false) ->
             let alreadyRan =
                 getAppliedMigrations migration migrations
@@ -154,10 +155,10 @@ module Migrations =
                 )
                 |> fun arr -> String.Join("", arr)
 
-            printfn "Migrations that have been ran:\n%s" migrations
+            successPrint $"Migrations that have been ran:\n{migrations}"
         | (_, _, _) ->
-            printfn "This flag combination is not supported"
+            successPrint "This flag combination is not supported"
             let l1 = "--last true"
             let l2 = "--all true --missing true"
             let l3 = "--all true --missing false"
-            printfn $"Suported comibations are:\n{l1}\n{l2}\n{l3}"
+            successPrint $"Suported comibations are:\n{l1}\n{l2}\n{l3}"
