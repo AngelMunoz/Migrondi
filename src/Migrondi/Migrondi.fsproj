@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net6.0</TargetFramework>
     <Description>
       This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
     </Description>
@@ -23,8 +23,8 @@
     <WarnOn>3390;$(WarnOn)</WarnOn>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="UserInterface.fs" />
     <Compile Include="Types.fs" />
+    <Compile Include="UserInterface.fs" />
     <Compile Include="Options.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Queries.fs" />
