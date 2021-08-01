@@ -1,0 +1,62 @@
+{
+  "profiles": {
+    "Migrondi": {
+      "commandName": "Project"
+    },
+    "Migrondi init": {
+      "commandName": "Project",
+      "commandLineArgs": "init",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi new": {
+      "commandName": "Project",
+      "commandLineArgs": "new -n Sample",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi Down": {
+      "commandName": "Project",
+      "commandLineArgs": "down",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi Down Dry": {
+      "commandName": "Project",
+      "commandLineArgs": "down -d true",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi Down All": {
+      "commandName": "Project",
+      "commandLineArgs": "down -t -1",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi Down All Dry": {
+      "commandName": "Project",
+      "commandLineArgs": "down -t -1 -d true",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi Up": {
+      "commandName": "Project",
+      "commandLineArgs": "up",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi Up Dry": {
+      "commandName": "Project",
+      "commandLineArgs": "up -d",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi Up All": {
+      "commandName": "Project",
+      "commandLineArgs": "up -t -1",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi Up All Dry": {
+      "commandName": "Project",
+      "commandLineArgs": "up -t -1 -d true",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi List": {
+      "commandName": "Project",
+      "commandLineArgs": "list",
+      "workingDirectory": "..\\..\\"
+    }
+  }
+}
