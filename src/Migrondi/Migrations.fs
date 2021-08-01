@@ -47,13 +47,12 @@ module Migrations =
         let migration = getLastMigration connection
 
         let migrations = getMigrations path
-
         let pendingMigrations =
             getPendingMigrations migration migrations
 
         let migrationsToRun =
-            match options.total |> Option.ofNullable with
-            | Some total ->
+            match options.total with
+            | total when total > 0  ->
                 let total =
                     match total >= pendingMigrations.Length with
                     | true -> pendingMigrations.Length - 1
@@ -61,13 +60,15 @@ module Migrations =
 
                 match Array.isEmpty pendingMigrations with
                 | true -> Array.empty
-                | false -> pendingMigrations |> Array.take total
-            | None -> pendingMigrations
-
-        match options.dryRun |> Option.ofNullable with
-        | Some true -> dryRunMigrations driver MigrationType.Up migrationsToRun
-        | Some false
-        | _ -> runMigrations driver connection MigrationType.Up migrationsToRun
+                | false ->
+                    let amount = if total >= pendingMigrations.Length then pendingMigrations.Length - 1 else total
+                    pendingMigrations.[..amount]
+            | _  -> pendingMigrations
+        match options.dryRun with
+        | true ->
+            dryRunMigrations driver MigrationType.Up migrationsToRun
+        | false ->
+            runMigrations driver connection MigrationType.Up migrationsToRun
 
     let runMigrationsDown (connection: IDbConnection)
                           (path: string, _: MigrondiConfig, driver: Driver)
@@ -82,8 +83,8 @@ module Migrations =
             |> Array.rev
 
         let amountToRunDown =
-            match options.total |> Option.ofNullable with
-            | Some number ->
+            match options.total with
+            | number when number > 0 ->
                 match number > alreadyRanMigrations.Length with
                 | true ->
                     successPrint
@@ -91,36 +92,21 @@ module Migrations =
 
                     alreadyRanMigrations.Length
                 | false -> number
-            | None -> alreadyRanMigrations.Length
+            | _ -> alreadyRanMigrations.Length
 
-        match options.dryRun |> Option.ofNullable with
-        | Some true -> dryRunMigrations driver MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
-        | Some false
-        | _ -> runMigrations driver connection MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
+        match options.dryRun with
+        | true -> dryRunMigrations driver MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
+        | false -> runMigrations driver connection MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
 
     let runMigrationsList (connection: IDbConnection)
                           (path: string, _: MigrondiConfig, _: Driver)
                           (options: ListOptions)
                           =
-        let all =
-            match options.all |> Option.ofNullable with
-            | Some total -> total
-            | None -> false
-
-        let missing =
-            match options.missing |> Option.ofNullable with
-            | Some missing -> missing
-            | None -> false
-
-        let last =
-            match options.last |> Option.ofNullable with
-            | Some last -> last
-            | None -> false
 
         let migrations = getMigrations path
         let migration = getLastMigration connection
 
-        match last, all, missing with
+        match options.last, options.all, options.missing with
         | (true, _, _) ->
             match migration with
             | Some migration ->
