@@ -51,11 +51,11 @@ module Queries =
 
             true
         with ex ->
-            successPrint ex.Message
+            failurePrint ex.Message
             false
 
     let getLastMigration (connection: IDbConnection) =
-        let orderBy: IEnumerable<OrderField> =
+        let orderBy =
             seq { OrderField("timestamp", Order.Descending) }
 
         let result =
@@ -120,7 +120,7 @@ module Queries =
         try
             connection.ExecuteNonQuery(migrationContent, queryParams)
         with ex ->
-            successPrint $"Error while running migration \"{migration.name}\""
+            failurePrint $"Error while running migration \"{migration.name}\""
             failwith ex.Message
 
     let private applyDryRunMigration (driver: Driver) (migrationType: MigrationType) (migration: MigrationFile) =
@@ -133,8 +133,7 @@ module Queries =
         let queryParams =
             prepareQueryParams migrationType migration
 
-        successPrint $"[MIGRATION: %s{migration.name}] - [PARAMS: %A{queryParams}]\n%s{migrationContent}"
-        0
+        $"[MIGRATION: %s{migration.name}] - [PARAMS: %A{queryParams}]\n%s{migrationContent}"
 
     let runMigrations (driver: Driver)
                       (connection: IDbConnection)
@@ -150,6 +149,9 @@ module Queries =
     let dryRunMigrations (driver: Driver) (migrationType: MigrationType) (migrationFiles: array<MigrationFile>) =
         let applyMigrationWithConnectionAndType =
             applyDryRunMigration driver migrationType
-
-        migrationFiles
-        |> Array.map applyMigrationWithConnectionAndType
+        let migrations = 
+            migrationFiles
+            |> Array.map applyMigrationWithConnectionAndType
+        
+        successPrint (System.String.Join('\n', migrations))
+        Array.create migrations.Length 1

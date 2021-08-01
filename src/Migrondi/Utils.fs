@@ -1,15 +1,19 @@
 namespace Migrondi
 
-open Types
+open System
+open System.Data
 open System.Data.SQLite
 open System.Data.SqlClient
 open System.IO
 open System.Text.Json
-open System
-open System.Data
-open Npgsql
-open MySql.Data.MySqlClient
+open System.Text.Json.Serialization
 open System.Text.RegularExpressions
+
+open Npgsql
+
+open MySql.Data.MySqlClient
+
+open Types
 
 module Utils =
     module Operators =
@@ -51,7 +55,7 @@ module Utils =
             opts.WriteIndented <- true
             opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
 
-            JsonSerializer.SerializeToUtf8Bytes<MigrondiConfig>
+            JsonSerializer.SerializeToUtf8Bytes
                 ({ connection = "Data Source=migrondi.db"
                    migrationsDir = migrationsDir
                    driver = "sqlite" },
@@ -73,7 +77,7 @@ module Utils =
 
     let createNewMigrationFile (path: string) (name: string) =
         let timestamp =
-            DateTimeOffset.Now.ToUnixTimeMilliseconds()
+            DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 
         let name =
             sprintf "%s_%i.sql" (name.Trim()) timestamp
@@ -123,7 +127,7 @@ module Utils =
             let opts = JsonSerializerOptions()
             opts.AllowTrailingCommas <- true
             opts.ReadCommentHandling <- JsonCommentHandling.Skip
-            opts.IgnoreNullValues <- true
+            opts.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
             JsonSerializer.Deserialize<MigrondiConfig>(content, opts)
 
         match config.driver with
@@ -242,7 +246,6 @@ module Utils =
             migrations.[0..lastRanIndex]
         | None -> Array.empty
 
-    /// gets a new sqlite connection based on the connection string
     let getConnection (driver: Driver) (connectionString: string): IDbConnection =
         match driver with
         | Driver.Mssql -> new SqlConnection(connectionString) :> IDbConnection
