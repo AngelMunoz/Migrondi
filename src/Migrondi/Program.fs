@@ -6,6 +6,7 @@ open Migrondi.Options
 open Migrondi.Migrations
 open Migrondi.Utils
 open System.Data
+open UserInterface
 
 
 module Main =
@@ -138,37 +139,37 @@ module Main =
                 match tryRunNew tryGetConfig newOptions with
                 | Ok _ -> 0
                 | Error err ->
-                    eprintfn $"{err.Message}"
+                    failurePrint $"{err.Message}"
                     1
             | :? UpOptions as upOptions ->
                 match tryRunUp tryGetConfig getConnection upOptions with
                 | Ok amount ->
                     match upOptions.dryRun |> Option.ofNullable with
-                    | Some true -> printfn $"Total Migrations To Run: %i{amount}"
+                    | Some true -> successPrint $"Total Migrations To Run: %i{amount}"
                     | Some false
-                    | _ -> printfn $"Migrations Applied: %i{amount}"
+                    | _ -> successPrint $"Migrations Applied: %i{amount}"
 
                     0
                 | Error err ->
-                    eprintfn $"{err.Message}"
+                    failurePrint $"{err.Message}"
                     1
             | :? DownOptions as downOptions ->
                 match tryRunDown tryGetConfig getConnection downOptions with
                 | Ok amount ->
                     match downOptions.dryRun |> Option.ofNullable with
-                    | Some true -> printfn $"Total Migrations To Run: %i{amount}"
+                    | Some true -> successPrint $"Total Migrations To Run: %i{amount}"
                     | Some false
-                    | _ -> printfn $"Rolled back %i{amount} migrations"
+                    | _ -> successPrint $"Rolled back %i{amount} migrations"
 
                     0
                 | Error err ->
-                    eprintfn $"{err.Message}"
+                    failurePrint $"{err.Message}"
                     1
             | :? ListOptions as listOptions ->
                 match tryRunList tryGetConfig getConnection listOptions with
                 | Ok _ -> 0
                 | Error err ->
-                    eprintfn $"{err.Message}"
+                    failurePrint $"{err.Message}"
                     1
             | :? InitOptions as initOptions ->
                 let result = tryRunInit initOptions
@@ -176,11 +177,11 @@ module Main =
                 match result with
                 | Ok _ -> 0
                 | Error err ->
-                    eprintfn $"{err.Message}"
+                    failurePrint $"{err.Message}"
                     1
             | _ ->
-                eprintfn "Unexpected parsing result"
+                failurePrint "Unexpected parsing result"
                 1
         | _ ->
-            eprintfn "Unexpected parsing result"
+            failurePrint "Unexpected parsing result"
             1

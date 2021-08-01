@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp3.1</TargetFramework>
@@ -23,6 +23,7 @@
     <WarnOn>3390;$(WarnOn)</WarnOn>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="UserInterface.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Options.fs" />
     <Compile Include="Utils.fs" />
@@ -40,12 +41,13 @@
     <PackageReference Include="RepoDb.PostgreSql" Version="1.1.3" />
     <PackageReference Include="RepoDb.Sqlite" Version="1.1.3" />
     <PackageReference Include="RepoDb.Sqlserver" Version="1.1.3" />
+    <PackageReference Include="Spectre.Console" Version="0.41.0" />
     <!-- prevent downgrades -->
     <PackageReference Include="System.IO.FileSystem" Version="4.3.0" />
     <PackageReference Include="System.Net.Primitives" Version="4.3.0" />
   </ItemGroup>
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)\..\..\LICENSE" Pack="true" PackagePath="LICENSE" />
-    <None Include="$(MSBuildThisFileDirectory)\..\..\README.md" Pack="true" PackagePath="README.md"/>
+    <None Include="$(MSBuildThisFileDirectory)\..\..\README.md" Pack="true" PackagePath="README.md" />
   </ItemGroup>
 </Project>

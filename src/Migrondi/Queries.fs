@@ -6,6 +6,7 @@ open RepoDb
 open RepoDb.Enumerations
 open Types
 open Utils.Operators
+open UserInterface
 
 module Queries =
     let private createTableQuery driver =
@@ -50,7 +51,7 @@ module Queries =
 
             true
         with ex ->
-            printfn "%s" ex.Message
+            successPrint ex.Message
             false
 
     let getLastMigration (connection: IDbConnection) =
@@ -119,7 +120,7 @@ module Queries =
         try
             connection.ExecuteNonQuery(migrationContent, queryParams)
         with ex ->
-            printfn "Error while running migration \"%s\"" migration.name
+            successPrint $"Error while running migration \"{migration.name}\""
             failwith ex.Message
 
     let private applyDryRunMigration (driver: Driver) (migrationType: MigrationType) (migration: MigrationFile) =
@@ -132,7 +133,7 @@ module Queries =
         let queryParams =
             prepareQueryParams migrationType migration
 
-        printfn $"[MIGRATION: %s{migration.name}] - [PARAMS: %A{queryParams}]\n%s{migrationContent}"
+        successPrint $"[MIGRATION: %s{migration.name}] - [PARAMS: %A{queryParams}]\n%s{migrationContent}"
         0
 
     let runMigrations (driver: Driver)
