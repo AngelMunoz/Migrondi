@@ -4,7 +4,7 @@
 
 Migrondi is a SQL Migrations tool designed to be simple and execute simple migrations. Write SQL and execute SQL against your database.
 
-> **_NOTE_**: You don't need a dotnet **project** or **toolchain** etc to use this, if you are using node, java, python, ruby, or something else that's completely fine this project works directly with your database and **you don't even need to have .NET installed at all**. If you want a brief tutorial/explanation you can check this post in [dev.to](https://dev.to/tunaxor/migrondi-simple-sql-migrations-tool-30lm)
+> No need to install it, use it from [VSCode](https://marketplace.visualstudio.com/items?itemName=tunaxor-apps.migrondi-vscode)! https://github.com/AngelMunoz/migrondi-vscode
 
 Migrondi Runs on `Linux-x64`, `Linux-arm64`, `Windows-x64`, and `MacOS-x64` (intel based)
 ## Install
@@ -135,7 +135,7 @@ these will give you these outputs
 
 ## Build
 
-Use the Powershell build script or clone and run
+Use the build.fsx (`dotnet fsi build.fsx`) script or clone and run
 
 ```
 dotnet publish -c Release -r <RID> --self-contained true -p:PublishSingleFile=true -o dist
