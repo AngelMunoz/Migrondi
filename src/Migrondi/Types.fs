@@ -1,55 +1,60 @@
-namespace Migrondi
+namespace Migrondi.Types
 
-open System
-open RepoDb.Attributes
+exception InvalidDriverException of string
+exception EmptyPath of string
+exception ConfigurationExists of string
 
-module Types =
+type MigrondiConfig =
+    { connection: string
+      migrationsDir: string
+      driver: string }
 
-    [<CLIMutable>]
-    type MigrondiConfig =
-        { connection: string
-          migrationsDir: string
-          driver: string }
+type Migration =
+    { id: int64
+      name: string
+      timestamp: int64 }
 
-    [<CLIMutable>]
-    [<Map("migration")>]
-    type Migration =
-        { id: int64
-          name: string
-          timestamp: int64 }
+type MigrationFile =
+    { name: string
+      timestamp: int64
+      upContent: string
+      downContent: string }
 
-    type MigrationFile =
-        { name: string
-          timestamp: int64
-          upContent: string
-          downContent: string }
+[<RequireQualifiedAccess>]
+type MigrationSource =
+    | File of MigrationFile
+    | Database of Migration
 
-    [<RequireQualifiedAccess>]
-    type MigrationType =
-        | Up
-        | Down
+[<RequireQualifiedAccess>]
+type MigrationType =
+    | Up
+    | Down
 
-    [<RequireQualifiedAccess>]
-    type Driver =
-        | Mssql
-        | Sqlite
-        | Postgresql
-        | Mysql
+[<RequireQualifiedAccess>]
+type Driver =
+    | Mssql
+    | Sqlite
+    | Postgresql
+    | Mysql
 
-        static member FromString(driver: string) =
-            match driver.ToLowerInvariant() with
-            | "mssql" -> Mssql
-            | "sqlite" -> Sqlite
-            | "postgres" -> Postgresql
-            | "mysql" -> Mysql
-            | others ->
-                let drivers = "mssql | sqlite | postgres | mysql"
+    static member FromString(driver: string) =
+        match driver.ToLowerInvariant() with
+        | "mssql" -> Mssql
+        | "sqlite" -> Sqlite
+        | "postgres" -> Postgresql
+        | "mysql" -> Mysql
+        | others ->
+            let drivers = "mssql | sqlite | postgres | mysql"
 
-                raise
-                    (ArgumentException
-                        (sprintf "The driver selected \"%s\" does not match the available drivers  %s" others drivers))
+            let message =
+                $"""The driver selected "{others}" does not match the available drivers  {drivers}"""
 
-    [<RequireQualifiedAccess>]
-    type MigrationSource =
-        | File of MigrationFile
-        | Database of Migration
+            raise (InvalidDriverException message)
+
+    static member IsValidDriver(driver: string) =
+        try
+            Driver.FromString driver |> ignore
+            true
+        with
+        | _ -> false
+
