@@ -1,14 +1,15 @@
 namespace Migrondi
 
-open System.Collections.Generic
 open System.Data
 open RepoDb
 open RepoDb.Enumerations
-open Types
-open Utils.Operators
-open UserInterface
+open Migrondi.Types
 
 module Queries =
+    /// custom tuple box operator, takes a string that represents a column of a table
+    /// and boxes the value on the right
+    let inline private (=>) (column: string) (value: 'T) = column, box value
+
     let private createTableQuery driver =
         match driver with
         | Driver.Sqlite ->
@@ -50,16 +51,15 @@ module Queries =
             |> ignore
 
             true
-        with ex ->
-            failurePrint ex.Message
-            false
+        with
+        | ex -> false
 
     let getLastMigration (connection: IDbConnection) =
         let orderBy =
             seq { OrderField("timestamp", Order.Descending) }
 
         let result =
-            connection.QueryAll<Migration>(orderBy = orderBy)
+            connection.QueryAll<Migration>("migration", orderBy = orderBy)
 
         result |> Seq.tryHead
 
@@ -67,7 +67,8 @@ module Queries =
         try
             getLastMigration connection |> ignore
             true
-        with ex -> false
+        with
+        | ex -> false
 
     let ensureMigrationsTable (driver: Driver) (connection: IDbConnection) =
         let tableExists = migrationsTableExist connection
@@ -103,11 +104,12 @@ module Queries =
                    "Timestamp" => migration.timestamp ]
         | MigrationType.Down -> dict [ "Timestamp" => migration.timestamp ]
 
-    let private applyMigration (driver: Driver)
-                               (connection: IDbConnection)
-                               (migrationType: MigrationType)
-                               (migration: MigrationFile)
-                               =
+    let private applyMigration
+        (driver: Driver)
+        (connection: IDbConnection)
+        (migrationType: MigrationType)
+        (migration: MigrationFile)
+        =
         let content = extractContent migrationType migration
         let insert = getInsertStatement migrationType
 
@@ -119,9 +121,8 @@ module Queries =
 
         try
             connection.ExecuteNonQuery(migrationContent, queryParams)
-        with ex ->
-            failurePrint $"Error while running migration \"{migration.name}\""
-            failwith ex.Message
+        with
+        | ex -> raise (MigrationApplyFailedException(ex.Message, migration, driver))
 
     let private applyDryRunMigration (driver: Driver) (migrationType: MigrationType) (migration: MigrationFile) =
         let content = extractContent migrationType migration
@@ -135,11 +136,12 @@ module Queries =
 
         $"[MIGRATION: %s{migration.name}] - [PARAMS: %A{queryParams}]\n%s{migrationContent}"
 
-    let runMigrations (driver: Driver)
-                      (connection: IDbConnection)
-                      (migrationType: MigrationType)
-                      (migrationFiles: array<MigrationFile>)
-                      =
+    let runMigrations
+        (driver: Driver)
+        (connection: IDbConnection)
+        (migrationType: MigrationType)
+        (migrationFiles: array<MigrationFile>)
+        =
         let applyMigrationWithConnectionAndType =
             applyMigration driver connection migrationType
 
@@ -149,9 +151,10 @@ module Queries =
     let dryRunMigrations (driver: Driver) (migrationType: MigrationType) (migrationFiles: array<MigrationFile>) =
         let applyMigrationWithConnectionAndType =
             applyDryRunMigration driver migrationType
-        let migrations = 
+
+        let migrations =
             migrationFiles
             |> Array.map applyMigrationWithConnectionAndType
-        
-        successPrint (System.String.Join('\n', migrations))
+
+        printfn "%s" (System.String.Join('\n', migrations))
         Array.create migrations.Length 1

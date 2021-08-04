@@ -4,7 +4,7 @@ open Migrondi.Options
 open Migrondi.Migrations
 open Migrondi.Utils
 open System.Data
-open UserInterface
+open FsToolkit.ErrorHandling
 
 
 let initializeDriver driver =
@@ -14,11 +14,13 @@ let initializeDriver driver =
     | Driver.Mysql -> RepoDb.MySqlBootstrap.Initialize()
     | Driver.Postgresql -> RepoDb.PostgreSqlBootstrap.Initialize()
 
-let tryRunInit init =
-    try
-        runMigrationsInit init
-        Ok()
-    with ex -> Result.Error ex
+let tryRunInit init : Result<int, exn> =
+    runMigrationsInit init
+    |> Result.map
+        (fun (filename, migrationsDir) ->
+            printfn $"Created: \"{filename}\" and \"{migrationsDir}\""
+            0)
+
 
 let tryRunNew (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>) newOptions =
 
@@ -28,15 +30,17 @@ let tryRunNew (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
             runMigrationsNew config newOptions
             Ok()
         | Error ex -> Result.Error ex
-    with :? System.UnauthorizedAccessException ->
+    with
+    | :? System.UnauthorizedAccessException ->
         Result.Error(
             exn "Failed to write migration to disk\nCheck that you have sufficient permission on the directory"
         )
 
-let tryRunUp (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
-                (getConnection: Driver -> string -> IDbConnection)
-                upOptions
-                =
+let tryRunUp
+    (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
+    (getConnection: Driver -> string -> IDbConnection)
+    upOptions
+    =
     try
         match getConfig () with
         | Ok (path, config, driver) ->
@@ -62,10 +66,11 @@ let tryRunUp (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
         Result.Error(exn $"{l1}\n{l2}\n{l3}")
     | ex -> Result.Error ex
 
-let tryRunDown (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
-                (getConnection: Driver -> string -> IDbConnection)
-                downOptions
-                =
+let tryRunDown
+    (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
+    (getConnection: Driver -> string -> IDbConnection)
+    downOptions
+    =
     try
         match getConfig () with
         | Ok (path, config, driver) ->
@@ -79,12 +84,14 @@ let tryRunDown (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>
             connection.Close()
             Ok result
         | Error err -> Result.Error err
-    with ex -> Result.Error ex
+    with
+    | ex -> Result.Error ex
 
-let tryRunList (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
-                (getConnection: Driver -> string -> IDbConnection)
-                listOptions
-                =
+let tryRunList
+    (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
+    (getConnection: Driver -> string -> IDbConnection)
+    listOptions
+    =
     try
         match getConfig () with
         | Ok (path, config, driver) ->
@@ -124,10 +131,9 @@ let tryGetConfig () =
 [<EntryPoint>]
 let main argv =
     printfn "%s" System.Environment.CurrentDirectory
+
     let result =
-        CommandLine.Parser.Default.ParseArguments<InitOptions, NewOptions, UpOptions, DownOptions, ListOptions>(
-            argv
-        )
+        CommandLine.Parser.Default.ParseArguments<InitOptions, NewOptions, UpOptions, DownOptions, ListOptions>(argv)
 
     match result with
     | :? (NotParsed<obj>) -> 1
@@ -137,47 +143,43 @@ let main argv =
             match tryRunNew tryGetConfig newOptions with
             | Ok _ -> 0
             | Error err ->
-                failurePrint $"{err.Message}"
+                printfn $"{err.Message}"
                 1
         | :? UpOptions as upOptions ->
             match tryRunUp tryGetConfig getConnection upOptions with
             | Ok amount ->
                 match upOptions.dryRun with
-                | true -> successPrint $"Total Migrations To Run: %i{amount}"
-                | false -> successPrint $"Migrations Applied: %i{amount}"
+                | true -> printfn $"Total Migrations To Run: %i{amount}"
+                | false -> printfn $"Migrations Applied: %i{amount}"
 
                 0
             | Error err ->
-                failurePrint $"{err.Message}"
+                printfn $"{err.Message}"
                 1
         | :? DownOptions as downOptions ->
             match tryRunDown tryGetConfig getConnection downOptions with
             | Ok amount ->
                 match downOptions.dryRun with
-                | true -> successPrint $"Total Migrations To Run: %i{amount}"
-                | false -> successPrint $"Rolled back %i{amount} migrations"
+                | true -> printfn $"Total Migrations To Run: %i{amount}"
+                | false -> printfn $"Rolled back %i{amount} migrations"
 
                 0
             | Error err ->
-                failurePrint $"{err.Message}"
+                printfn $"{err.Message}"
                 1
         | :? ListOptions as listOptions ->
             match tryRunList tryGetConfig getConnection listOptions with
             | Ok _ -> 0
             | Error err ->
-                failurePrint $"{err.Message}"
+                printfn $"{err.Message}"
                 1
         | :? InitOptions as initOptions ->
-            let result = tryRunInit initOptions
-
-            match result with
-            | Ok _ -> 0
-            | Error err ->
-                failurePrint $"{err.Message}"
-                1
+            tryRunInit initOptions
+            |> Result.mapError Spectre.Console.AnsiConsole.WriteException
+            |> Result.defaultValue 0
         | _ ->
-            failurePrint "Unexpected parsing result"
+            printfn "Unexpected parsing result"
             1
     | _ ->
-        failurePrint "Unexpected parsing result"
+        printfn "Unexpected parsing result"
         1

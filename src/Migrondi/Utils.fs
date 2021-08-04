@@ -13,13 +13,9 @@ open Npgsql
 
 open MySql.Data.MySqlClient
 
-open Types
+open Migrondi.Types
 
 module Utils =
-    module Operators =
-        /// custom tuple box operator, takes a string that represents a column of a table
-        /// and boxes the value on the right
-        let inline (=>) (column: string) (value: 'T) = column, box value
 
     let checkExistsPathAndMigrationsDir (path: string) (migrationsDir: string) =
         let migrondiFile = Path.Combine(path, "migrondi.json")
@@ -27,7 +23,12 @@ module Utils =
 
     let getInitPathAndMigrationsPath (path: string) =
         let path =
-            Path.GetFullPath(if String.IsNullOrEmpty path then "./" else path)
+            Path.GetFullPath(
+                if String.IsNullOrEmpty path then
+                    "./"
+                else
+                    path
+            )
 
         let migrationsPath =
             let currentPath =
@@ -39,13 +40,17 @@ module Utils =
 
         path, migrationsPath
 
-    let createMigrationsDir (path: string) =
+    let getOrCreateMigrationsDir (path: string) : Result<DirectoryInfo, exn> =
         let path =
-            if Path.EndsInDirectorySeparator path
-            then path
-            else sprintf "%s%c" path Path.DirectorySeparatorChar
+            if Path.EndsInDirectorySeparator path then
+                path
+            else
+                sprintf "%s%c" path Path.DirectorySeparatorChar
 
-        if Directory.Exists path then DirectoryInfo(path) else Directory.CreateDirectory path
+        try
+            Ok <| Directory.CreateDirectory path
+        with
+        | ex -> Error ex
 
     let createMigrondiConfJson (path: string) (migrationsDir: string) =
         let fullpath = Path.Combine(path, "migrondi.json")
@@ -55,11 +60,12 @@ module Utils =
             opts.WriteIndented <- true
             opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
 
-            JsonSerializer.SerializeToUtf8Bytes
-                ({ connection = "Data Source=migrondi.db"
-                   migrationsDir = migrationsDir
-                   driver = "sqlite" },
-                 opts)
+            JsonSerializer.SerializeToUtf8Bytes(
+                { connection = "Data Source=migrondi.db"
+                  migrationsDir = migrationsDir
+                  driver = "sqlite" },
+                opts
+            )
 
         let file = File.Create(fullpath)
 
@@ -130,38 +136,37 @@ module Utils =
             opts.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
             JsonSerializer.Deserialize<MigrondiConfig>(content, opts)
 
-        match config.driver with
-        | "mssql"
-        | "sqlite"
-        | "postgres"
-        | "mysql" -> config
-        | others ->
+        if Driver.IsValidDriver config.driver then
+            config
+        else
             let drivers = "mssql | sqlite | postgres | mysql"
 
-            raise
-                (ArgumentException
-                    ($"""The driver selected "%s{others}" does not match the available drivers "%s{drivers}"."""))
+            let message =
+                $"""The driver selected "{config.driver}" does not match the available drivers  {drivers}"""
+
+            raise (InvalidDriverException message)
 
     let getPathConfigAndDriver () =
         let config = getMigrondiConfiguration ()
 
         let path = Path.GetFullPath config.migrationsDir
 
-        if not (Directory.Exists(path))
-        then Directory.CreateDirectory(path) |> ignore
+        if not (Directory.Exists(path)) then
+            Directory.CreateDirectory(path) |> ignore
 
         let driver = Driver.FromString config.driver
 
         if String.IsNullOrEmpty path then
-            raise
-                (ArgumentException
-                    "Path seems to be empty, please check that you have provided the correct path to your migrations directory")
+            raise (
+                EmptyPath
+                    "Path seems to be empty, please check that you have provided the correct path to your migrations directory"
+            )
 
         path, config, driver
 
     let getMigrations (path: string) =
         let dir = DirectoryInfo(path)
-        
+
         let fileMapping (file: FileInfo) =
             let name = file.Name
             let reader = file.OpenText()
@@ -182,11 +187,14 @@ module Utils =
 
             // matches any name that ends with a timestamp.sql
             let migrationNamePattern = "(.+)_([0-9]+).(sql|SQL)"
-            
+
             let (|Regex|_|) pattern input =
                 let m = Regex.Match(input, pattern)
-                if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
-                else None
+
+                if m.Success then
+                    Some(List.tail [ for g in m.Groups -> g.Value ])
+                else
+                    None
 
             let (name, timestamp) =
                 match name with
@@ -246,7 +254,7 @@ module Utils =
             migrations.[0..lastRanIndex]
         | None -> Array.empty
 
-    let getConnection (driver: Driver) (connectionString: string): IDbConnection =
+    let getConnection (driver: Driver) (connectionString: string) : IDbConnection =
         match driver with
         | Driver.Mssql -> new SqlConnection(connectionString) :> IDbConnection
         | Driver.Sqlite -> new SQLiteConnection(connectionString) :> IDbConnection

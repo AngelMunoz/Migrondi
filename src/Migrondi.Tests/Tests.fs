@@ -42,7 +42,7 @@ type TestUtils() =
         let tempPath =
             Path.Combine(Path.GetTempPath(), "migrondiCreateDir", "migrations")
 
-        let dir = createMigrationsDir tempPath
+        let dir = getOrCreateMigrationsDir tempPath
 
         Assert.AreEqual(tempPath + Path.DirectorySeparatorChar.ToString(), dir.FullName)
         Assert.IsTrue(Directory.Exists dir.FullName)
@@ -107,20 +107,26 @@ type TestUtils() =
 
     [<TestMethod>]
     member this.CreateNewMigrationFile_WithComplexNameTest() =
-        let randomName n = 
+        let randomName n =
             let r = Random()
-            let chars = Array.concat([[|'a' .. 'z'|]; [|'A' .. 'Z'|]; [|'0' .. '9'|]; [|'!'; '@'; ' '; '_'; '#'; '%'|]])
+
+            let chars =
+                Array.concat (
+                    [ [| 'a' .. 'z' |]
+                      [| 'A' .. 'Z' |]
+                      [| '0' .. '9' |]
+                      [| '!'; '@'; ' '; '_'; '#'; '%' |] ]
+                )
+
             let sz = Array.length chars in
             String(Array.init n (fun _ -> chars.[r.Next sz]))
 
         let name = randomName 20
-        let tempPath =
-            Path.Combine(Path.GetTempPath(), name)
+        let tempPath = Path.Combine(Path.GetTempPath(), name)
 
         Directory.CreateDirectory tempPath |> ignore
 
-        let file, content =
-            createNewMigrationFile tempPath name
+        let file, content = createNewMigrationFile tempPath name
 
         let content = Encoding.UTF8.GetString content
         Assert.IsTrue(file.Name.Contains name)
