@@ -24,7 +24,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
-    <Compile Include="UserInterface.fs" />
+    <Compile Include="Writer.fs" />
     <Compile Include="Options.fs" />
     <Compile Include="Utils.fs" />
     <Compile Include="Queries.fs" />
@@ -34,6 +34,8 @@
   <ItemGroup>
     <PackageReference Include="CommandLineParser" Version="2.8.0" />
     <PackageReference Include="CommandLineParser.FSharp" Version="2.8.0" />
+    <PackageReference Include="FSharp.SystemTextJson" Version="0.17.4" />
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="2.7.0" />
     <PackageReference Include="Microsoft.Data.SqlClient" Version="3.0.0" />
     <PackageReference Include="Microsoft.Data.SQLite" Version="5.0.8" />
     <PackageReference Include="RepoDb" Version="1.12.7" />
@@ -44,10 +46,13 @@
     <PackageReference Include="Spectre.Console" Version="0.41.0" />
     <!-- prevent downgrades -->
     <PackageReference Include="System.IO.FileSystem" Version="4.3.0" />
-    <PackageReference Include="System.Net.Primitives" Version="4.3.0" />
+    <PackageReference Include="System.Net.Primitives" Version="4.3.1" />
   </ItemGroup>
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)\..\..\LICENSE" Pack="true" PackagePath="LICENSE" />
     <None Include="$(MSBuildThisFileDirectory)\..\..\README.md" Pack="true" PackagePath="README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Update="FSharp.Core" Version="5.0.2" />
   </ItemGroup>
 </Project>
