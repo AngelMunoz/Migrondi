@@ -29,7 +29,6 @@ module Queries =
     /// and boxes the value on the right
     let inline private (=>) (column: string) (value: 'T) = column, box value
 
-
     /// gives the separator string used inside the migrations file
     let getSeparator (migrationType: MigrationType) (timestamp: int64) =
         let str =
