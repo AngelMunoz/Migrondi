@@ -13,7 +13,11 @@ type ConsoleOutput =
 
 type JsonOutput =
     { FullContent: string
-      Parts: ConsoleOutput list option }
+      Parts: ConsoleOutput list }
+
+    static member FromParts(parts: ConsoleOutput list) =
+        { FullContent = System.String.Join("", parts)
+          Parts = parts }
 
 type MigrondiOutput =
     | ConsoleOutput of ConsoleOutput list
