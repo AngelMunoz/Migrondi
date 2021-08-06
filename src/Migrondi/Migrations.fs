@@ -58,40 +58,48 @@ module Migrations =
         fun opts tryGetOrCreateDirectory tryGetOrCreateConfig ->
             result {
                 let! migrationsDir =
-                    tryGetOrCreateDirectory opts.path
-                    |> Result.map (tryGetOrCreateConfig "migrondi.json")
-                // TODO: Print config and migrationsDir
+                    result {
+                        let defaultPath =
+                            opts.path
+                            |> Option.ofObj
+                            |> Option.defaultValue "./migrations"
+
+                        let! config = tryGetOrCreateConfig "migrondi.json" defaultPath
+                        return! tryGetOrCreateDirectory config.migrationsDir
+                    }
+
+                let message =
+                    migrondiOutput {
+                        normal $"Created:"
+                        success "\"migrondi.json\""
+                        normal " And "
+                        success $"\"{migrationsDir}\"\n"
+                    }
+                    |> MigrondiOutput.toOutput opts.json
+
+                MigrondiConsole.Log(message, opts.noColor |> not)
                 return 0
             }
 
     let tryRunMigrationsNew: TryRunMigrationsNew =
         fun options config createMigration ->
             let logCreated (name: string) =
-                let createdMsg =
-                    [ ConsoleOutput.Success $"Created: {name}\n" ]
+                let message =
+                    migrondiOutput {
+                        normal $"Created:"
+                        success $"\"{name}\"\n"
+                    }
+                    |> MigrondiOutput.toOutput options.json
 
 
-                if options.json then
-                    MigrondiConsole.Log(
-                        JsonOutput.FromParts createdMsg
-                        |> MigrondiOutput.JsonOutput
-                    )
-                else
-                    MigrondiConsole.Log(createdMsg |> MigrondiOutput.ConsoleOutput, options.noColor |> not)
-
+                MigrondiConsole.Log(message, options.noColor |> not)
                 0
 
             let initMessage =
-                [ ConsoleOutput.Normal "Running Migrondi New\n" ]
+                migrondiOutput { normal "Running Migrondi New\n" }
+                |> MigrondiOutput.toOutput options.json
 
-
-            if options.json then
-                MigrondiConsole.Log(
-                    JsonOutput.FromParts initMessage
-                    |> MigrondiOutput.JsonOutput
-                )
-            else
-                MigrondiConsole.Log(initMessage |> MigrondiOutput.ConsoleOutput, options.noColor |> not)
+            MigrondiConsole.Log(initMessage, options.noColor |> not)
 
             createMigration config.migrationsDir options.name
             |> Result.map logCreated
@@ -105,6 +113,11 @@ module Migrations =
                 do initializeDriver driver
                 let connection = getConnection config.connection driver
 
+                MigrondiConsole.Log(
+                    migrondiOutput { normal "Running Migrondi Up\n" }
+                    |> MigrondiOutput.toOutput options.json,
+                    options.noColor |> not
+                )
 
                 do! tryEnsureMigrationsTableExists driver connection.Value
 
@@ -133,16 +146,64 @@ module Migrations =
                     else
                         pendingMigrations
 
+                MigrondiConsole.Log(
+                    migrondiOutput {
+                        normal "Pending Migrations: "
+                        warning $"{migrationsToRun.Length}\n"
+                    }
+                    |> MigrondiOutput.toOutput options.json,
+                    options.noColor |> not
+                )
+
                 if options.dryRun then
+                    MigrondiConsole.Log(
+                        migrondiOutput { normal "Executing Dry Run:\n" }
+                        |> MigrondiOutput.toOutput options.json,
+                        options.noColor |> not
+                    )
+
                     let migrations =
                         runDryMigrations driver MigrationType.Up migrationsToRun
-                    // TODO: Print migration content
-                    ()
+                        |> Array.map
+                            (fun (name, queryParams, content) ->
+                                migrondiOutput {
+                                    normal "MIGRATION: "
+                                    warning $"{name} "
+                                    normal "PARAMETERS: "
+                                    warning (Spectre.Console.Markup.Escape($"%A{queryParams} "))
+                                    normal $"CONTENT: \n{(Spectre.Console.Markup.Escape(content))}\n\n"
+                                })
+                        |> Array.fold
+                            (fun (current: ConsoleOutput seq) next ->
+                                seq {
+                                    yield! next
+                                    yield! current
+                                })
+                            Seq.empty
+                        |> Seq.toList
+
+                    MigrondiConsole.Log(migrations |> MigrondiOutput.toOutput options.json, options.noColor |> not)
                 else
+                    MigrondiConsole.Log(
+                        migrondiOutput { normal "Executing Live Run:\n" }
+                        |> MigrondiOutput.toOutput options.json,
+                        options.noColor |> not
+                    )
+
                     let amount =
                         runMigrations driver connection.Value MigrationType.Up migrationsToRun
                         |> Array.length
-                    // TODO: Print success message
+
+                    MigrondiConsole.Log(
+                        migrondiOutput {
+                            normal "Executed: "
+                            warning $"{amount}"
+                            normal "migrations\n"
+                        }
+                        |> MigrondiOutput.toOutput options.json,
+                        options.noColor |> not
+                    )
+
                     ()
 
                 return 0
@@ -157,7 +218,14 @@ module Migrations =
                 do initializeDriver driver
                 let connection = getConnection config.connection driver
 
+
                 do! tryEnsureMigrationsTableExists driver connection.Value
+
+                MigrondiConsole.Log(
+                    migrondiOutput { normal "Running Migrondi Down\n" }
+                    |> MigrondiOutput.toOutput options.json,
+                    options.noColor |> not
+                )
 
                 let! migration = tryGetLastMigrationPresent connection.Value
 
@@ -173,7 +241,7 @@ module Migrations =
                         if amount > 0 then
                             if amount > alreadyRanMigrations.Length then
                                 let message =
-                                    $"Total [{amount}] provided exceeds the amount of migrations in the database ({alreadyRanMigrations.Length})"
+                                    $"Total ({amount}) provided exceeds the amount of migrations in the database ({alreadyRanMigrations.Length})"
 
                                 return! Error(AmountExeedsExistingException message)
 
@@ -184,20 +252,67 @@ module Migrations =
 
                 let! amountToRunDown = getAmountToRunDown options.total
 
+                MigrondiConsole.Log(
+                    migrondiOutput {
+                        normal "Rolling back: "
+                        warning $"{amountToRunDown} "
+                        normal "migrations\n"
+                    }
+                    |> MigrondiOutput.toOutput options.json,
+                    options.noColor |> not
+                )
+
                 if options.dryRun then
+                    MigrondiConsole.Log(
+                        migrondiOutput { normal "Executing Dry Run:\n" }
+                        |> MigrondiOutput.toOutput options.json,
+                        options.noColor |> not
+                    )
+
                     let migrations =
                         runDryMigrations driver MigrationType.Down (alreadyRanMigrations |> Array.take amountToRunDown)
-                    // TODO: Print migration content
-                    ()
+                        |> Array.map
+                            (fun (name, queryParams, content) ->
+                                migrondiOutput {
+                                    normal "MIGRATION: "
+                                    warning $"{name} "
+                                    normal "PARAMETERS: "
+                                    warning (Spectre.Console.Markup.Escape($"%A{queryParams} "))
+                                    normal $"CONTENT: \n{(Spectre.Console.Markup.Escape(content))}\n\n"
+                                })
+                        |> Array.fold
+                            (fun (current: ConsoleOutput seq) next ->
+                                seq {
+                                    yield! next
+                                    yield! current
+                                })
+                            Seq.empty
+                        |> Seq.toList
+
+                    MigrondiConsole.Log(migrations |> MigrondiOutput.toOutput options.json, options.noColor |> not)
                 else
+                    MigrondiConsole.Log(
+                        migrondiOutput { normal "Executing Live Run:\n" }
+                        |> MigrondiOutput.toOutput options.json,
+                        options.noColor |> not
+                    )
+
                     let amount =
                         runMigrations
                             driver
                             connection.Value
                             MigrationType.Down
                             (alreadyRanMigrations |> Array.take amountToRunDown)
-                    // TODO: Print success message
-                    ()
+
+                    MigrondiConsole.Log(
+                        migrondiOutput {
+                            normal "Executed: "
+                            warning $"{amount}"
+                            normal "migrations\n"
+                        }
+                        |> MigrondiOutput.toOutput options.json,
+                        options.noColor |> not
+                    )
 
                 return 0
             }
@@ -210,57 +325,107 @@ module Migrations =
                 do initializeDriver driver
                 let connection = getConnection config.connection driver
 
+                MigrondiConsole.Log(
+                    migrondiOutput { normal "Running Migrondi List\n" }
+                    |> MigrondiOutput.toOutput options.json,
+                    options.noColor |> not
+                )
+
                 let! migration = tryGetLastMigrationPresent connection.Value
 
                 let migrations =
                     tryGetMigrationFiles config.migrationsDir
 
-                // TODO: Fix these console calls
+                // TODO: Fix options behavior calls for #21
 
-                match options.last, options.all, options.missing with
-                | (true, _, _) ->
-                    match migration with
-                    | Some migration ->
-                        getMigrationName (MigrationSource.Database migration)
-                        |> (fun name -> printfn $"Last migration in the database is {name}")
+                return
+                    match options.last, options.all, options.missing with
+                    | (true, _, _) ->
+                        match migration with
+                        | Some migration ->
+                            getMigrationName (MigrationSource.Database migration)
+                            |> (fun name ->
+                                MigrondiConsole.Log(
+                                    migrondiOutput {
+                                        normal "Last migration in the database is: "
+                                        warning $"{name}\n"
+                                    }
+                                    |> MigrondiOutput.toOutput options.json,
+                                    options.noColor |> not
+                                ))
 
-                    | None -> printfn "No migrations have been run in the database"
-                | (_, true, true) ->
-                    let pendingMigrations =
-                        getPendingMigrations migration migrations
+                        | None ->
+                            MigrondiConsole.Log(
+                                migrondiOutput { normal "No migrations have been run in the database\n" }
+                                |> MigrondiOutput.toOutput options.json,
+                                options.noColor |> not
+                            )
 
-                    let migrations =
-                        pendingMigrations
-                        |> Array.map (
-                            MigrationSource.File
-                            >> getMigrationName
-                            >> sprintf "%s\n"
+                        0
+                    | (_, true, true) ->
+                        let pendingMigrations =
+                            getPendingMigrations migration migrations
+
+                        let migrations =
+                            pendingMigrations
+                            |> Array.map (
+                                MigrationSource.File
+                                >> getMigrationName
+                                >> sprintf "%s\n"
+                            )
+                            |> fun arr -> System.String.Join("", arr)
+
+                        MigrondiConsole.Log(
+                            migrondiOutput {
+                                normal "Missing migrations:\n"
+                                warning $"{migrations}\n"
+                            }
+                            |> MigrondiOutput.toOutput options.json,
+                            options.noColor |> not
                         )
-                        |> fun arr -> System.String.Join("", arr)
 
-                    printfn $"Missing migrations:\n{migrations}"
-                | (_, true, false) ->
-                    let alreadyRan =
-                        getAppliedMigrations migration migrations
+                        0
+                    | (_, true, false) ->
+                        let alreadyRan =
+                            getAppliedMigrations migration migrations
 
-                    let migrations =
-                        alreadyRan
-                        |> Array.map (
-                            MigrationSource.File
-                            >> getMigrationName
-                            >> sprintf "%s\n"
+                        let migrations =
+                            alreadyRan
+                            |> Array.map (
+                                MigrationSource.File
+                                >> getMigrationName
+                                >> sprintf "%s\n"
+                            )
+                            |> fun arr -> System.String.Join("", arr)
+
+                        MigrondiConsole.Log(
+                            migrondiOutput {
+                                normal "Present migrations in the database:\n"
+                                warning $"{migrations}\n"
+                            }
+                            |> MigrondiOutput.toOutput options.json,
+                            options.noColor |> not
                         )
-                        |> fun arr -> System.String.Join("", arr)
 
-                    printfn $"Migrations that have been ran:\n{migrations}"
-                | (_, _, _) ->
-                    printfn "This flag combination is not supported"
-                    let l1 = "--last true"
-                    let l2 = "--all true --missing true"
-                    let l3 = "--all true --missing false"
-                    printfn $"Suported comibations are:\n{l1}\n{l2}\n{l3}"
+                        0
+                    | (_, _, _) ->
+                        MigrondiConsole.Log(
+                            migrondiOutput { danger "This flag combination is not supported" }
+                            |> MigrondiOutput.toOutput options.json,
+                            options.noColor |> not
+                        )
 
-                return 0
+                        let l1 = "--last true"
+                        let l2 = "--all true --missing true"
+                        let l3 = "--all true --missing false"
+
+                        MigrondiConsole.Log(
+                            migrondiOutput { normal $"Supported combinations are:\n{l1}\n{l2}\n{l3}\n" }
+                            |> MigrondiOutput.toOutput options.json,
+                            options.noColor |> not
+                        )
+
+                        1
             }
 
 type MigrondiRunner() =
