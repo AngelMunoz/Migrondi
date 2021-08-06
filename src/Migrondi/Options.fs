@@ -1,7 +1,6 @@
 namespace Migrondi
 
 module Options =
-    open System
     open CommandLine
 
     [<CLIMutable; Verb("init", HelpText = "Creates basic files and directories to start using migrondi.")>]
