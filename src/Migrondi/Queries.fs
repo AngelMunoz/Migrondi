@@ -1,4 +1,4 @@
-namespace Migrondi
+namespace Migrondi.Database
 
 open System
 open System.Data
@@ -14,12 +14,22 @@ open FsToolkit.ErrorHandling
 
 open Migrondi.Types
 
+type GetConnection = string -> Driver -> Lazy<IDbConnection>
+type GetMigrations = Migration option -> MigrationFile array -> MigrationFile array
+type GetMigrationName = MigrationSource -> string
+type RunDryMigrations = Driver -> MigrationType -> MigrationFile array -> (string * Map<string, obj> * string) array
+type RunMigrations = Driver -> IDbConnection -> MigrationType -> MigrationFile array -> int array
+type TryEnsureMigrationsTableExists = Driver -> IDbConnection -> Result<unit, exn>
+type TryGetLastMigrationInDatabase = IDbConnection -> Result<Migration option, exn>
+type InitializeDriver = Driver -> unit
+
+[<RequireQualifiedAccess>]
 module Queries =
     /// custom tuple box operator, takes a string that represents a column of a table
     /// and boxes the value on the right
     let inline private (=>) (column: string) (value: 'T) = column, box value
 
-    
+
     /// gives the separator string used inside the migrations file
     let getSeparator (migrationType: MigrationType) (timestamp: int64) =
         let str =
@@ -29,7 +39,7 @@ module Queries =
 
         sprintf "-- ---------- MIGRONDI:%s:%i --------------" str timestamp
 
-    let migrationName (migration: MigrationSource) =
+    let getMigrationName (migration: MigrationSource) =
         match migration with
         | MigrationSource.File migration -> sprintf "%s_%i.sql" migration.name migration.timestamp
         | MigrationSource.Database migration -> sprintf "%s_%i.sql" migration.name migration.timestamp
@@ -58,13 +68,14 @@ module Queries =
             migrations.[0..lastRanIndex]
         | None -> Array.empty
 
-    let getConnection (connectionString: string) (driver: Driver) : Lazy<IDbConnection> =
-        lazy
-            (match driver with
-             | Driver.Mssql -> new SqlConnection(connectionString) :> IDbConnection
-             | Driver.Sqlite -> new SQLiteConnection(connectionString) :> IDbConnection
-             | Driver.Mysql -> new MySqlConnection(connectionString) :> IDbConnection
-             | Driver.Postgresql -> new NpgsqlConnection(connectionString) :> IDbConnection)
+    let getConnection: GetConnection =
+        fun (connectionString: string) (driver: Driver) ->
+            lazy
+                (match driver with
+                 | Driver.Mssql -> new SqlConnection(connectionString) :> IDbConnection
+                 | Driver.Sqlite -> new SQLiteConnection(connectionString) :> IDbConnection
+                 | Driver.Mysql -> new MySqlConnection(connectionString) :> IDbConnection
+                 | Driver.Postgresql -> new NpgsqlConnection(connectionString) :> IDbConnection)
 
     let initializeDriver (driver: Driver) =
         match driver with
