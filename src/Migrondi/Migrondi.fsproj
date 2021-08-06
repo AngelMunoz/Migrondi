@@ -25,9 +25,9 @@
   <ItemGroup>
     <Compile Include="Types.fs" />
     <Compile Include="Writer.fs" />
-    <Compile Include="Options.fs" />
-    <Compile Include="Utils.fs" />
+    <Compile Include="FileSystem.fs" />
     <Compile Include="Queries.fs" />
+    <Compile Include="Options.fs" />
     <Compile Include="Migrations.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
