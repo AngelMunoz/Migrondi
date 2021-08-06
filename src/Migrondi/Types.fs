@@ -3,6 +3,14 @@ namespace Migrondi.Types
 exception InvalidDriverException of string
 exception EmptyPath of string
 exception ConfigurationExists of string
+exception ConfigurationNotFound of string
+exception InvalidMigrationName of string
+exception MissingMigrationContent
+exception FailedToReadFile of string
+exception CommandNotParsedException
+exception FailedToExecuteQuery of string
+exception InvalidOptionSetException of string
+exception AmountExeedsExistingException of string
 
 type MigrondiConfig =
     { connection: string
@@ -58,3 +66,4 @@ type Driver =
         with
         | _ -> false
 
+exception MigrationApplyFailedException of string * MigrationFile * Driver
