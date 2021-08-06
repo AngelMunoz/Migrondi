@@ -126,6 +126,11 @@ module Queries =
                     connection.ExecuteNonQuery(createTableQuery driver)
                     |> ignore
             with
+            | :? System.Data.SQLite.SQLiteException as ex ->
+                if ex.Message.Contains("already exists") then
+                    return ()
+                else
+                    return! (Error(FailedToExecuteQuery ex.Message))
             | ex -> return! (Error(FailedToExecuteQuery ex.Message))
         }
 
@@ -140,14 +145,15 @@ module Queries =
 
                 return result |> Seq.tryHead
             with
+            | :? RepoDb.Exceptions.MissingFieldsException -> return None
             | ex -> return! (Error(FailedToExecuteQuery ex.Message))
         }
 
     let migrationsTableExist (connection: IDbConnection) =
         result {
             try
-                let! migration = getLastMigration connection
-                return migration |> Option.isSome
+                let! _ = getLastMigration connection
+                return true
             with
             | ex -> return! (Error(FailedToExecuteQuery ex.Message))
         }

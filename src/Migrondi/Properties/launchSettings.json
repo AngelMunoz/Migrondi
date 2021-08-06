@@ -57,6 +57,11 @@
       "commandName": "Project",
       "commandLineArgs": "list",
       "workingDirectory": "..\\..\\"
+    },
+    "Migrondi init json": {
+      "commandName": "Project",
+      "commandLineArgs": "init --json",
+      "workingDirectory": "..\\..\\"
     }
   }
 }

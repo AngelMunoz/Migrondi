@@ -90,4 +90,38 @@ type MigrondiConsole() =
         let writer =
             defaultArg withWriter (Writer.GetMigrondiWriter withColor)
 
-        AnsiConsole.Markup(writer output)
+        let value =
+            match output with
+            | JsonOutput _ -> writer output |> Markup.Escape
+            | ConsoleOutput _ -> writer output
+
+        AnsiConsole.Markup(value)
+
+[<AutoOpen>]
+module BuilderCE =
+    type MigrondiOutputListBuilder() =
+        member _.Yield(_) : ConsoleOutput list = []
+
+        member _.Run(state: ConsoleOutput list) = state |> List.rev
+
+        [<CustomOperation("normal")>]
+        member _.Normal(state: ConsoleOutput list, value: string) = ConsoleOutput.Normal value :: state
+
+        [<CustomOperation("warning")>]
+        member _.Warning(state: ConsoleOutput list, value: string) = ConsoleOutput.Warning value :: state
+
+        [<CustomOperation("danger")>]
+        member _.Danger(state: ConsoleOutput list, value: string) = ConsoleOutput.Danger value :: state
+
+        [<CustomOperation("success")>]
+        member _.Success(state: ConsoleOutput list, value: string) = ConsoleOutput.Success value :: state
+
+    let migrondiOutput = MigrondiOutputListBuilder()
+
+    [<RequireQualifiedAccess>]
+    module MigrondiOutput =
+        let toOutput isJson content =
+            if isJson then
+                JsonOutput.FromParts content |> JsonOutput
+            else
+                ConsoleOutput content

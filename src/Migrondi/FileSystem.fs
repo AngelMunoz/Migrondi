@@ -50,6 +50,7 @@ module FileSystem =
             try
                 File.ReadAllBytes path |> Ok
             with
+            | :? System.IO.FileNotFoundException -> [||] |> Ok
             | ex -> Error ex
 
         let tryWriteFile path config =
@@ -67,18 +68,20 @@ module FileSystem =
             with
             | ex -> Error ex
 
-        fun filename directory ->
+        fun filename migrationsDir ->
             result {
-                let path = Path.Combine(directory, filename)
-                let! file = tryGetFileFromPath path
+                let configPath =
+                    Path.Join(migrationsDir, $"../{filename}")
+
+                let! file = tryGetFileFromPath configPath
 
                 let config =
                     { connection = "Data Source=migrondi.db"
-                      migrationsDir = Path.GetDirectoryName(path)
+                      migrationsDir = $"{migrationsDir}/"
                       driver = "sqlite" }
 
                 if file.LongLength = 0L then
-                    do! tryWriteFile path config
+                    do! tryWriteFile configPath config
                     return config
                 else
                     return! tryDeserializeFile (file)

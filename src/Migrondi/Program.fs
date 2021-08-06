@@ -38,5 +38,5 @@ let main argv =
     |> function
         | Ok exitCode -> exitCode
         | Error ex ->
-            Spectre.Console.AnsiConsole.WriteException ex
+            eprintfn "%O" ex
             1
