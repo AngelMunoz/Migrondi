@@ -15,7 +15,7 @@
     },
     "Migrondi Down": {
       "commandName": "Project",
-      "commandLineArgs": "down",
+      "commandLineArgs": "down -d false",
       "workingDirectory": "..\\..\\"
     },
     "Migrondi Down Dry": {
@@ -35,12 +35,12 @@
     },
     "Migrondi Up": {
       "commandName": "Project",
-      "commandLineArgs": "up",
+      "commandLineArgs": "up -d false",
       "workingDirectory": "..\\..\\"
     },
     "Migrondi Up Dry": {
       "commandName": "Project",
-      "commandLineArgs": "up -d",
+      "commandLineArgs": "up -d true",
       "workingDirectory": "..\\..\\"
     },
     "Migrondi Up All": {
