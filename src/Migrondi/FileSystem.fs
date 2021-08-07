@@ -1,13 +1,12 @@
 ﻿namespace Migrondi.FileSystem
 
 open System
-open System.Text.Json
-open System.Text.Json.Serialization
 open System.Text.RegularExpressions
 
 open FsToolkit.ErrorHandling
 
 open Migrondi.Types
+open Migrondi.Writer
 
 type TryGetOrCreateDirectoryFn = string -> Result<string, exn>
 type TryGetOrCreateConfigFn = string -> string -> Result<MigrondiConfig, exn>
@@ -22,28 +21,16 @@ module FileSystem =
     let TryGetOrCreateDirectory: TryGetOrCreateDirectoryFn =
         fun (path: string) ->
             let path =
-                if Path.EndsInDirectorySeparator path then
-                    path
-                else
-                    sprintf "%s%c" path Path.DirectorySeparatorChar
+                match Path.EndsInDirectorySeparator path with
+                | true -> path
+                | false -> sprintf "%s%c" path Path.DirectorySeparatorChar
 
             try
-                Ok <| (Directory.CreateDirectory path).FullName
+                Directory.CreateDirectory path
+                |> (fun x -> x.FullName)
+                |> Ok
             with
             | ex -> Error ex
-
-    let private tryDeserializeFile (bytes: byte []) =
-        let opts = JsonSerializerOptions()
-        opts.AllowTrailingCommas <- true
-        opts.ReadCommentHandling <- JsonCommentHandling.Skip
-        opts.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
-        opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
-
-        try
-            JsonSerializer.Deserialize<MigrondiConfig>(ReadOnlySpan(bytes), opts)
-            |> Ok
-        with
-        | ex -> Error ex
 
     let TryGetOrCreateConfiguration: TryGetOrCreateConfigFn =
         let tryGetFileFromPath path =
@@ -54,12 +41,7 @@ module FileSystem =
             | ex -> Error ex
 
         let tryWriteFile path config =
-            let content =
-                let opts = JsonSerializerOptions()
-                opts.WriteIndented <- true
-                opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
-
-                JsonSerializer.SerializeToUtf8Bytes(config, opts)
+            let content = Json.serializeBytes config true
 
             try
                 use file = File.Create(path)
@@ -84,30 +66,30 @@ module FileSystem =
                     do! tryWriteFile configPath config
                     return config
                 else
-                    return! tryDeserializeFile (file)
+                    return! Json.tryDeserializeFile (file)
             }
 
     let TryGetMigrondiConfig: TryGetMigrondiConfigFn =
         fun () ->
-            result {
-                match
-                    Directory.EnumerateFiles(Directory.GetCurrentDirectory(), "migrondi.json")
-                    |> Seq.tryHead
-                    with
-                | Some file ->
-                    let! config = File.ReadAllBytes file |> tryDeserializeFile
+            match
+                Directory.EnumerateFiles(Directory.GetCurrentDirectory(), "migrondi.json")
+                |> Seq.tryHead
+                with
+            | Some file ->
+                File.ReadAllBytes file
+                |> Json.tryDeserializeFile
+                |> Result.bind
+                    (fun config ->
+                        match Driver.IsValidDriver config.driver with
+                        | true -> Ok config
+                        | false ->
+                            let drivers = "mssql | sqlite | postgres | mysql"
 
-                    if Driver.IsValidDriver config.driver then
-                        return config
-                    else
-                        let drivers = "mssql | sqlite | postgres | mysql"
+                            let message =
+                                $"""The driver selected "{config.driver}" does not match the available drivers  {drivers}"""
 
-                        let message =
-                            $"""The driver selected "{config.driver}" does not match the available drivers  {drivers}"""
-
-                        return! (Error(InvalidDriverException message))
-                | None -> return! Error(ConfigurationNotFound "We couldn't find the migrondi.json file")
-            }
+                            Error(InvalidDriverException message))
+            | None -> Error(ConfigurationNotFound "We couldn't find the migrondi.json file")
 
     let private getNameAndTimestamp name =
         // matches any name that ends with a timestamp.sql
