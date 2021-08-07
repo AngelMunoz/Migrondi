@@ -194,7 +194,7 @@ module Migrations =
                     MigrondiConsole.Log(
                         migrondiOutput {
                             normal "Executed: "
-                            warning $"{amount}"
+                            warning $"{amount} "
                             normalln "migrations"
                         },
                         options.noColor |> not,
