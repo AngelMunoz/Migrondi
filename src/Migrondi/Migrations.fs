@@ -213,7 +213,6 @@ module Migrations =
                 do initializeDriver driver
                 let connection = getConnection config.connection driver
 
-
                 do! tryEnsureMigrationsTableExists driver connection.Value
 
                 MigrondiConsole.Log(
