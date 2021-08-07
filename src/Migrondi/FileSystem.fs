@@ -172,7 +172,12 @@ module FileSystem =
                 Ok path
             with
             | ex -> Error ex
-
+        let tryCreateDirectory path = 
+            try
+                let dirinfo = Directory.CreateDirectory path
+                dirinfo.FullName |> Ok
+            with ex ->
+                Error ex
         fun migrationsDir migrationName ->
             let timestamp =
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
@@ -180,6 +185,8 @@ module FileSystem =
             let name =
                 $"{migrationName.Trim()}_{timestamp}.sql"
 
-            let path = Path.Combine(migrationsDir, name)
-
-            tryCreateFile path (getContent timestamp)
+            tryCreateDirectory migrationsDir
+            |> Result.bind(fun migrationsDir -> 
+                let path = Path.Combine(migrationsDir, name)
+                tryCreateFile path (getContent timestamp)
+            )

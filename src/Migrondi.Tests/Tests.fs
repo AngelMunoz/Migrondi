@@ -3,81 +3,55 @@ namespace Migrondi.Tests
 open System
 open Microsoft.VisualStudio.TestTools.UnitTesting
 open System.IO
-open Migrondi.Utils
 open System.Text
+open Migrondi.FileSystem
+open Migrondi.Options
+open Migrondi.Migrations
+open Migrondi.Database
 open Migrondi.Types
 
 [<TestClass>]
 type TestUtils() =
 
     [<TestMethod>]
-    member this.CheckExistsPathAndMigrationsDirTest() =
-        let tempPath = Path.GetTempPath()
-        let path = Path.Combine(tempPath, "migronditests")
-
-        let migrationsPath =
-            Path.Combine(tempPath, "migronditests", "migrations")
-
-        let (fileExists, directoryExists) =
-            checkExistsPathAndMigrationsDir path migrationsPath
-
-        Assert.IsFalse(fileExists)
-        Assert.IsFalse(directoryExists)
-
-    [<TestMethod>]
-    member this.GetInitPathAndMigrationsPathTest() =
-        let tempPath = Path.GetTempPath()
-        let expected = Path.Combine(tempPath, "migronditests")
-
-        let expectedMigrationsPath =
-            "migrations"
-            + Path.DirectorySeparatorChar.ToString()
-
-        let (actualPath, actualMigrationsPath) = getInitPathAndMigrationsPath expected
-        Assert.AreEqual(expected, actualPath)
-        Assert.AreEqual(expectedMigrationsPath, actualMigrationsPath)
-
-    [<TestMethod>]
-    member this.CreateMigrationsDirTest() =
+    member _.``Run Init with Custom Path``() =
         let tempPath =
-            Path.Combine(Path.GetTempPath(), "migrondiCreateDir", "migrations")
-
-        let dir = getOrCreateMigrationsDir tempPath
-
-        Assert.AreEqual(tempPath + Path.DirectorySeparatorChar.ToString(), dir.FullName)
-        Assert.IsTrue(Directory.Exists dir.FullName)
+            Path.Combine(Path.GetTempPath(), "migrondi-init-custom-path")
+        let opts: InitOptions = { path = tempPath; noColor = true; json = false }
+        let result = MigrondiRunner.RunInit(opts)
+        match result with 
+        | Ok result ->
+            Assert.AreEqual(0, result)
+            Assert.IsTrue(tempPath |> Path.GetFullPath |> Directory.Exists)
+        | Error err ->
+            eprintfn "%O" err
+            Assert.Fail()
 
     [<TestMethod>]
-    member this.CreateMigrondiConfJsonTest() =
+    member _.``Create Migrondi Config Json``() =
         let tempPath =
-            Path.Combine(Path.GetTempPath(), "createMigrondiConfJson")
-
+            Path.Combine(Path.GetTempPath(), "migrondi-create-config", "migrations")
         Directory.CreateDirectory tempPath |> ignore
-
-        let migrationsDir =
-            Path.Combine(tempPath, "migrations")
-            + Path.DirectorySeparatorChar.ToString()
-
-        let file, content =
-            createMigrondiConfJson tempPath migrationsDir
-
-        file.Write(ReadOnlySpan<byte>(content))
-        let contentStr = Encoding.UTF8.GetString content
-        let expected = Path.Combine(tempPath, "migrondi.json")
-        Assert.AreEqual(expected, file.Name)
-        printfn "%s" contentStr
-        Assert.IsTrue(contentStr.Contains("Data Source=migrondi.db"))
-        Assert.IsTrue(contentStr.Contains("sqlite"))
+        let result = FileSystem.TryGetOrCreateConfiguration "test.json" tempPath
+        match result with 
+        | Ok config ->
+            Assert.IsTrue(tempPath |> Path.GetFullPath |> Directory.Exists)
+            let fullPath = tempPath |> Path.GetFullPath
+            let fullPathOnConfig = config.migrationsDir |> Path.GetFullPath
+            Assert.AreEqual(fullPath + $"{Path.DirectorySeparatorChar}", fullPathOnConfig)
+        | Error err ->
+            eprintfn "%O" err
+            Assert.Fail()
 
     [<TestMethod>]
-    member this.GetSeparatorTest() =
+    member _.``Get Separator``() =
         let timestamp =
             DateTimeOffset.Now.ToUnixTimeMilliseconds()
 
         let actualDownSeparator =
-            getSeparator MigrationType.Down timestamp
+            Queries.getSeparator MigrationType.Down timestamp
 
-        let actualUpSeparator = getSeparator MigrationType.Up timestamp
+        let actualUpSeparator = FileSystem.GetSeparator timestamp MigrationType.Up 
 
         let expectedDown =
             sprintf "-- ---------- MIGRONDI:%s:%i --------------" "DOWN" timestamp
@@ -89,24 +63,36 @@ type TestUtils() =
         Assert.AreEqual(expectedUp, actualUpSeparator)
 
     [<TestMethod>]
-    member this.CreateNewMigrationFileTest() =
+    member _.``Run New Migration``() =
+
         let tempPath =
             Path.Combine(Path.GetTempPath(), "createNewMigrationFile")
 
-        Directory.CreateDirectory tempPath |> ignore
+        let result = FileSystem.TryCreateNewMigrationFile tempPath "RunNewMigrationTest"
 
-        let file, content =
-            createNewMigrationFile tempPath "createNewMigrationFile"
+        let getContent path = 
+            try 
+                File.ReadAllText path |> Some
+            with ex -> None
 
-        let content = Encoding.UTF8.GetString content
-        Assert.IsTrue(file.Name.Contains "createNewMigrationFile")
-        Assert.IsTrue(file.Name.Contains "_")
-        Assert.IsTrue(file.Name.Contains ".sql")
-        Assert.IsTrue(content.Contains "MIGRONDI:UP")
-        Assert.IsTrue(content.Contains "MIGRONDI:DOWN")
+        match result with 
+        | Ok path ->
+            let file = FileInfo(path)
+            Assert.IsTrue(file.FullName.Contains "createNewMigrationFile")
+            Assert.IsTrue(file.FullName.Contains "RunNewMigrationTest")
+            Assert.IsTrue(file.FullName.Contains "_")
+            Assert.IsTrue(file.FullName.Contains ".sql")
+            match getContent path with 
+            | Some content -> 
+                Assert.IsTrue(content.Contains "MIGRONDI:UP")
+                Assert.IsTrue(content.Contains "MIGRONDI:DOWN")
+            | None -> Assert.Fail()
+        | Error err ->
+            eprintfn "%O" err
+            Assert.Fail()
 
     [<TestMethod>]
-    member this.CreateNewMigrationFile_WithComplexNameTest() =
+    member _.``Create New Migration File With Complex Name``() =
         let randomName n =
             let r = Random()
 
@@ -122,15 +108,28 @@ type TestUtils() =
             String(Array.init n (fun _ -> chars.[r.Next sz]))
 
         let name = randomName 20
-        let tempPath = Path.Combine(Path.GetTempPath(), name)
+        let tempPath =
+            Path.Combine(Path.GetTempPath(), "createNewMigrationFileComplex")
 
-        Directory.CreateDirectory tempPath |> ignore
+        let result = FileSystem.TryCreateNewMigrationFile tempPath name
 
-        let file, content = createNewMigrationFile tempPath name
+        let getContent path = 
+            try 
+                File.ReadAllText path |> Some
+            with ex -> None
 
-        let content = Encoding.UTF8.GetString content
-        Assert.IsTrue(file.Name.Contains name)
-        Assert.IsTrue(file.Name.Contains "_")
-        Assert.IsTrue(file.Name.Contains ".sql")
-        Assert.IsTrue(content.Contains "MIGRONDI:UP")
-        Assert.IsTrue(content.Contains "MIGRONDI:DOWN")
+        match result with 
+        | Ok path ->
+            let file = FileInfo(path)
+            Assert.IsTrue(file.FullName.Contains "createNewMigrationFile")
+            Assert.IsTrue(file.FullName.Contains name)
+            Assert.IsTrue(file.FullName.Contains "_")
+            Assert.IsTrue(file.FullName.Contains ".sql")
+            match getContent path with 
+            | Some content -> 
+                Assert.IsTrue(content.Contains "MIGRONDI:UP")
+                Assert.IsTrue(content.Contains "MIGRONDI:DOWN")
+            | None -> Assert.Fail()
+        | Error err ->
+            eprintfn "%O" err
+            Assert.Fail()
