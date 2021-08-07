@@ -3,6 +3,8 @@
 open System.Text.Json
 open System.Text.Json.Serialization
 open Spectre.Console
+open Migrondi.Types
+open System
 
 
 type ConsoleOutput =
@@ -29,6 +31,45 @@ type ConsoleWriter = ConsoleOutput list -> string
 type MigrondiWriter = MigrondiOutput -> string
 
 [<RequireQualifiedAccess>]
+module Json =
+    let private defaultOptions =
+        lazy
+            (let opts = JsonSerializerOptions()
+             opts.Converters.Add(JsonFSharpConverter())
+             opts.AllowTrailingCommas <- true
+             opts.ReadCommentHandling <- JsonCommentHandling.Skip
+             opts.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
+             opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+             opts.WriteIndented <- true
+             opts)
+
+    let private diskOptions =
+        lazy
+            (let opts = JsonSerializerOptions()
+             opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+             opts.WriteIndented <- true
+             opts)
+
+    let defaultJsonWriter: JsonWriter =
+        fun json -> JsonSerializer.Serialize(json, defaultOptions.Value)
+
+    let serializeBytes content (indented: bool) =
+        JsonSerializer.SerializeToUtf8Bytes(
+            content,
+            if indented then
+                diskOptions.Value
+            else
+                defaultOptions.Value
+        )
+
+    let tryDeserializeFile (bytes: byte array) =
+        try
+            JsonSerializer.Deserialize<MigrondiConfig>(ReadOnlySpan(bytes), defaultOptions.Value)
+            |> Ok
+        with
+        | ex -> Error ex
+
+[<RequireQualifiedAccess>]
 module Writer =
 
     let Writer
@@ -39,17 +80,6 @@ module Writer =
         match output with
         | JsonOutput output -> jsonWriter output
         | ConsoleOutput output -> consoleWriter output
-
-    let private jsonOptions =
-        lazy
-            (fun () ->
-                let opts = JsonSerializerOptions()
-                opts.Converters.Add(JsonFSharpConverter())
-                opts.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
-                opts)
-
-    let private jsonWriter: JsonWriter =
-        fun json -> JsonSerializer.Serialize(json, jsonOptions.Value())
 
     let private coloredConsoleWriter: ConsoleWriter =
         fun parts ->
@@ -79,13 +109,20 @@ module Writer =
 
     let GetMigrondiWriter (withColor: bool) : MigrondiWriter =
         if withColor then
-            Writer jsonWriter coloredConsoleWriter
+            Writer Json.defaultJsonWriter coloredConsoleWriter
         else
-            Writer jsonWriter noColorConsoleWriter
+            Writer Json.defaultJsonWriter noColorConsoleWriter
 
 type MigrondiConsole() =
-    static member Log(output: MigrondiOutput, ?withColor: bool, ?withWriter: MigrondiWriter) =
+    static member Log(output: ConsoleOutput list, ?withColor: bool, ?isJson: bool, ?withWriter: MigrondiWriter) =
         let withColor = defaultArg withColor true
+        let isJson = defaultArg isJson false
+
+        let output =
+            if isJson then
+                JsonOutput.FromParts output |> JsonOutput
+            else
+                ConsoleOutput output
 
         let writer =
             defaultArg withWriter (Writer.GetMigrondiWriter withColor)
@@ -107,21 +144,33 @@ module BuilderCE =
         [<CustomOperation("normal")>]
         member _.Normal(state: ConsoleOutput list, value: string) = ConsoleOutput.Normal value :: state
 
+        [<CustomOperation("normalln")>]
+        member _.NormalLn(state: ConsoleOutput list, value: string) =
+            ConsoleOutput.Normal $"{value}{System.Environment.NewLine}"
+            :: state
+
         [<CustomOperation("warning")>]
         member _.Warning(state: ConsoleOutput list, value: string) = ConsoleOutput.Warning value :: state
+
+        [<CustomOperation("warningln")>]
+        member _.WarningLn(state: ConsoleOutput list, value: string) =
+            ConsoleOutput.Warning $"{value}{System.Environment.NewLine}"
+            :: state
 
         [<CustomOperation("danger")>]
         member _.Danger(state: ConsoleOutput list, value: string) = ConsoleOutput.Danger value :: state
 
+        [<CustomOperation("dangerln")>]
+        member _.DangerLn(state: ConsoleOutput list, value: string) =
+            ConsoleOutput.Danger $"{value}{System.Environment.NewLine}"
+            :: state
+
         [<CustomOperation("success")>]
         member _.Success(state: ConsoleOutput list, value: string) = ConsoleOutput.Success value :: state
 
-    let migrondiOutput = MigrondiOutputListBuilder()
+        [<CustomOperation("successln")>]
+        member _.SuccessLn(state: ConsoleOutput list, value: string) =
+            ConsoleOutput.Success $"{value}{System.Environment.NewLine}"
+            :: state
 
-    [<RequireQualifiedAccess>]
-    module MigrondiOutput =
-        let toOutput isJson content =
-            if isJson then
-                JsonOutput.FromParts content |> JsonOutput
-            else
-                ConsoleOutput content
+    let migrondiOutput = MigrondiOutputListBuilder()
