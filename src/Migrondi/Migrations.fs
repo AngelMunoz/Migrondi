@@ -73,11 +73,10 @@ module Migrations =
                         normal $"Created:"
                         success "\"migrondi.json\""
                         normal " And "
-                        success $"\"{migrationsDir}\"\n"
+                        successln $"\"{migrationsDir}\""
                     }
-                    |> MigrondiOutput.toOutput opts.json
 
-                MigrondiConsole.Log(message, opts.noColor |> not)
+                MigrondiConsole.Log(message, opts.noColor |> not, opts.json)
                 return 0
             }
 
@@ -87,19 +86,17 @@ module Migrations =
                 let message =
                     migrondiOutput {
                         normal $"Created:"
-                        success $"\"{name}\"\n"
+                        successln $"\"{name}\""
                     }
-                    |> MigrondiOutput.toOutput options.json
 
 
                 MigrondiConsole.Log(message, options.noColor |> not)
                 0
 
             let initMessage =
-                migrondiOutput { normal "Running Migrondi New\n" }
-                |> MigrondiOutput.toOutput options.json
+                migrondiOutput { normalln "Running Migrondi New" }
 
-            MigrondiConsole.Log(initMessage, options.noColor |> not)
+            MigrondiConsole.Log(initMessage, options.noColor |> not, options.json)
 
             createMigration config.migrationsDir options.name
             |> Result.map logCreated
@@ -114,9 +111,9 @@ module Migrations =
                 let connection = getConnection config.connection driver
 
                 MigrondiConsole.Log(
-                    migrondiOutput { normal "Running Migrondi Up\n" }
-                    |> MigrondiOutput.toOutput options.json,
-                    options.noColor |> not
+                    migrondiOutput { normalln "Running Migrondi Up" },
+                    options.noColor |> not,
+                    options.json
                 )
 
                 do! tryEnsureMigrationsTableExists driver connection.Value
@@ -149,17 +146,17 @@ module Migrations =
                 MigrondiConsole.Log(
                     migrondiOutput {
                         normal "Pending Migrations: "
-                        warning $"{migrationsToRun.Length}\n"
-                    }
-                    |> MigrondiOutput.toOutput options.json,
-                    options.noColor |> not
+                        warningln $"{migrationsToRun.Length}"
+                    },
+                    options.noColor |> not,
+                    options.json
                 )
 
                 if options.dryRun then
                     MigrondiConsole.Log(
-                        migrondiOutput { normal "Executing Dry Run:\n" }
-                        |> MigrondiOutput.toOutput options.json,
-                        options.noColor |> not
+                        migrondiOutput { normalln "Executing Dry Run:" },
+                        options.noColor |> not,
+                        options.json
                     )
 
                     let migrations =
@@ -171,7 +168,7 @@ module Migrations =
                                     warning $"{name} "
                                     normal "PARAMETERS: "
                                     warning (Spectre.Console.Markup.Escape($"%A{queryParams} "))
-                                    normal $"CONTENT: \n{(Spectre.Console.Markup.Escape(content))}\n\n"
+                                    normalln $"CONTENT: \n{(Spectre.Console.Markup.Escape(content))}"
                                 })
                         |> Array.fold
                             (fun (current: ConsoleOutput seq) next ->
@@ -182,12 +179,12 @@ module Migrations =
                             Seq.empty
                         |> Seq.toList
 
-                    MigrondiConsole.Log(migrations |> MigrondiOutput.toOutput options.json, options.noColor |> not)
+                    MigrondiConsole.Log(migrations, options.noColor |> not, options.json)
                 else
                     MigrondiConsole.Log(
-                        migrondiOutput { normal "Executing Live Run:\n" }
-                        |> MigrondiOutput.toOutput options.json,
-                        options.noColor |> not
+                        migrondiOutput { normalln "Executing Live Run:" },
+                        options.noColor |> not,
+                        options.json
                     )
 
                     let amount =
@@ -198,13 +195,11 @@ module Migrations =
                         migrondiOutput {
                             normal "Executed: "
                             warning $"{amount}"
-                            normal "migrations\n"
-                        }
-                        |> MigrondiOutput.toOutput options.json,
-                        options.noColor |> not
+                            normalln "migrations"
+                        },
+                        options.noColor |> not,
+                        options.json
                     )
-
-                    ()
 
                 return 0
             }
@@ -222,9 +217,9 @@ module Migrations =
                 do! tryEnsureMigrationsTableExists driver connection.Value
 
                 MigrondiConsole.Log(
-                    migrondiOutput { normal "Running Migrondi Down\n" }
-                    |> MigrondiOutput.toOutput options.json,
-                    options.noColor |> not
+                    migrondiOutput { normalln "Running Migrondi Down" },
+                    options.noColor |> not,
+                    options.json
                 )
 
                 let! migration = tryGetLastMigrationPresent connection.Value
@@ -256,17 +251,17 @@ module Migrations =
                     migrondiOutput {
                         normal "Rolling back: "
                         warning $"{amountToRunDown} "
-                        normal "migrations\n"
-                    }
-                    |> MigrondiOutput.toOutput options.json,
-                    options.noColor |> not
+                        normalln "migrations"
+                    },
+                    options.noColor |> not,
+                    options.json
                 )
 
                 if options.dryRun then
                     MigrondiConsole.Log(
-                        migrondiOutput { normal "Executing Dry Run:\n" }
-                        |> MigrondiOutput.toOutput options.json,
-                        options.noColor |> not
+                        migrondiOutput { normalln "Executing Dry Run:" },
+                        options.noColor |> not,
+                        options.json
                     )
 
                     let migrations =
@@ -278,7 +273,7 @@ module Migrations =
                                     warning $"{name} "
                                     normal "PARAMETERS: "
                                     warning (Spectre.Console.Markup.Escape($"%A{queryParams} "))
-                                    normal $"CONTENT: \n{(Spectre.Console.Markup.Escape(content))}\n\n"
+                                    normalln $"CONTENT: \n{(Spectre.Console.Markup.Escape(content))}\n"
                                 })
                         |> Array.fold
                             (fun (current: ConsoleOutput seq) next ->
@@ -289,12 +284,12 @@ module Migrations =
                             Seq.empty
                         |> Seq.toList
 
-                    MigrondiConsole.Log(migrations |> MigrondiOutput.toOutput options.json, options.noColor |> not)
+                    MigrondiConsole.Log(migrations, options.noColor |> not, options.json)
                 else
                     MigrondiConsole.Log(
-                        migrondiOutput { normal "Executing Live Run:\n" }
-                        |> MigrondiOutput.toOutput options.json,
-                        options.noColor |> not
+                        migrondiOutput { normalln "Executing Live Run:" },
+                        options.noColor |> not,
+                        options.json
                     )
 
                     let amount =
@@ -308,10 +303,10 @@ module Migrations =
                         migrondiOutput {
                             normal "Executed: "
                             warning $"{amount}"
-                            normal "migrations\n"
-                        }
-                        |> MigrondiOutput.toOutput options.json,
-                        options.noColor |> not
+                            normalln "migrations"
+                        },
+                        options.noColor |> not,
+                        options.json
                     )
 
                 return 0
@@ -326,9 +321,9 @@ module Migrations =
                 let connection = getConnection config.connection driver
 
                 MigrondiConsole.Log(
-                    migrondiOutput { normal "Running Migrondi List\n" }
-                    |> MigrondiOutput.toOutput options.json,
-                    options.noColor |> not
+                    migrondiOutput { normalln "Running Migrondi List" },
+                    options.noColor |> not,
+                    options.json
                 )
 
                 let! migration = tryGetLastMigrationPresent connection.Value
@@ -348,17 +343,17 @@ module Migrations =
                                 MigrondiConsole.Log(
                                     migrondiOutput {
                                         normal "Last migration in the database is: "
-                                        warning $"{name}\n"
-                                    }
-                                    |> MigrondiOutput.toOutput options.json,
-                                    options.noColor |> not
+                                        warningln $"{name}"
+                                    },
+                                    options.noColor |> not,
+                                    options.json
                                 ))
 
                         | None ->
                             MigrondiConsole.Log(
-                                migrondiOutput { normal "No migrations have been run in the database\n" }
-                                |> MigrondiOutput.toOutput options.json,
-                                options.noColor |> not
+                                migrondiOutput { normalln "No migrations have been run in the database" },
+                                options.noColor |> not,
+                                options.json
                             )
 
                         0
@@ -377,11 +372,11 @@ module Migrations =
 
                         MigrondiConsole.Log(
                             migrondiOutput {
-                                normal "Missing migrations:\n"
-                                warning $"{migrations}\n"
-                            }
-                            |> MigrondiOutput.toOutput options.json,
-                            options.noColor |> not
+                                normalln "Missing migrations:"
+                                warningln $"{migrations}"
+                            },
+                            options.noColor |> not,
+                            options.json
                         )
 
                         0
@@ -400,19 +395,19 @@ module Migrations =
 
                         MigrondiConsole.Log(
                             migrondiOutput {
-                                normal "Present migrations in the database:\n"
-                                warning $"{migrations}\n"
-                            }
-                            |> MigrondiOutput.toOutput options.json,
-                            options.noColor |> not
+                                normalln "Present migrations in the database:"
+                                warningln $"{migrations}"
+                            },
+                            options.noColor |> not,
+                            options.json
                         )
 
                         0
                     | (_, _, _) ->
                         MigrondiConsole.Log(
-                            migrondiOutput { danger "This flag combination is not supported" }
-                            |> MigrondiOutput.toOutput options.json,
-                            options.noColor |> not
+                            migrondiOutput { dangerln "This flag combination is not supported" },
+                            options.noColor |> not,
+                            options.json
                         )
 
                         let l1 = "--last true"
@@ -420,9 +415,9 @@ module Migrations =
                         let l3 = "--all true --missing false"
 
                         MigrondiConsole.Log(
-                            migrondiOutput { normal $"Supported combinations are:\n{l1}\n{l2}\n{l3}\n" }
-                            |> MigrondiOutput.toOutput options.json,
-                            options.noColor |> not
+                            migrondiOutput { normal $"Supported combinations are:\n{l1}\n{l2}\n{l3}\n" },
+                            options.noColor |> not,
+                            options.json
                         )
 
                         1
