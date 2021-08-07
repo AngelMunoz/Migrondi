@@ -1,39 +1,76 @@
-﻿open CommandLine
+﻿open Argu
 
 open FsToolkit.ErrorHandling
 
 open Migrondi.Types
-open Migrondi.Options
+open Migrondi.Options.Cli
 open Migrondi.Migrations
 
 [<EntryPoint>]
 let main argv =
-    let getParsedResult () =
+    let getCommand () : Result<MigrondiArgs * bool * bool, exn> =
         result {
-            let! parsed =
-                try
-                    CommandLine.Parser.Default.ParseArguments<InitOptions, NewOptions, UpOptions, DownOptions, ListOptions>(
-                        argv
-                    )
-                    |> Ok
-                with
-                | ex -> Result.Error CommandNotParsedException
+            let parser = ArgumentParser.Create<MigrondiArgs>()
+            let parsed = parser.Parse argv
 
-            match parsed with
-            | :? (Parsed<obj>) as command -> return command
-            | _ -> return! (Result.Error CommandNotParsedException)
+            let json =
+                parsed.TryGetResult(MigrondiArgs.Json)
+                |> Option.map
+                    (fun opt ->
+                        if opt.IsNone then
+                            true
+                        else
+                            opt |> Option.defaultValue false)
+                |> Option.defaultValue false
+
+            let noColor =
+                parsed.TryGetResult(MigrondiArgs.No_Color)
+                |> Option.map
+                    (fun opt ->
+                        if opt.IsNone then
+                            true
+                        else
+                            opt |> Option.defaultValue false)
+                |> Option.defaultValue false
+
+            let cliArgs =
+                parsed.GetAllResults()
+                |> List.filter
+                    (fun result ->
+                        match result with
+                        | Json _
+                        | No_Color _ -> false
+                        | _ -> true)
+
+            match cliArgs with
+            | [ Init subcmd ] -> return Init subcmd, noColor, json
+            | [ New subcmd ] -> return New subcmd, noColor, json
+            | [ Up subcmd ] -> return Up subcmd, noColor, json
+            | [ Down subcmd ] -> return Down subcmd, noColor, json
+            | _ -> return! CommandNotParsedException |> Result.Error
         }
 
     result {
-        let! command = getParsedResult ()
+        let! command = getCommand ()
 
-        match command.Value with
-        | :? InitOptions as options -> return! MigrondiRunner.RunInit(options)
-        | :? NewOptions as options -> return! MigrondiRunner.RunNew(options)
-        | :? UpOptions as options -> return! MigrondiRunner.RunUp(options)
-        | :? DownOptions as options -> return! MigrondiRunner.RunDown(options)
-        | :? ListOptions as options -> return! MigrondiRunner.RunList(options)
-        | parsed -> return! (Result.Error(InvalidOptionSetException(nameof parsed)))
+        return!
+            match command with
+            | (MigrondiArgs.Init args, noColor, json) ->
+                InitArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunInit
+            | (MigrondiArgs.New args, noColor, json) ->
+                NewArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunNew
+            | (MigrondiArgs.Up args, noColor, json) ->
+                UpArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunUp
+            | (MigrondiArgs.Down args, noColor, json) ->
+                DownArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunDown
+            | (MigrondiArgs.List args, noColor, json) ->
+                ListArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunList
+            | _ -> CommandNotParsedException |> Result.Error
     }
     |> function
         | Ok exitCode -> exitCode
