@@ -82,7 +82,7 @@ module Cli =
                 | Dry_Run _ -> "Prints to the console what is going to be run against the database."
 
         static member GetOptions(results: ParseResults<UpArgs>, ?noColor: bool, ?asJson: bool) : UpOptions =
-            { total = defaultArg (results.TryGetResult(Total) |> Option.flatten) 1
+            { total = defaultArg (results.TryGetResult(Total) |> Option.flatten) 0
               dryRun = defaultArg (results.TryGetResult(Dry_Run) |> Option.flatten) true
               noColor = defaultArg noColor false
               json = defaultArg asJson false }
@@ -99,7 +99,7 @@ module Cli =
                 | Dry_Run _ -> "Prints to the console what is going to be run against the database."
 
         static member GetOptions(results: ParseResults<DownArgs>, ?noColor: bool, ?asJson: bool) : DownOptions =
-            { total = defaultArg (results.TryGetResult(Total) |> Option.flatten) 1
+            { total = defaultArg (results.TryGetResult(Total) |> Option.flatten) 0
               dryRun = defaultArg (results.TryGetResult(Dry_Run) |> Option.flatten) true
               noColor = defaultArg noColor false
               json = defaultArg asJson false }
