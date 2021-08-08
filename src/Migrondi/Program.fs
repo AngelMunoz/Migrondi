@@ -11,7 +11,13 @@ let main argv =
     let getCommand () : Result<MigrondiArgs * bool * bool, exn> =
         result {
             let parser = ArgumentParser.Create<MigrondiArgs>()
-            let parsed = parser.Parse argv
+
+            let! parsed =
+                try
+                    parser.Parse argv |> Ok
+                with
+                | :? Argu.ArguParseException as ex -> CommandNotParsedException(ex.Message) |> Error
+
 
             let json =
                 parsed.TryGetResult(MigrondiArgs.Json)
@@ -48,7 +54,11 @@ let main argv =
             | [ Up subcmd ] -> return Up subcmd, noColor, json
             | [ Down subcmd ] -> return Down subcmd, noColor, json
             | [ List subcmd ] -> return List subcmd, noColor, json
-            | _ -> return! CommandNotParsedException |> Result.Error
+            | [ Status subcmd ] -> return Status subcmd, noColor, json
+            | args ->
+                return!
+                    CommandNotParsedException $"%A{args}"
+                    |> Result.Error
         }
 
     result {
@@ -71,10 +81,31 @@ let main argv =
             | (MigrondiArgs.List args, noColor, json) ->
                 ListArgs.GetOptions(args, noColor, json)
                 |> MigrondiRunner.RunList
-            | _ -> CommandNotParsedException |> Result.Error
+            | (MigrondiArgs.Status args, noColor, json) ->
+                StatusArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunStatus
+            | args ->
+                CommandNotParsedException $"%A{args}"
+                |> Result.Error
     }
     |> function
         | Ok exitCode -> exitCode
         | Error ex ->
-            eprintfn "%O" ex
+            match ex with
+            | InvalidDriverException message
+            | EmptyPath message
+            | ConfigurationExists message
+            | ConfigurationNotFound message
+            | InvalidMigrationName message
+            | FailedToReadFile message
+            | FailedToExecuteQuery message
+            | InvalidOptionSetException message
+            | CommandNotParsedException message
+            | AmountExeedsExistingException message -> eprintfn "%s" message
+            | MigrationApplyFailedException (message, file, driver) ->
+                eprintfn $"Failed to apply {file.name} with {driver.AsString()}: {message}"
+            | MissingMigrationContent content ->
+                eprintfn $"The migration file is corrupt or missing parts, found: %A{content}"
+            | others -> eprintfn "%s, at %s" others.Message others.Source
+
             1
