@@ -62,6 +62,21 @@
       "commandName": "Project",
       "commandLineArgs": "init --json",
       "workingDirectory": "..\\..\\"
+    },
+    "Print Help": {
+      "commandName": "Project",
+      "commandLineArgs": "--help",
+      "workingDirectory": "..\\..\\"
+    },
+    "Help sub-command": {
+      "commandName": "Project",
+      "commandLineArgs": "new --help",
+      "workingDirectory": "..\\..\\"
+    },
+    "Status -n filename": {
+      "commandName": "Project",
+      "commandLineArgs": "status -n CreateTodos3_1628280578632.sql",
+      "workingDirectory": "..\\..\\"
     }
   }
 }
