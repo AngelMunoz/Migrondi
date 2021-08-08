@@ -50,6 +50,8 @@ type TryListMigrations =
         -> TryGetMigrationsFn
         -> Result<int, exn>
 
+type TryGetFileStatus =
+    StatusOptions -> MigrondiConfig -> InitializeDriver -> GetConnection -> TryGetByFilename -> Result<int, exn>
 
 [<RequireQualifiedAccess>]
 module Migrations =
@@ -408,6 +410,35 @@ module Migrations =
 
             }
 
+    let truRunMigrationsStatus: TryGetFileStatus =
+        fun options config initializeDriver getConnection tryGetFileByName ->
+            result {
+                let driver = Driver.FromString config.driver
+                do initializeDriver driver
+                let connection = getConnection config.connection driver
+
+                MigrondiConsole.Log(
+                    migrondiOutput { normalln "Running Migrondi Status" },
+                    options.noColor |> not,
+                    options.json
+                )
+
+
+                let! exists = tryGetFileByName connection.Value options.filename
+
+                let log =
+                    let output = 
+                        if exists then
+                            migrondiOutput { successln $"Present" }
+                        else
+                           migrondiOutput { warningln $"Pending" }
+                    output
+                    |> List.append (migrondiOutput { normal $"Filename: {options.filename} is " })
+
+                MigrondiConsole.Log(log, options.noColor |> not, options.json)
+                return 0
+            }
+
 type MigrondiRunner() =
 
     static member RunInit(options: InitOptions) : Result<int, exn> =
@@ -494,4 +525,22 @@ type MigrondiRunner() =
                     Queries.getMigrationName
                     Queries.getLastMigration
                     FileSystem.GetMigrations
+        }
+
+    static member RunStatus(options: StatusOptions, ?config: MigrondiConfig) : Result<int, exn> =
+        result {
+            let! config =
+                result {
+                    match config with
+                    | Some config -> return config
+                    | None -> return! FileSystem.TryGetMigrondiConfig()
+                }
+
+            return!
+                Migrations.truRunMigrationsStatus
+                    options
+                    config
+                    Queries.initializeDriver
+                    Queries.getConnection
+                    Queries.tryGetByFilename
         }

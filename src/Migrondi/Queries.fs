@@ -22,6 +22,7 @@ type RunMigrations = Driver -> IDbConnection -> MigrationType -> MigrationFile a
 type TryEnsureMigrationsTableExists = Driver -> IDbConnection -> Result<unit, exn>
 type TryGetLastMigrationInDatabase = IDbConnection -> Result<Migration option, exn>
 type InitializeDriver = Driver -> unit
+type TryGetByFilename = IDbConnection -> string -> Result<bool, exn>
 
 [<RequireQualifiedAccess>]
 module Queries =
@@ -252,3 +253,40 @@ module Queries =
             migrationFiles
             |> Array.sortByDescending (fun x -> x.timestamp)
             |> Array.map getMigrationContent
+
+    let tryGetByFilename: TryGetByFilename =
+        fun connection filename ->
+            result {
+                let! name, timestamp =
+                    result {
+                        let parts =
+                            filename.Split('_')
+
+                        if parts.Length <> 2 then
+                            return!
+                                InvalidMigrationName
+                                    $"{filename} is not a valid migration name, migration names come as \"NAME_TIMESTAMP.sql\""
+                                |> Error
+
+                        try
+                            return parts.[0], (parts.[1].Split('.') |> Array.head) |> int64
+                        with
+                        | :? System.FormatException ->
+                            return!
+                                InvalidMigrationName
+                                    $"The timestamp in this filename is not an integer or is missing: {filename}"
+                                |> Error
+                    }
+
+                try
+                    let result =
+                        connection.Count(
+                            "migration",
+                            {| name = name; timestamp = timestamp |}
+                        )
+
+                    return result >= 1L
+                with
+                | :? RepoDb.Exceptions.MissingFieldsException -> return false
+                | ex -> return! (Error(FailedToExecuteQuery ex.Message))
+            }

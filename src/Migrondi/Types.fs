@@ -5,12 +5,12 @@ exception EmptyPath of string
 exception ConfigurationExists of string
 exception ConfigurationNotFound of string
 exception InvalidMigrationName of string
-exception MissingMigrationContent
 exception FailedToReadFile of string
-exception CommandNotParsedException
+exception CommandNotParsedException of string
 exception FailedToExecuteQuery of string
 exception InvalidOptionSetException of string
 exception AmountExeedsExistingException of string
+exception MissingMigrationContent of string array
 
 type MigrondiConfig =
     { connection: string
@@ -44,6 +44,13 @@ type Driver =
     | Sqlite
     | Postgresql
     | Mysql
+
+    member this.AsString() =
+        match this with
+        | Mssql -> "mssql"
+        | Sqlite -> "sqlite"
+        | Postgresql -> "postgres"
+        | Mysql -> "mysql"
 
     static member FromString(driver: string) =
         match driver.ToLowerInvariant() with

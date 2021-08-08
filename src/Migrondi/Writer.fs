@@ -40,7 +40,6 @@ module Json =
              opts.ReadCommentHandling <- JsonCommentHandling.Skip
              opts.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
              opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
-             opts.WriteIndented <- true
              opts)
 
     let private diskOptions =
@@ -129,7 +128,7 @@ type MigrondiConsole() =
 
         let value =
             match output with
-            | JsonOutput _ -> writer output |> Markup.Escape
+            | JsonOutput _ -> $"{writer output |> Markup.Escape}\n"
             | ConsoleOutput _ -> writer output
 
         AnsiConsole.Markup(value)

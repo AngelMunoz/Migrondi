@@ -35,6 +35,11 @@ type ListOptions =
       noColor: bool
       json: bool }
 
+type StatusOptions =
+    { filename: string
+      noColor: bool
+      json: bool }
+
 module Cli =
 
     [<RequireQualifiedAccess>]
@@ -116,12 +121,26 @@ module Cli =
               noColor = defaultArg noColor false
               json = defaultArg asJson false }
 
+    type StatusArgs =
+        | [<AltCommandLine("-n"); Mandatory>] Name of string
+
+        interface IArgParserTemplate with
+            member this.Usage: string =
+                match this with
+                | Name _ -> "Name of the file to check against the database."
+
+        static member GetOptions(results: ParseResults<StatusArgs>, ?noColor: bool, ?asJson: bool) : StatusOptions =
+            { filename = results.GetResult(Name)
+              noColor = defaultArg noColor false
+              json = defaultArg asJson false }
+
     type MigrondiArgs =
         | [<CliPrefix(CliPrefix.None)>] Init of ParseResults<InitArgs>
         | [<CliPrefix(CliPrefix.None)>] New of ParseResults<NewArgs>
         | [<CliPrefix(CliPrefix.None)>] Up of ParseResults<UpArgs>
         | [<CliPrefix(CliPrefix.None)>] Down of ParseResults<DownArgs>
         | [<CliPrefix(CliPrefix.None)>] List of ParseResults<ListArgs>
+        | [<CliPrefix(CliPrefix.None)>] Status of ParseResults<StatusArgs>
         | [<First; AltCommandLine("-nc")>] No_Color of bool option
         | [<First; AltCommandLine("-j")>] Json of bool option
 
@@ -133,5 +152,7 @@ module Cli =
                 | Up _ -> "Runs the migrations against the database."
                 | Down _ -> "Rolls back migrations from the database."
                 | List _ -> "List the amount of migrations in the database."
+                | Status _ ->
+                    "Checks if a migration file is present in the database, this file has to be inside \"migrationsDir\" from migrondi.json"
                 | No_Color _ -> "Write to the console without coloring enabled."
                 | Json _ -> "Output to the console with a json format."
