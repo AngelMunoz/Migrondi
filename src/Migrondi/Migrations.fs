@@ -194,7 +194,7 @@ module Migrations =
                     MigrondiConsole.Log(
                         migrondiOutput {
                             normal "Executed: "
-                            warning $"{amount} "
+                            warning $"%i{amount} "
                             normalln "migrations"
                         },
                         options.noColor |> not,
@@ -249,7 +249,7 @@ module Migrations =
                 MigrondiConsole.Log(
                     migrondiOutput {
                         normal "Rolling back: "
-                        warning $"{amountToRunDown} "
+                        warning $"%i{amountToRunDown} "
                         normalln "migrations"
                     },
                     options.noColor |> not,
@@ -297,11 +297,12 @@ module Migrations =
                             connection.Value
                             MigrationType.Down
                             (alreadyRanMigrations |> Array.take amountToRunDown)
+                        |> Array.length
 
                     MigrondiConsole.Log(
                         migrondiOutput {
                             normal "Executed: "
-                            warning $"{amount}"
+                            warning $"%i{amount} "
                             normalln "migrations"
                         },
                         options.noColor |> not,
@@ -330,96 +331,81 @@ module Migrations =
                 let migrations =
                     tryGetMigrationFiles config.migrationsDir
 
-                // TODO: Fix options behavior calls for #21
+                let getPendingMigrations () =
+                    getPendingMigrations migration migrations
 
-                return
-                    match options.last, options.all, options.missing with
-                    | (true, _, _) ->
-                        match migration with
-                        | Some migration ->
-                            getMigrationName (MigrationSource.Database migration)
-                            |> (fun name ->
-                                MigrondiConsole.Log(
-                                    migrondiOutput {
-                                        normal "Last migration in the database is: "
-                                        warningln $"{name}"
-                                    },
-                                    options.noColor |> not,
-                                    options.json
-                                ))
+                let getPresentMigrations () =
+                    getAppliedMigrations migration migrations
 
-                        | None ->
-                            MigrondiConsole.Log(
-                                migrondiOutput { normalln "No migrations have been run in the database" },
-                                options.noColor |> not,
-                                options.json
-                            )
+                let getMigrationLog (migrations: MigrationFile array) asPresent =
+                    migrations
+                    |> Array.map
+                        (fun m ->
+                            let isPresent = if asPresent then "x" else ""
 
-                        0
-                    | (_, true, true) ->
-                        let pendingMigrations =
-                            getPendingMigrations migration migrations
-
-                        let migrations =
-                            pendingMigrations
-                            |> Array.map (
-                                MigrationSource.File
-                                >> getMigrationName
-                                >> sprintf "%s\n"
-                            )
-                            |> fun arr -> System.String.Join("", arr)
-
-                        MigrondiConsole.Log(
                             migrondiOutput {
-                                normalln "Missing migrations:"
-                                warningln $"{migrations}"
-                            },
-                            options.noColor |> not,
-                            options.json
-                        )
+                                normal (Spectre.Console.Markup.Escape($"- [ {isPresent} ] "))
+                                warningln $"{m.name} - {m.timestamp}"
+                            })
+                    |> Array.fold
+                        (fun (current: ConsoleOutput seq) next ->
+                            seq {
+                                yield! next
+                                yield! current
+                            })
+                        Seq.empty
+                    |> Seq.toList
 
-                        0
-                    | (_, true, false) ->
-                        let alreadyRan =
-                            getAppliedMigrations migration migrations
+                match options.listKind with
+                | MigrationListEnum.Pending ->
+                    let migrations = getPendingMigrations ()
+                    let log = getMigrationLog migrations false
 
-                        let migrations =
-                            alreadyRan
-                            |> Array.map (
-                                MigrationSource.File
-                                >> getMigrationName
-                                >> sprintf "%s\n"
-                            )
-                            |> fun arr -> System.String.Join("", arr)
+                    MigrondiConsole.Log(
+                        migrondiOutput { normalln "Pending Migrations:" },
+                        options.noColor |> not,
+                        options.json
+                    )
 
-                        MigrondiConsole.Log(
-                            migrondiOutput {
-                                normalln "Present migrations in the database:"
-                                warningln $"{migrations}"
-                            },
-                            options.noColor |> not,
-                            options.json
-                        )
+                    MigrondiConsole.Log(log, options.noColor |> not, options.json)
+                    return 0
+                | MigrationListEnum.Present ->
+                    let migrations = getPresentMigrations ()
+                    let log = getMigrationLog migrations true
 
-                        0
-                    | (_, _, _) ->
-                        MigrondiConsole.Log(
-                            migrondiOutput { dangerln "This flag combination is not supported" },
-                            options.noColor |> not,
-                            options.json
-                        )
+                    MigrondiConsole.Log(
+                        migrondiOutput { normalln "Present Migrations:" },
+                        options.noColor |> not,
+                        options.json
+                    )
 
-                        let l1 = "--last true"
-                        let l2 = "--all true --missing true"
-                        let l3 = "--all true --missing false"
+                    MigrondiConsole.Log(log, options.noColor |> not, options.json)
+                    return 0
+                | MigrationListEnum.Both ->
+                    let pending = getPendingMigrations ()
+                    let present = getPresentMigrations ()
 
-                        MigrondiConsole.Log(
-                            migrondiOutput { normal $"Supported combinations are:\n{l1}\n{l2}\n{l3}\n" },
-                            options.noColor |> not,
-                            options.json
-                        )
+                    let logPresent = getMigrationLog present true
+                    let logPending = getMigrationLog pending false
 
-                        1
+                    MigrondiConsole.Log(
+                        migrondiOutput { normalln "Present Migrations:" },
+                        options.noColor |> not,
+                        options.json
+                    )
+
+                    MigrondiConsole.Log(logPresent, options.noColor |> not, options.json)
+
+                    MigrondiConsole.Log(
+                        migrondiOutput { normalln "Pending Migrations:" },
+                        options.noColor |> not,
+                        options.json
+                    )
+
+                    MigrondiConsole.Log(logPending, options.noColor |> not, options.json)
+                    return 0
+                | _ -> return 1
+
             }
 
 type MigrondiRunner() =

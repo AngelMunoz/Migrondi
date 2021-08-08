@@ -141,6 +141,8 @@ module BuilderCE =
 
         member _.Run(state: ConsoleOutput list) = state |> List.rev
 
+        member _.Source(s: ConsoleOutput list) = s
+
         [<CustomOperation("normal")>]
         member _.Normal(state: ConsoleOutput list, value: string) = ConsoleOutput.Normal value :: state
 
