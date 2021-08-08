@@ -1,5 +1,7 @@
 ![.NET Core](https://github.com/AngelMunoz/Migrondi/workflows/.NET%20Core/badge.svg?branch=master)
 
+> Currently Working on the next version to also add better support for the VSCode Extension!
+
 # Migrondi
 
 Migrondi is a SQL Migrations tool designed to be simple and execute simple migrations. Write SQL and execute SQL against your database.
