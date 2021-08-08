@@ -47,6 +47,7 @@ let main argv =
             | [ New subcmd ] -> return New subcmd, noColor, json
             | [ Up subcmd ] -> return Up subcmd, noColor, json
             | [ Down subcmd ] -> return Down subcmd, noColor, json
+            | [ List subcmd ] -> return List subcmd, noColor, json
             | _ -> return! CommandNotParsedException |> Result.Error
         }
 

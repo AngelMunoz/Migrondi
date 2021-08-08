@@ -244,4 +244,11 @@ module Queries =
 
             migration.name, queryParams, content
 
-        migrationFiles |> Array.map getMigrationContent
+        if migrationType = MigrationType.Down then
+            migrationFiles
+            |> Array.sortBy (fun x -> x.timestamp)
+            |> Array.map getMigrationContent
+        else
+            migrationFiles
+            |> Array.sortByDescending (fun x -> x.timestamp)
+            |> Array.map getMigrationContent

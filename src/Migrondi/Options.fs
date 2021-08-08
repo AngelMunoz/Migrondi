@@ -24,10 +24,14 @@ type DownOptions =
       noColor: bool
       json: bool }
 
+type MigrationListEnum =
+    | Present = 1
+    | Pending = 2
+    | Both = 3
+
 type ListOptions =
-    { all: bool
-      missing: bool
-      last: bool
+    { listKind: MigrationListEnum
+      amount: int
       noColor: bool
       json: bool }
 
@@ -97,21 +101,18 @@ module Cli =
 
     [<RequireQualifiedAccess>]
     type ListArgs =
-        | [<AltCommandLine("-a"); Mandatory>] All of bool
-        | [<AltCommandLine("-m")>] Missing of bool option
-        | [<AltCommandLine("-l")>] Last of bool option
+        | [<AltCommandLine("-n")>] Amount of int option
+        | [<AltCommandLine("-k")>] Kind of MigrationListEnum option
 
         interface IArgParserTemplate with
             member this.Usage: string =
                 match this with
-                | All _ -> "Shows every migration present in the database."
-                | Missing _ -> "Shows the migrations that are pending to run."
-                | Last _ -> "Shows the last migration run agains the database."
+                | Kind _ -> "Which migrations should be listed, defaults to \"pending\"."
+                | Amount _ -> "Amount of migrations to get, defaults to 5."
 
         static member GetOptions(results: ParseResults<ListArgs>, ?noColor: bool, ?asJson: bool) : ListOptions =
-            { all = results.GetResult(All)
-              missing = defaultArg (results.TryGetResult(Missing) |> Option.flatten) true
-              last = defaultArg (results.TryGetResult(Last) |> Option.flatten) true
+            { amount = defaultArg (results.TryGetResult(Amount) |> Option.flatten) -1
+              listKind = defaultArg (results.TryGetResult(Kind) |> Option.flatten) MigrationListEnum.Pending
               noColor = defaultArg noColor false
               json = defaultArg asJson false }
 
