@@ -1,183 +1,79 @@
-﻿open CommandLine
+﻿open Argu
+
+open FsToolkit.ErrorHandling
+
 open Migrondi.Types
-open Migrondi.Options
+open Migrondi.Options.Cli
 open Migrondi.Migrations
-open Migrondi.Utils
-open System.Data
-open UserInterface
-
-
-let initializeDriver driver =
-    match driver with
-    | Driver.Mssql -> RepoDb.SqlServerBootstrap.Initialize()
-    | Driver.Sqlite -> RepoDb.SqLiteBootstrap.Initialize()
-    | Driver.Mysql -> RepoDb.MySqlBootstrap.Initialize()
-    | Driver.Postgresql -> RepoDb.PostgreSqlBootstrap.Initialize()
-
-let tryRunInit init =
-    try
-        runMigrationsInit init
-        Ok()
-    with ex -> Result.Error ex
-
-let tryRunNew (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>) newOptions =
-
-    try
-        match getConfig () with
-        | Ok config ->
-            runMigrationsNew config newOptions
-            Ok()
-        | Error ex -> Result.Error ex
-    with :? System.UnauthorizedAccessException ->
-        Result.Error(
-            exn "Failed to write migration to disk\nCheck that you have sufficient permission on the directory"
-        )
-
-let tryRunUp (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
-                (getConnection: Driver -> string -> IDbConnection)
-                upOptions
-                =
-    try
-        match getConfig () with
-        | Ok (path, config, driver) ->
-            initializeDriver driver
-            let connection = getConnection driver config.connection
-
-            let result =
-                (runMigrationsUp connection (path, config, driver) upOptions)
-                    .Length
-
-            connection.Close()
-            Ok result
-
-        | Error err -> Result.Error err
-    with
-    | :? System.UnauthorizedAccessException as ex ->
-        let l1 = "Failed to write migration to disk"
-
-        let l2 =
-            "Check that you have sufficient permission on the directory"
-
-        let l3 = ex.Message
-        Result.Error(exn $"{l1}\n{l2}\n{l3}")
-    | ex -> Result.Error ex
-
-let tryRunDown (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
-                (getConnection: Driver -> string -> IDbConnection)
-                downOptions
-                =
-    try
-        match getConfig () with
-        | Ok (path, config, driver) ->
-            initializeDriver driver
-            let connection = getConnection driver config.connection
-
-            let result =
-                (runMigrationsDown connection (path, config, driver) downOptions)
-                    .Length
-
-            connection.Close()
-            Ok result
-        | Error err -> Result.Error err
-    with ex -> Result.Error ex
-
-let tryRunList (getConfig: unit -> Result<string * MigrondiConfig * Driver, exn>)
-                (getConnection: Driver -> string -> IDbConnection)
-                listOptions
-                =
-    try
-        match getConfig () with
-        | Ok (path, config, driver) ->
-            initializeDriver driver
-            let connection = getConnection driver config.connection
-            runMigrationsList connection (path, config, driver) listOptions
-            connection.Close()
-            Ok()
-        | Error err -> Result.Error err
-    with
-    | :? System.UnauthorizedAccessException ->
-        Result.Error(
-            exn "Failed to read migrations directory\nCheck that you have sufficient permission on the directory"
-        )
-    | ex -> Result.Error ex
-
-let tryGetConfig () =
-    try
-        Ok(getPathConfigAndDriver ())
-    with
-    | :? System.IO.FileNotFoundException
-    | :? System.ArgumentException
-    | :? System.ArgumentNullException
-    | :? System.IO.DirectoryNotFoundException
-    | :? System.IO.IOException
-    | :? System.IO.PathTooLongException
-    | :? System.NotSupportedException
-    | :? System.UnauthorizedAccessException as ex -> Result.Error ex
-    | :? System.Text.Json.JsonException ->
-        Result.Error(
-            exn
-                "Failed to parse the migrondi.json file, please check for trailing commas and that the properties have the correct name"
-        )
-
-
 
 [<EntryPoint>]
 let main argv =
-    printfn "%s" System.Environment.CurrentDirectory
-    let result =
-        CommandLine.Parser.Default.ParseArguments<InitOptions, NewOptions, UpOptions, DownOptions, ListOptions>(
-            argv
-        )
+    let getCommand () : Result<MigrondiArgs * bool * bool, exn> =
+        result {
+            let parser = ArgumentParser.Create<MigrondiArgs>()
+            let parsed = parser.Parse argv
 
-    match result with
-    | :? (NotParsed<obj>) -> 1
-    | :? (Parsed<obj>) as command ->
-        match command.Value with
-        | :? NewOptions as newOptions ->
-            match tryRunNew tryGetConfig newOptions with
-            | Ok _ -> 0
-            | Error err ->
-                failurePrint $"{err.Message}"
-                1
-        | :? UpOptions as upOptions ->
-            match tryRunUp tryGetConfig getConnection upOptions with
-            | Ok amount ->
-                match upOptions.dryRun with
-                | true -> successPrint $"Total Migrations To Run: %i{amount}"
-                | false -> successPrint $"Migrations Applied: %i{amount}"
+            let json =
+                parsed.TryGetResult(MigrondiArgs.Json)
+                |> Option.map
+                    (fun opt ->
+                        if opt.IsNone then
+                            true
+                        else
+                            opt |> Option.defaultValue false)
+                |> Option.defaultValue false
 
-                0
-            | Error err ->
-                failurePrint $"{err.Message}"
-                1
-        | :? DownOptions as downOptions ->
-            match tryRunDown tryGetConfig getConnection downOptions with
-            | Ok amount ->
-                match downOptions.dryRun with
-                | true -> successPrint $"Total Migrations To Run: %i{amount}"
-                | false -> successPrint $"Rolled back %i{amount} migrations"
+            let noColor =
+                parsed.TryGetResult(MigrondiArgs.No_Color)
+                |> Option.map
+                    (fun opt ->
+                        if opt.IsNone then
+                            true
+                        else
+                            opt |> Option.defaultValue false)
+                |> Option.defaultValue false
 
-                0
-            | Error err ->
-                failurePrint $"{err.Message}"
-                1
-        | :? ListOptions as listOptions ->
-            match tryRunList tryGetConfig getConnection listOptions with
-            | Ok _ -> 0
-            | Error err ->
-                failurePrint $"{err.Message}"
-                1
-        | :? InitOptions as initOptions ->
-            let result = tryRunInit initOptions
+            let cliArgs =
+                parsed.GetAllResults()
+                |> List.filter
+                    (fun result ->
+                        match result with
+                        | Json _
+                        | No_Color _ -> false
+                        | _ -> true)
 
-            match result with
-            | Ok _ -> 0
-            | Error err ->
-                failurePrint $"{err.Message}"
-                1
-        | _ ->
-            failurePrint "Unexpected parsing result"
+            match cliArgs with
+            | [ Init subcmd ] -> return Init subcmd, noColor, json
+            | [ New subcmd ] -> return New subcmd, noColor, json
+            | [ Up subcmd ] -> return Up subcmd, noColor, json
+            | [ Down subcmd ] -> return Down subcmd, noColor, json
+            | _ -> return! CommandNotParsedException |> Result.Error
+        }
+
+    result {
+        let! command = getCommand ()
+
+        return!
+            match command with
+            | (MigrondiArgs.Init args, noColor, json) ->
+                InitArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunInit
+            | (MigrondiArgs.New args, noColor, json) ->
+                NewArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunNew
+            | (MigrondiArgs.Up args, noColor, json) ->
+                UpArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunUp
+            | (MigrondiArgs.Down args, noColor, json) ->
+                DownArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunDown
+            | (MigrondiArgs.List args, noColor, json) ->
+                ListArgs.GetOptions(args, noColor, json)
+                |> MigrondiRunner.RunList
+            | _ -> CommandNotParsedException |> Result.Error
+    }
+    |> function
+        | Ok exitCode -> exitCode
+        | Error ex ->
+            eprintfn "%O" ex
             1
-    | _ ->
-        failurePrint "Unexpected parsing result"
-        1

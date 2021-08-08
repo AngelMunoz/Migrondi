@@ -361,3 +361,4 @@ MigrationBackup/
 migrations/
 migrondi.json
 dist
+/.idea

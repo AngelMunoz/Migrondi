@@ -1,14 +1,88 @@
-namespace Migrondi
+namespace Migrondi.Database
 
-open System.Collections.Generic
+open System
 open System.Data
+open System.Data.SQLite
+open System.Data.SqlClient
+
 open RepoDb
 open RepoDb.Enumerations
-open Types
-open Utils.Operators
-open UserInterface
+open Npgsql
+open MySql.Data.MySqlClient
 
+open FsToolkit.ErrorHandling
+
+open Migrondi.Types
+
+type GetConnection = string -> Driver -> Lazy<IDbConnection>
+type GetMigrations = Migration option -> MigrationFile array -> MigrationFile array
+type GetMigrationName = MigrationSource -> string
+type RunDryMigrations = Driver -> MigrationType -> MigrationFile array -> (string * Map<string, obj> * string) array
+type RunMigrations = Driver -> IDbConnection -> MigrationType -> MigrationFile array -> int array
+type TryEnsureMigrationsTableExists = Driver -> IDbConnection -> Result<unit, exn>
+type TryGetLastMigrationInDatabase = IDbConnection -> Result<Migration option, exn>
+type InitializeDriver = Driver -> unit
+
+[<RequireQualifiedAccess>]
 module Queries =
+    /// custom tuple box operator, takes a string that represents a column of a table
+    /// and boxes the value on the right
+    let inline private (=>) (column: string) (value: 'T) = column, box value
+
+    /// gives the separator string used inside the migrations file
+    let getSeparator (migrationType: MigrationType) (timestamp: int64) =
+        let str =
+            match migrationType with
+            | MigrationType.Up -> "UP"
+            | MigrationType.Down -> "DOWN"
+
+        sprintf "-- ---------- MIGRONDI:%s:%i --------------" str timestamp
+
+    let getMigrationName (migration: MigrationSource) =
+        match migration with
+        | MigrationSource.File migration -> sprintf "%s_%i.sql" migration.name migration.timestamp
+        | MigrationSource.Database migration -> sprintf "%s_%i.sql" migration.name migration.timestamp
+
+    let getPendingMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
+        match lastMigration with
+        | None -> migrations
+        | Some migration ->
+            let index =
+                migrations
+                |> Array.findIndex (fun m -> m.name = migration.name)
+
+            match index + 1 = migrations.Length with
+            | true -> Array.empty
+            | false ->
+                let pending = migrations |> Array.skip (index + 1)
+                pending
+
+    let getAppliedMigrations (lastMigration: Migration option) (migrations: MigrationFile array) =
+        match lastMigration with
+        | Some lastMigration ->
+            let lastRanIndex =
+                migrations
+                |> Array.findIndex (fun m -> m.name = lastMigration.name)
+
+            migrations.[0..lastRanIndex]
+        | None -> Array.empty
+
+    let getConnection: GetConnection =
+        fun (connectionString: string) (driver: Driver) ->
+            lazy
+                (match driver with
+                 | Driver.Mssql -> new SqlConnection(connectionString) :> IDbConnection
+                 | Driver.Sqlite -> new SQLiteConnection(connectionString) :> IDbConnection
+                 | Driver.Mysql -> new MySqlConnection(connectionString) :> IDbConnection
+                 | Driver.Postgresql -> new NpgsqlConnection(connectionString) :> IDbConnection)
+
+    let initializeDriver (driver: Driver) =
+        match driver with
+        | Driver.Mssql -> RepoDb.SqlServerBootstrap.Initialize()
+        | Driver.Sqlite -> RepoDb.SqLiteBootstrap.Initialize()
+        | Driver.Mysql -> RepoDb.MySqlBootstrap.Initialize()
+        | Driver.Postgresql -> RepoDb.PostgreSqlBootstrap.Initialize()
+
     let private createTableQuery driver =
         match driver with
         | Driver.Sqlite ->
@@ -45,36 +119,51 @@ module Queries =
             """
 
     let createMigrationsTable (connection: IDbConnection) (driver: Driver) =
-        try
-            connection.ExecuteNonQuery(createTableQuery driver)
-            |> ignore
-
-            true
-        with ex ->
-            failurePrint ex.Message
-            false
+        result {
+            try
+                return
+                    connection.ExecuteNonQuery(createTableQuery driver)
+                    |> ignore
+            with
+            | :? System.Data.SQLite.SQLiteException as ex ->
+                if ex.Message.Contains("already exists") then
+                    return ()
+                else
+                    return! (Error(FailedToExecuteQuery ex.Message))
+            | ex -> return! (Error(FailedToExecuteQuery ex.Message))
+        }
 
     let getLastMigration (connection: IDbConnection) =
-        let orderBy =
-            seq { OrderField("timestamp", Order.Descending) }
+        result {
+            let orderBy =
+                seq { OrderField("timestamp", Order.Descending) }
 
-        let result =
-            connection.QueryAll<Migration>(orderBy = orderBy)
+            try
+                let result =
+                    connection.QueryAll<Migration>("migration", orderBy = orderBy)
 
-        result |> Seq.tryHead
+                return result |> Seq.tryHead
+            with
+            | :? RepoDb.Exceptions.MissingFieldsException -> return None
+            | ex -> return! (Error(FailedToExecuteQuery ex.Message))
+        }
 
     let migrationsTableExist (connection: IDbConnection) =
-        try
-            getLastMigration connection |> ignore
-            true
-        with ex -> false
+        result {
+            try
+                let! _ = getLastMigration connection
+                return true
+            with
+            | ex -> return! (Error(FailedToExecuteQuery ex.Message))
+        }
 
     let ensureMigrationsTable (driver: Driver) (connection: IDbConnection) =
-        let tableExists = migrationsTableExist connection
+        result {
+            let! tableExists = migrationsTableExist connection
 
-        match tableExists with
-        | false -> createMigrationsTable connection driver
-        | true -> true
+            if not <| tableExists then
+                do! createMigrationsTable connection driver
+        }
 
     let private extractContent (migrationType: MigrationType) (migration: MigrationFile) =
         match migrationType with
@@ -99,15 +188,19 @@ module Queries =
     let private prepareQueryParams (migrationType: MigrationType) (migration: MigrationFile) =
         match migrationType with
         | MigrationType.Up ->
-            dict [ "Name" => migration.name
-                   "Timestamp" => migration.timestamp ]
-        | MigrationType.Down -> dict [ "Timestamp" => migration.timestamp ]
+            [ "Name" => migration.name
+              "Timestamp" => migration.timestamp ]
+            |> Map.ofSeq
+        | MigrationType.Down ->
+            [ "Timestamp" => migration.timestamp ]
+            |> Map.ofSeq
 
-    let private applyMigration (driver: Driver)
-                               (connection: IDbConnection)
-                               (migrationType: MigrationType)
-                               (migration: MigrationFile)
-                               =
+    let private applyMigration
+        (driver: Driver)
+        (connection: IDbConnection)
+        (migrationType: MigrationType)
+        (migration: MigrationFile)
+        =
         let content = extractContent migrationType migration
         let insert = getInsertStatement migrationType
 
@@ -119,39 +212,36 @@ module Queries =
 
         try
             connection.ExecuteNonQuery(migrationContent, queryParams)
-        with ex ->
-            failurePrint $"Error while running migration \"{migration.name}\""
-            failwith ex.Message
+        with
+        | ex -> raise (MigrationApplyFailedException(ex.Message, migration, driver))
 
-    let private applyDryRunMigration (driver: Driver) (migrationType: MigrationType) (migration: MigrationFile) =
-        let content = extractContent migrationType migration
-        let insert = getInsertStatement migrationType
-
-        let migrationContent =
-            prepareMigrationContent driver content insert
-
-        let queryParams =
-            prepareQueryParams migrationType migration
-
-        $"[MIGRATION: %s{migration.name}] - [PARAMS: %A{queryParams}]\n%s{migrationContent}"
-
-    let runMigrations (driver: Driver)
-                      (connection: IDbConnection)
-                      (migrationType: MigrationType)
-                      (migrationFiles: array<MigrationFile>)
-                      =
+    let runMigrations
+        (driver: Driver)
+        (connection: IDbConnection)
+        (migrationType: MigrationType)
+        (migrationFiles: array<MigrationFile>)
+        =
         let applyMigrationWithConnectionAndType =
             applyMigration driver connection migrationType
 
         migrationFiles
         |> Array.map applyMigrationWithConnectionAndType
 
-    let dryRunMigrations (driver: Driver) (migrationType: MigrationType) (migrationFiles: array<MigrationFile>) =
-        let applyMigrationWithConnectionAndType =
-            applyDryRunMigration driver migrationType
-        let migrations = 
-            migrationFiles
-            |> Array.map applyMigrationWithConnectionAndType
-        
-        successPrint (System.String.Join('\n', migrations))
-        Array.create migrations.Length 1
+    let dryRunMigrations
+        (driver: Driver)
+        (migrationType: MigrationType)
+        (migrationFiles: array<MigrationFile>)
+        : (string * Map<string, obj> * string) array =
+        let getMigrationContent (migration: MigrationFile) =
+            let content = extractContent migrationType migration
+            let insert = getInsertStatement migrationType
+
+            let content =
+                prepareMigrationContent driver content insert
+
+            let queryParams =
+                prepareQueryParams migrationType migration
+
+            migration.name, queryParams, content
+
+        migrationFiles |> Array.map getMigrationContent
