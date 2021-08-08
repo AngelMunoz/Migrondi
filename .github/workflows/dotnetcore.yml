@@ -2,13 +2,12 @@ name: .NET Core
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
@@ -19,5 +18,4 @@ jobs:
         include-prerelease: true
     - run: dotnet build src --configuration Release
     - run: dotnet test src/Migrondi.Tests --verbosity normal
-
 
