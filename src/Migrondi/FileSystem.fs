@@ -134,7 +134,7 @@ module FileSystem =
                 let parts = content.Split(separator)
 
                 if parts.Length <> 2 then
-                    raise MissingMigrationContent
+                    raise (MissingMigrationContent parts)
 
                 parts.[0], parts.[1]
 
@@ -172,12 +172,14 @@ module FileSystem =
                 Ok path
             with
             | ex -> Error ex
-        let tryCreateDirectory path = 
+
+        let tryCreateDirectory path =
             try
                 let dirinfo = Directory.CreateDirectory path
                 dirinfo.FullName |> Ok
-            with ex ->
-                Error ex
+            with
+            | ex -> Error ex
+
         fun migrationsDir migrationName ->
             let timestamp =
                 DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
@@ -186,7 +188,7 @@ module FileSystem =
                 $"{migrationName.Trim()}_{timestamp}.sql"
 
             tryCreateDirectory migrationsDir
-            |> Result.bind(fun migrationsDir -> 
-                let path = Path.Combine(migrationsDir, name)
-                tryCreateFile path (getContent timestamp)
-            )
+            |> Result.bind
+                (fun migrationsDir ->
+                    let path = Path.Combine(migrationsDir, name)
+                    tryCreateFile path (getContent timestamp))

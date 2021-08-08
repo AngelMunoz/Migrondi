@@ -17,9 +17,15 @@ type TestUtils() =
     member _.``Run Init with Custom Path``() =
         let tempPath =
             Path.Combine(Path.GetTempPath(), "migrondi-init-custom-path")
-        let opts: InitOptions = { path = tempPath; noColor = true; json = false }
+
+        let opts: InitOptions =
+            { path = tempPath
+              noColor = true
+              json = false }
+
         let result = MigrondiRunner.RunInit(opts)
-        match result with 
+
+        match result with
         | Ok result ->
             Assert.AreEqual(0, result)
             Assert.IsTrue(tempPath |> Path.GetFullPath |> Directory.Exists)
@@ -31,9 +37,13 @@ type TestUtils() =
     member _.``Create Migrondi Config Json``() =
         let tempPath =
             Path.Combine(Path.GetTempPath(), "migrondi-create-config", "migrations")
+
         Directory.CreateDirectory tempPath |> ignore
-        let result = FileSystem.TryGetOrCreateConfiguration "test.json" tempPath
-        match result with 
+
+        let result =
+            FileSystem.TryGetOrCreateConfiguration "test.json" tempPath
+
+        match result with
         | Ok config ->
             Assert.IsTrue(tempPath |> Path.GetFullPath |> Directory.Exists)
             let fullPath = tempPath |> Path.GetFullPath
@@ -51,7 +61,8 @@ type TestUtils() =
         let actualDownSeparator =
             Queries.getSeparator MigrationType.Down timestamp
 
-        let actualUpSeparator = FileSystem.GetSeparator timestamp MigrationType.Up 
+        let actualUpSeparator =
+            FileSystem.GetSeparator timestamp MigrationType.Up
 
         let expectedDown =
             sprintf "-- ---------- MIGRONDI:%s:%i --------------" "DOWN" timestamp
@@ -68,22 +79,25 @@ type TestUtils() =
         let tempPath =
             Path.Combine(Path.GetTempPath(), "createNewMigrationFile")
 
-        let result = FileSystem.TryCreateNewMigrationFile tempPath "RunNewMigrationTest"
+        let result =
+            FileSystem.TryCreateNewMigrationFile tempPath "RunNewMigrationTest"
 
-        let getContent path = 
-            try 
+        let getContent path =
+            try
                 File.ReadAllText path |> Some
-            with ex -> None
+            with
+            | ex -> None
 
-        match result with 
+        match result with
         | Ok path ->
             let file = FileInfo(path)
             Assert.IsTrue(file.FullName.Contains "createNewMigrationFile")
             Assert.IsTrue(file.FullName.Contains "RunNewMigrationTest")
             Assert.IsTrue(file.FullName.Contains "_")
             Assert.IsTrue(file.FullName.Contains ".sql")
-            match getContent path with 
-            | Some content -> 
+
+            match getContent path with
+            | Some content ->
                 Assert.IsTrue(content.Contains "MIGRONDI:UP")
                 Assert.IsTrue(content.Contains "MIGRONDI:DOWN")
             | None -> Assert.Fail()
@@ -108,25 +122,29 @@ type TestUtils() =
             String(Array.init n (fun _ -> chars.[r.Next sz]))
 
         let name = randomName 20
+
         let tempPath =
             Path.Combine(Path.GetTempPath(), "createNewMigrationFileComplex")
 
-        let result = FileSystem.TryCreateNewMigrationFile tempPath name
+        let result =
+            FileSystem.TryCreateNewMigrationFile tempPath name
 
-        let getContent path = 
-            try 
+        let getContent path =
+            try
                 File.ReadAllText path |> Some
-            with ex -> None
+            with
+            | ex -> None
 
-        match result with 
+        match result with
         | Ok path ->
             let file = FileInfo(path)
             Assert.IsTrue(file.FullName.Contains "createNewMigrationFile")
             Assert.IsTrue(file.FullName.Contains name)
             Assert.IsTrue(file.FullName.Contains "_")
             Assert.IsTrue(file.FullName.Contains ".sql")
-            match getContent path with 
-            | Some content -> 
+
+            match getContent path with
+            | Some content ->
                 Assert.IsTrue(content.Contains "MIGRONDI:UP")
                 Assert.IsTrue(content.Contains "MIGRONDI:DOWN")
             | None -> Assert.Fail()
