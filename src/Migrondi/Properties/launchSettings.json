@@ -15,7 +15,7 @@
     },
     "Migrondi Down": {
       "commandName": "Project",
-      "commandLineArgs": "down -d false",
+      "commandLineArgs": "down --dry-run false",
       "workingDirectory": "..\\..\\"
     },
     "Migrondi Down Dry": {
