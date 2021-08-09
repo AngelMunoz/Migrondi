@@ -106,6 +106,6 @@ let main argv =
                 eprintfn $"Failed to apply {file.name} with {driver.AsString()}: {message}"
             | MissingMigrationContent content ->
                 eprintfn $"The migration file is corrupt or missing parts, found: %A{content}"
-            | others -> eprintfn "%s, at %s" others.Message others.Source
+            | others -> eprintfn $"%s{others.Message}, at %s{others.Source}"
 
             1
