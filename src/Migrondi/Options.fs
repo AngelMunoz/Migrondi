@@ -44,7 +44,7 @@ module Cli =
 
     [<RequireQualifiedAccess>]
     type InitArgs =
-        | [<AltCommandLine("-p"); Mandatory>] Path of string
+        | [<AltCommandLine("-p")>] Path of string option
 
         interface IArgParserTemplate with
             member this.Usage: string =
@@ -52,7 +52,8 @@ module Cli =
                 | Path _ -> "Where should the migrondi.json should be created."
 
         static member GetOptions(results: ParseResults<InitArgs>, ?noColor: bool, ?asJson: bool) : InitOptions =
-            { path = results.GetResult(Path)
+            let defaultPath = "./migrations/"
+            { path = defaultArg (results.TryGetResult(Path) |> Option.flatten) defaultPath
               noColor = defaultArg noColor false
               json = defaultArg asJson false }
 
