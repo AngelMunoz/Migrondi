@@ -45,7 +45,6 @@ type TryListMigrations =
         -> GetConnection
         -> GetMigrations
         -> GetMigrations
-        -> GetMigrationName
         -> TryGetLastMigrationInDatabase
         -> TryGetMigrationsFn
         -> Result<int, exn>
@@ -57,16 +56,12 @@ type TryGetFileStatus =
 module Migrations =
 
     let tryRunMigrationsInit: TryRunInit =
-        fun opts tryGetOrCreateDirectory tryGetOrCreateConfig ->
+        fun options tryGetOrCreateDirectory tryGetOrCreateConfig ->
             result {
                 let! migrationsDir =
                     result {
-                        let defaultPath =
-                            opts.path
-                            |> Option.ofObj
-                            |> Option.defaultValue "./migrations"
 
-                        let! config = tryGetOrCreateConfig "migrondi.json" defaultPath
+                        let! config = tryGetOrCreateConfig "migrondi.json" options.path
                         return! tryGetOrCreateDirectory config.migrationsDir
                     }
 
@@ -78,7 +73,7 @@ module Migrations =
                         successln $"\"{migrationsDir}\""
                     }
 
-                MigrondiConsole.Log(message, opts.noColor |> not, opts.json)
+                MigrondiConsole.Log(message, options.noColor |> not, options.json)
                 return 0
             }
 
@@ -315,7 +310,7 @@ module Migrations =
             }
 
     let tryListMigrations: TryListMigrations =
-        fun options config initializeDriver getConnection getAppliedMigrations getPendingMigrations getMigrationName tryGetLastMigrationPresent tryGetMigrationFiles ->
+        fun options config initializeDriver getConnection getAppliedMigrations getPendingMigrations tryGetLastMigrationPresent tryGetMigrationFiles ->
             result {
                 let driver = Driver.FromString config.driver
 
@@ -522,7 +517,6 @@ type MigrondiRunner() =
                     Queries.getConnection
                     Queries.getAppliedMigrations
                     Queries.getPendingMigrations
-                    Queries.getMigrationName
                     Queries.getLastMigration
                     FileSystem.GetMigrations
         }
