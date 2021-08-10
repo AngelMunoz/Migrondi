@@ -53,6 +53,7 @@ module Cli =
 
         static member GetOptions(results: ParseResults<InitArgs>, ?noColor: bool, ?asJson: bool) : InitOptions =
             let defaultPath = "./migrations/"
+
             { path = defaultArg (results.TryGetResult(Path) |> Option.flatten) defaultPath
               noColor = defaultArg noColor false
               json = defaultArg asJson false }
