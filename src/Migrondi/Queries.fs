@@ -18,7 +18,7 @@ type GetConnection = string -> Driver -> Lazy<IDbConnection>
 type GetMigrations = Migration option -> MigrationFile array -> MigrationFile array
 type GetMigrationName = MigrationSource -> string
 type RunDryMigrations = Driver -> MigrationType -> MigrationFile array -> (string * Map<string, obj> * string) array
-type RunMigrations = Driver -> IDbConnection -> MigrationType -> MigrationFile array -> int array
+type RunMigrations = Driver -> IDbConnection -> MigrationType -> MigrationFile array -> Result<int array, exn>
 type TryEnsureMigrationsTableExists = Driver -> IDbConnection -> Result<unit, exn>
 type TryGetLastMigrationInDatabase = IDbConnection -> Result<Migration option, exn>
 type InitializeDriver = Driver -> unit
@@ -159,12 +159,7 @@ module Queries =
         }
 
     let ensureMigrationsTable (driver: Driver) (connection: IDbConnection) =
-        result {
-            let! tableExists = migrationsTableExist connection
-
-            if not <| tableExists then
-                do! createMigrationsTable connection driver
-        }
+        createMigrationsTable connection driver
 
     let private extractContent (migrationType: MigrationType) (migration: MigrationFile) =
         match migrationType with
@@ -213,8 +208,11 @@ module Queries =
 
         try
             connection.ExecuteNonQuery(migrationContent, queryParams)
+            |> Ok
         with
-        | ex -> raise (MigrationApplyFailedException(ex.Message, migration, driver))
+        | ex ->
+            MigrationApplyFailedException(ex.Message, migration, driver)
+            |> Error
 
     let runMigrations
         (driver: Driver)
@@ -225,8 +223,15 @@ module Queries =
         let applyMigrationWithConnectionAndType =
             applyMigration driver connection migrationType
 
-        migrationFiles
-        |> Array.map applyMigrationWithConnectionAndType
+        result {
+            let results = ResizeArray()
+
+            for file in migrationFiles do
+                let! result = applyMigrationWithConnectionAndType file
+                results.Add result
+
+            return results |> Array.ofSeq
+        }
 
     let dryRunMigrations
         (driver: Driver)
@@ -259,8 +264,7 @@ module Queries =
             result {
                 let! name, timestamp =
                     result {
-                        let parts =
-                            filename.Split('_')
+                        let parts = filename.Split('_')
 
                         if parts.Length <> 2 then
                             return!
@@ -280,10 +284,7 @@ module Queries =
 
                 try
                     let result =
-                        connection.Count(
-                            "migration",
-                            {| name = name; timestamp = timestamp |}
-                        )
+                        connection.Count("migration", {| name = name; timestamp = timestamp |})
 
                     return result >= 1L
                 with
