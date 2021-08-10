@@ -25,7 +25,7 @@
     },
     "Migrondi Down All": {
       "commandName": "Project",
-      "commandLineArgs": "down -t -1",
+      "commandLineArgs": "down -t 0 --dry-run false",
       "workingDirectory": "..\\..\\"
     },
     "Migrondi Down All Dry": {
@@ -35,7 +35,7 @@
     },
     "Migrondi Up": {
       "commandName": "Project",
-      "commandLineArgs": "up -d false",
+      "commandLineArgs": "up -t 1 --dry-run false",
       "workingDirectory": "..\\..\\"
     },
     "Migrondi Up Dry": {
@@ -45,7 +45,7 @@
     },
     "Migrondi Up All": {
       "commandName": "Project",
-      "commandLineArgs": "up -t -1",
+      "commandLineArgs": "up -t 0 --dry-run false",
       "workingDirectory": "..\\..\\"
     },
     "Migrondi Up All Dry": {
@@ -76,6 +76,16 @@
     "Status -n filename": {
       "commandName": "Project",
       "commandLineArgs": "status -n CreateTodos3_1628280578632.sql",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi List Json Both": {
+      "commandName": "Project",
+      "commandLineArgs": "--json list --kind both",
+      "workingDirectory": "..\\..\\"
+    },
+    "Migrondi Down Json 1": {
+      "commandName": "Project",
+      "commandLineArgs": "--json down -t 1",
       "workingDirectory": "..\\..\\"
     }
   }
