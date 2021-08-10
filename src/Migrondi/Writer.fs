@@ -13,12 +13,19 @@ type ConsoleOutput =
     | Danger of string
     | Success of string
 
+    member this.Value =
+        match this with
+        | Normal value
+        | Warning value
+        | Danger value
+        | Success value -> value
+
 type JsonOutput =
     { FullContent: string
       Parts: ConsoleOutput list }
 
     static member FromParts(parts: ConsoleOutput list) =
-        { FullContent = System.String.Join("", parts)
+        { FullContent = System.String.Join("", parts |> List.map (fun o -> o.Value))
           Parts = parts }
 
 type MigrondiOutput =
@@ -85,26 +92,22 @@ module Writer =
             let colored =
                 parts
                 |> List.map
-                    (function
-                    | Normal value -> value
-                    | Warning value -> $"[yellow]{value}[/]"
-                    | Danger value -> $"[red]{value}[/]"
-                    | Success value -> $"[green]{value}[/]")
+                    (fun o ->
+                        match o with
+                        | Normal value -> Markup.Escape(value)
+                        | Warning value -> $"[yellow]{Markup.Escape(value)}[/]"
+                        | Danger value -> $"[red]{Markup.Escape(value)}[/]"
+                        | Success value -> $"[green]{Markup.Escape(value)}[/]")
 
-            System.String.Join("", colored)
+            String.Join("", colored)
 
     let private noColorConsoleWriter: ConsoleWriter =
         fun parts ->
             let colored =
                 parts
-                |> List.map
-                    (function
-                    | Normal value
-                    | Warning value
-                    | Danger value
-                    | Success value -> value)
+                |> List.map (fun o -> o.Value |> Markup.Escape)
 
-            System.String.Join("", colored)
+            String.Join("", colored)
 
     let GetMigrondiWriter (withColor: bool) : MigrondiWriter =
         if withColor then
@@ -113,8 +116,8 @@ module Writer =
             Writer Json.defaultJsonWriter noColorConsoleWriter
 
 type MigrondiConsole() =
-    static member Log(output: ConsoleOutput list, ?withColor: bool, ?isJson: bool, ?withWriter: MigrondiWriter) =
-        let withColor = defaultArg withColor true
+    static member Log(output: ConsoleOutput list, ?noColor: bool, ?isJson: bool, ?withWriter: MigrondiWriter) =
+        let noColor = defaultArg noColor false
         let isJson = defaultArg isJson false
 
         let output =
@@ -124,14 +127,17 @@ type MigrondiConsole() =
                 ConsoleOutput output
 
         let writer =
-            defaultArg withWriter (Writer.GetMigrondiWriter withColor)
+            defaultArg withWriter (Writer.GetMigrondiWriter(noColor |> not))
 
-        let value =
-            match output with
-            | JsonOutput _ -> $"{writer output |> Markup.Escape}\n"
-            | ConsoleOutput _ -> writer output
-
-        AnsiConsole.Markup(value)
+        match output with
+        | JsonOutput jsonOutput ->
+            if jsonOutput.FullContent
+               |> String.IsNullOrWhiteSpace then
+                ignore ()
+            else
+                let output = writer output
+                printfn $"{output.Trim()}"
+        | ConsoleOutput _ -> AnsiConsole.Markup(writer output)
 
 [<AutoOpen>]
 module BuilderCE =
@@ -147,31 +153,27 @@ module BuilderCE =
 
         [<CustomOperation("normalln")>]
         member _.NormalLn(state: ConsoleOutput list, value: string) =
-            ConsoleOutput.Normal $"{value}{System.Environment.NewLine}"
-            :: state
+            ConsoleOutput.Normal $"{value}\n" :: state
 
         [<CustomOperation("warning")>]
         member _.Warning(state: ConsoleOutput list, value: string) = ConsoleOutput.Warning value :: state
 
         [<CustomOperation("warningln")>]
         member _.WarningLn(state: ConsoleOutput list, value: string) =
-            ConsoleOutput.Warning $"{value}{System.Environment.NewLine}"
-            :: state
+            ConsoleOutput.Warning $"{value}\n" :: state
 
         [<CustomOperation("danger")>]
         member _.Danger(state: ConsoleOutput list, value: string) = ConsoleOutput.Danger value :: state
 
         [<CustomOperation("dangerln")>]
         member _.DangerLn(state: ConsoleOutput list, value: string) =
-            ConsoleOutput.Danger $"{value}{System.Environment.NewLine}"
-            :: state
+            ConsoleOutput.Danger $"{value}\n" :: state
 
         [<CustomOperation("success")>]
         member _.Success(state: ConsoleOutput list, value: string) = ConsoleOutput.Success value :: state
 
         [<CustomOperation("successln")>]
         member _.SuccessLn(state: ConsoleOutput list, value: string) =
-            ConsoleOutput.Success $"{value}{System.Environment.NewLine}"
-            :: state
+            ConsoleOutput.Success $"{value}\n" :: state
 
     let migrondiOutput = MigrondiOutputListBuilder()
