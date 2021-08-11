@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.0.31521.260
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31515.178
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{EA7E049A-0F40-4927-8960-83CD6C129A2E}"
 EndProject
@@ -9,7 +9,11 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Migrondi", "src\Migrondi\Mi
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Migrondi.Tests", "src\Migrondi.Tests\Migrondi.Tests.fsproj", "{B906D7C8-0F1C-498F-8EB1-B21D33AFCA7A}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Migrondi.Lib", "src\Migrondi.Lib\Migrondi.Lib.fsproj", "{52F68849-47FF-4858-A604-297AB2A11E80}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Migrondi.Lib", "src\Migrondi.Lib\Migrondi.Lib.fsproj", "{52F68849-47FF-4858-A604-297AB2A11E80}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{02FD976D-B7EA-41BF-88BC-667A6973FB4E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FromCSharp", "samples\FromCSharp\FromCSharp.csproj", "{048AF510-88C1-43A3-8EC6-42A5B68888EA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,6 +33,10 @@ Global
 		{52F68849-47FF-4858-A604-297AB2A11E80}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{52F68849-47FF-4858-A604-297AB2A11E80}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{52F68849-47FF-4858-A604-297AB2A11E80}.Release|Any CPU.Build.0 = Release|Any CPU
+		{048AF510-88C1-43A3-8EC6-42A5B68888EA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{048AF510-88C1-43A3-8EC6-42A5B68888EA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{048AF510-88C1-43A3-8EC6-42A5B68888EA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{048AF510-88C1-43A3-8EC6-42A5B68888EA}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -37,6 +45,7 @@ Global
 		{FA24C8BF-63F6-418E-9C14-00B1A73D5A2F} = {EA7E049A-0F40-4927-8960-83CD6C129A2E}
 		{B906D7C8-0F1C-498F-8EB1-B21D33AFCA7A} = {EA7E049A-0F40-4927-8960-83CD6C129A2E}
 		{52F68849-47FF-4858-A604-297AB2A11E80} = {EA7E049A-0F40-4927-8960-83CD6C129A2E}
+		{048AF510-88C1-43A3-8EC6-42A5B68888EA} = {02FD976D-B7EA-41BF-88BC-667A6973FB4E}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0433F508-49EE-4A47-AE71-60C6AA82692C}

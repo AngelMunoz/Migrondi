@@ -1,6 +1,8 @@
 namespace Migrondi.Database
 
 open System
+open System.Collections
+open System.Collections.Generic
 open System.Data
 open System.Data.SQLite
 open System.Data.SqlClient
@@ -17,7 +19,10 @@ open Migrondi.Types
 type GetConnection = string -> Driver -> Lazy<IDbConnection>
 type GetMigrations = Migration option -> MigrationFile array -> MigrationFile array
 type GetMigrationName = MigrationSource -> string
-type RunDryMigrations = Driver -> MigrationType -> MigrationFile array -> (string * Map<string, obj> * string) array
+
+type RunDryMigrations =
+    Driver -> MigrationType -> MigrationFile array -> (string * IDictionary<string, obj> * string) array
+
 type RunMigrations = Driver -> IDbConnection -> MigrationType -> MigrationFile array -> Result<int array, exn>
 type TryEnsureMigrationsTableExists = Driver -> IDbConnection -> Result<unit, exn>
 type TryGetLastMigrationInDatabase = IDbConnection -> Result<Migration option, exn>
@@ -158,8 +163,7 @@ module Queries =
             | ex -> return! (Error(FailedToExecuteQuery ex.Message))
         }
 
-    let ensureMigrationsTable (driver: Driver) (connection: IDbConnection) =
-        createMigrationsTable connection driver
+    let ensureMigrationsTable (driver: Driver) (connection: IDbConnection) = createMigrationsTable connection driver
 
     let private extractContent (migrationType: MigrationType) (migration: MigrationFile) =
         match migrationType with
@@ -190,6 +194,7 @@ module Queries =
         | MigrationType.Down ->
             [ "Timestamp" => migration.timestamp ]
             |> Map.ofSeq
+        :> IDictionary<string, obj>
 
     let private applyMigration
         (driver: Driver)
@@ -237,7 +242,7 @@ module Queries =
         (driver: Driver)
         (migrationType: MigrationType)
         (migrationFiles: array<MigrationFile>)
-        : (string * Map<string, obj> * string) array =
+        : (string * IDictionary<string, obj> * string) array =
         let getMigrationContent (migration: MigrationFile) =
             let content = extractContent migrationType migration
             let insert = getInsertStatement migrationType

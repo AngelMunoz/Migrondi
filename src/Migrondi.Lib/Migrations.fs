@@ -1,5 +1,9 @@
 namespace Migrondi.Migrations
 
+open System
+open System.Runtime.InteropServices
+open System.Collections.Generic
+open System.Data
 open Migrondi.Types
 open Migrondi.FileSystem
 open Migrondi.Writer
@@ -377,92 +381,227 @@ module Migrations =
 
 type MigrondiRunner() =
 
-    static member RunInit(options: InitOptions) : Result<int, exn> =
-        Migrations.tryRunMigrationsInit
-            options
-            FileSystem.TryGetOrCreateDirectory
-            FileSystem.TryGetOrCreateConfiguration
+    static member inline private tryGetMigrondiConfig
+        (tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>> option)
+        : TryGetMigrondiConfigFn =
+        tryGetMigrondiConfig
+        |> Option.map FuncConvert.FromFunc
+        |> Option.defaultValue FileSystem.TryGetMigrondiConfig
 
-    static member RunNew(options: NewOptions, ?config: MigrondiConfig) : Result<int, exn> =
+    static member inline private getConnection
+        (getConnection: Func<string, Driver, Lazy<IDbConnection>> option)
+        : GetConnection =
+        getConnection
+        |> Option.map FuncConvert.FromFunc
+        |> Option.defaultValue Queries.getConnection
+
+    static member RunInit
+        (
+            options: InitOptions,
+            [<Optional;DefaultParameterValue(null: Func<string, Result<string, exn>>)>] ?tryGetOrCreateDirectory: Func<string, Result<string, exn>>,
+            [<Optional;DefaultParameterValue(null: Func<string, string, Result<MigrondiConfig, exn>> )>] ?tryGetOrCreateConfiguration: Func<string, string, Result<MigrondiConfig, exn>>
+        ) : Result<int, exn> =
+
+        let tryGetOrCreateDirectory =
+            tryGetOrCreateDirectory
+            |> Option.map FuncConvert.FromFunc
+            |> Option.defaultValue FileSystem.TryGetOrCreateDirectory
+
+        let tryGetOrCreateConfiguration =
+            tryGetOrCreateConfiguration
+            |> Option.map FuncConvert.FromFunc
+            |> Option.defaultValue FileSystem.TryGetOrCreateConfiguration
+
+        Migrations.tryRunMigrationsInit options tryGetOrCreateDirectory tryGetOrCreateConfiguration
+
+    static member RunNew
+        (
+            options: NewOptions,
+            ?config: MigrondiConfig,
+            ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
+            ?tryCreateNewMigrationFile: Func<string, string, Result<string, exn>>
+        ) : Result<int, exn> =
         result {
             let! config =
                 result {
                     match config with
                     | Some config -> return config
-                    | None -> return! FileSystem.TryGetMigrondiConfig()
+                    | None -> return! (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
                 }
 
-            return! Migrations.tryRunMigrationsNew options config FileSystem.TryCreateNewMigrationFile
+            let tryCreateNewMigrationFile =
+                tryCreateNewMigrationFile
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue FileSystem.TryCreateNewMigrationFile
+
+            return! Migrations.tryRunMigrationsNew options config tryCreateNewMigrationFile
         }
 
-    static member RunUp(options: UpOptions, ?config: MigrondiConfig) : Result<int, exn> =
+    static member RunUp
+        (
+            options: UpOptions,
+            ?config: MigrondiConfig,
+            ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
+            ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
+            ?runDryMigrations: Func<Driver, MigrationType, MigrationFile array, Tuple<string, IDictionary<string, obj>, string> array>,
+            ?runMigrations: Func<Driver, IDbConnection, MigrationType, MigrationFile array, Result<int array, exn>>,
+            ?ensureMigrationsTable: Func<Driver, IDbConnection, Result<unit, exn>>,
+            ?getLastMigration: Func<IDbConnection, Result<Migration option, exn>>,
+            ?getMigrationsFromDisk: Func<string, MigrationFile array>
+        ) : Result<int, exn> =
         result {
             let! config =
                 result {
                     match config with
                     | Some config -> return config
-                    | None -> return! FileSystem.TryGetMigrondiConfig()
+                    | None -> return! (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
                 }
+
+            let runDryMigrations =
+                runDryMigrations
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.dryRunMigrations
+
+            let runMigrations =
+                runMigrations
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.runMigrations
+
+            let ensureMigrationsTable =
+                ensureMigrationsTable
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.ensureMigrationsTable
+
+            let getLastMigration =
+                getLastMigration
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.getLastMigration
+
+            let getMigrationsFromDisk =
+                getMigrationsFromDisk
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue FileSystem.GetMigrations
 
             return!
                 Migrations.tryRunMigrationsUp
                     options
                     config
                     Queries.initializeDriver
-                    Queries.getConnection
+                    (MigrondiRunner.getConnection getConnection)
                     Queries.getPendingMigrations
-                    Queries.dryRunMigrations
-                    Queries.runMigrations
-                    Queries.ensureMigrationsTable
-                    Queries.getLastMigration
-                    FileSystem.GetMigrations
+                    runDryMigrations
+                    runMigrations
+                    ensureMigrationsTable
+                    getLastMigration
+                    getMigrationsFromDisk
         }
 
-    static member RunDown(options: DownOptions, ?config: MigrondiConfig) : Result<int, exn> =
+    static member RunDown
+        (
+            options: DownOptions,
+            ?config: MigrondiConfig,
+            ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
+            ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
+            ?runDryMigrations: Func<Driver, MigrationType, MigrationFile array, Tuple<string, IDictionary<string, obj>, string> array>,
+            ?runMigrations: Func<Driver, IDbConnection, MigrationType, MigrationFile array, Result<int array, exn>>,
+            ?ensureMigrationsTable: Func<Driver, IDbConnection, Result<unit, exn>>,
+            ?getLastMigration: Func<IDbConnection, Result<Migration option, exn>>,
+            ?getMigrationsFromDisk: Func<string, MigrationFile array>
+        ) : Result<int, exn> =
         result {
             let! config =
                 result {
                     match config with
                     | Some config -> return config
-                    | None -> return! FileSystem.TryGetMigrondiConfig()
+                    | None -> return! (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
                 }
+
+            let runDryMigrations =
+                runDryMigrations
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.dryRunMigrations
+
+            let runMigrations =
+                runMigrations
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.runMigrations
+
+            let ensureMigrationsTable =
+                ensureMigrationsTable
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.ensureMigrationsTable
+
+            let getLastMigration =
+                getLastMigration
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.getLastMigration
+
+            let getMigrationsFromDisk =
+                getMigrationsFromDisk
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue FileSystem.GetMigrations
 
             return!
                 Migrations.tryRunMigrationsDown
                     options
                     config
                     Queries.initializeDriver
-                    Queries.getConnection
+                    (MigrondiRunner.getConnection getConnection)
                     Queries.getAppliedMigrations
-                    Queries.dryRunMigrations
-                    Queries.runMigrations
-                    Queries.ensureMigrationsTable
-                    Queries.getLastMigration
-                    FileSystem.GetMigrations
+                    runDryMigrations
+                    runMigrations
+                    ensureMigrationsTable
+                    getLastMigration
+                    getMigrationsFromDisk
         }
 
-    static member RunList(options: ListOptions, ?config: MigrondiConfig) : Result<int, exn> =
+    static member RunList
+        (
+            options: ListOptions,
+            ?config: MigrondiConfig,
+            ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
+            ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
+            ?getLastMigration: Func<IDbConnection, Result<Migration option, exn>>,
+            ?getMigrationsFromDisk: Func<string, MigrationFile array>
+        ) : Result<int, exn> =
         result {
             let! config =
                 result {
                     match config with
                     | Some config -> return config
-                    | None -> return! FileSystem.TryGetMigrondiConfig()
+                    | None -> return! (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
                 }
+
+
+            let getLastMigration =
+                getLastMigration
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.getLastMigration
+
+            let getMigrationsFromDisk =
+                getMigrationsFromDisk
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue FileSystem.GetMigrations
 
             return!
                 Migrations.tryListMigrations
                     options
                     config
                     Queries.initializeDriver
-                    Queries.getConnection
+                    (MigrondiRunner.getConnection getConnection)
                     Queries.getAppliedMigrations
                     Queries.getPendingMigrations
-                    Queries.getLastMigration
-                    FileSystem.GetMigrations
+                    getLastMigration
+                    getMigrationsFromDisk
         }
 
-    static member RunStatus(options: StatusOptions, ?config: MigrondiConfig) : Result<int, exn> =
+    static member RunStatus
+        (
+            options: StatusOptions,
+            ?config: MigrondiConfig,
+            ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
+            ?tryGetByFilename: Func<IDbConnection, string, Result<bool, exn>>
+        ) : Result<int, exn> =
         result {
             let! config =
                 result {
@@ -471,11 +610,16 @@ type MigrondiRunner() =
                     | None -> return! FileSystem.TryGetMigrondiConfig()
                 }
 
+            let getConnection: GetConnection =
+                getConnection
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.getConnection
+
+            let tryGetByFilename: TryGetByFilename =
+                tryGetByFilename
+                |> Option.map FuncConvert.FromFunc
+                |> Option.defaultValue Queries.tryGetByFilename
+
             return!
-                Migrations.truRunMigrationsStatus
-                    options
-                    config
-                    Queries.initializeDriver
-                    Queries.getConnection
-                    Queries.tryGetByFilename
+                Migrations.truRunMigrationsStatus options config Queries.initializeDriver getConnection tryGetByFilename
         }
