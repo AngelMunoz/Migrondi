@@ -59,7 +59,14 @@ Target.create
                 { opts with
                       Configuration = DotNet.BuildConfiguration.Release
                       OutputPath = Some $"{output}" })
-            "src/Migrondi")
+            "src/Migrondi"
+
+        DotNet.pack
+            (fun opts ->
+                { opts with
+                      Configuration = DotNet.BuildConfiguration.Release
+                      OutputPath = Some $"{output}" })
+            "src/Migrondi.Lib")
 
 Target.create
     "Zip"
