@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Migrondi\Migrondi.fsproj" />
+    <ProjectReference Include="..\Migrondi.Lib\Migrondi.Lib.fsproj" />
   </ItemGroup>
 
    <ItemGroup>

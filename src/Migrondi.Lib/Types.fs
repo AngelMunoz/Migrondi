@@ -74,3 +74,42 @@ type Driver =
         | _ -> false
 
 exception MigrationApplyFailedException of string * MigrationFile * Driver
+
+
+type InitOptions =
+    { path: string
+      noColor: bool
+      json: bool }
+
+type NewOptions =
+    { name: string
+      noColor: bool
+      json: bool }
+
+type UpOptions =
+    { total: int
+      dryRun: bool
+      noColor: bool
+      json: bool }
+
+type DownOptions =
+    { total: int
+      dryRun: bool
+      noColor: bool
+      json: bool }
+
+type MigrationListEnum =
+    | Present = 1
+    | Pending = 2
+    | Both = 3
+
+type ListOptions =
+    { listKind: MigrationListEnum
+      amount: int
+      noColor: bool
+      json: bool }
+
+type StatusOptions =
+    { filename: string
+      noColor: bool
+      json: bool }

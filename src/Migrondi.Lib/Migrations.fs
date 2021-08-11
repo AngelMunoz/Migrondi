@@ -4,7 +4,6 @@ open Migrondi.Types
 open Migrondi.FileSystem
 open Migrondi.Writer
 open Migrondi.Database
-open Migrondi.Options
 
 open FsToolkit.ErrorHandling
 
