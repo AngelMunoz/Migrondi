@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Reactive;
 using System.Text;
+using DynamicData.Binding;
+using FromCSharp.Types;
 using ReactiveUI;
 
 namespace FromCSharp.ViewModels
@@ -10,11 +12,27 @@ namespace FromCSharp.ViewModels
     {
         public RoutingState Router { get; } = new RoutingState();
 
+        public ObservableCollectionExtended<MigrondiWorkspace> workspaces { get; private set; } =
+            new ObservableCollectionExtended<MigrondiWorkspace>();
+
+
         public MainWindowViewModel()
         {
-            Router.Navigate.Execute(new MigrondiWorkspaceViewModel());
+            LoadWorkspaces();
         }
-        
 
+
+        public void GoToWorkspace(MigrondiWorkspace workspace)
+        {
+            Router.Navigate.Execute(new WorkspaceViewModel(workspace));
+        }
+
+
+        private void LoadWorkspaces()
+        {
+            var results = Database.GetWorkspaces();
+            workspaces.Clear();
+            workspaces.AddRange(results);
+        }
     }
 }

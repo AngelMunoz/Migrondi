@@ -7,9 +7,9 @@ using FromCSharp.ViewModels;
 
 namespace FromCSharp.Views
 {
-    public partial class MigrondiWorkspace : ReactiveUserControl<MigrondiWorkspaceViewModel>
+    public partial class WorkspaceView : ReactiveUserControl<WorkspaceViewModel>
     {
-        public MigrondiWorkspace()
+        public WorkspaceView()
         {
             InitializeComponent();
         }
@@ -17,7 +17,6 @@ namespace FromCSharp.Views
         private void InitializeComponent()
         {
             AvaloniaXamlLoader.Load(this);
-            Console.WriteLine("Olv");
         }
     }
 }
