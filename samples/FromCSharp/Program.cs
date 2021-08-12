@@ -1,8 +1,11 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.ReactiveUI;
-
 using System;
+using System.Reflection;
+using FromCSharp.ViewModels;
+using ReactiveUI;
+using Splat;
 
 namespace FromCSharp
 {
@@ -16,9 +19,12 @@ namespace FromCSharp
 
         // Avalonia configuration, don't remove; also used by visual designer.
         public static AppBuilder BuildAvaloniaApp()
-            => AppBuilder.Configure<App>()
+        {
+            Locator.CurrentMutable.RegisterViewsForViewModels(Assembly.GetCallingAssembly());
+            return AppBuilder.Configure<App>()
                 .UsePlatformDetect()
                 .LogToTrace()
                 .UseReactiveUI();
+        }
     }
 }
