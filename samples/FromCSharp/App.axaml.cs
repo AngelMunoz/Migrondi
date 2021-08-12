@@ -5,6 +5,10 @@ using Avalonia.Markup.Xaml;
 using FromCSharp.ViewModels;
 using FromCSharp.Views;
 
+using ReactiveUI;
+
+using Splat;
+
 namespace FromCSharp
 {
     public class App : Application
@@ -18,10 +22,7 @@ namespace FromCSharp
         {
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
-                desktop.MainWindow = new MainWindow
-                {
-                    DataContext = new MainWindowViewModel(),
-                };
+                desktop.MainWindow = new MainWindow();
             }
 
             base.OnFrameworkInitializationCompleted();

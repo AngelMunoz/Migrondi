@@ -1,11 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Reactive;
 using System.Text;
+using ReactiveUI;
 
 namespace FromCSharp.ViewModels
 {
-    public class MainWindowViewModel : ViewModelBase
+    public class MainWindowViewModel : ReactiveObject, IScreen
     {
-        public string Greeting => "Welcome to Avalonia!";
+        public RoutingState Router { get; } = new RoutingState();
+
+        public MainWindowViewModel()
+        {
+            Router.Navigate.Execute(new MigrondiWorkspaceViewModel());
+        }
+        
+
     }
 }

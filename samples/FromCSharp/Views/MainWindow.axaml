@@ -1,17 +1,20 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="using:FromCSharp.ViewModels"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
-        x:Class="FromCSharp.Views.MainWindow"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="FromCSharp">
-
-    <Design.DataContext>
-        <vm:MainWindowViewModel/>
-    </Design.DataContext>
-
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-
-</Window>
+<rxui:ReactiveWindow x:TypeArguments="vm:MainWindowViewModel" xmlns="https://github.com/avaloniaui"
+                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                     xmlns:vm="using:FromCSharp.ViewModels"
+                     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                     xmlns:rxui="http://reactiveui.net"
+                     mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+                     x:Class="FromCSharp.Views.MainWindow"
+                     Icon="/Assets/avalonia-logo.ico"
+                     Title="Migrondi UI">
+    <Grid>
+        <rxui:RoutedViewHost Grid.Row="0" Router="{Binding Router}">
+            <rxui:RoutedViewHost.DefaultContent>
+                <TextBlock Text="Default content"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+            </rxui:RoutedViewHost.DefaultContent>
+        </rxui:RoutedViewHost>
+    </Grid>
+</rxui:ReactiveWindow>

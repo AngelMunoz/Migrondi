@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.31515.178
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31606.5
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{EA7E049A-0F40-4927-8960-83CD6C129A2E}"
 EndProject
@@ -13,7 +13,7 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Migrondi.Lib", "src\Migrond
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{02FD976D-B7EA-41BF-88BC-667A6973FB4E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FromCSharp", "samples\FromCSharp\FromCSharp.csproj", "{048AF510-88C1-43A3-8EC6-42A5B68888EA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FromCSharp", "samples\FromCSharp\FromCSharp.csproj", "{048AF510-88C1-43A3-8EC6-42A5B68888EA}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
