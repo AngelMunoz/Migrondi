@@ -11,10 +11,13 @@ open Migrondi.Database
 
 open FsToolkit.ErrorHandling
 
+// A function that should initialize the migrondi workspace by creating a configuration file and a migrations directory
 type TryRunInit = InitOptions -> TryGetOrCreateDirectoryFn -> TryGetOrCreateConfigFn -> Result<int, exn>
 
+/// A function that should create a new SQL migration file using the provided options and configuration
 type TryRunMigrationsNew = NewOptions -> MigrondiConfig -> TryCreateFileFn -> Result<int, exn>
 
+/// A function that should run the pending migration files against the database using the provided options and configuration
 type TryRunMigrationsUp =
     UpOptions
         -> MigrondiConfig
@@ -28,6 +31,7 @@ type TryRunMigrationsUp =
         -> TryGetMigrationsFn
         -> Result<int, exn>
 
+/// A function that should roll back the existing migrations in the database using the provided options and configuration
 type TryRunMigrationsDown =
     DownOptions
         -> MigrondiConfig
@@ -41,6 +45,7 @@ type TryRunMigrationsDown =
         -> TryGetMigrationsFn
         -> Result<int, exn>
 
+/// A function that should present a list of migration based on if its present or not in the database or both kinds of migrations, using the provided options and configuration
 type TryListMigrations =
     ListOptions
         -> MigrondiConfig
@@ -52,6 +57,7 @@ type TryListMigrations =
         -> TryGetMigrationsFn
         -> Result<int, exn>
 
+/// A function that should check against the database to see if a particular file is present in the database
 type TryGetFileStatus =
     StatusOptions -> MigrondiConfig -> InitializeDriver -> GetConnection -> TryGetByFilename -> Result<int, exn>
 
@@ -395,11 +401,23 @@ type MigrondiRunner() =
         |> Option.map FuncConvert.FromFunc
         |> Option.defaultValue Queries.getConnection
 
+    /// <summary>Initializes a migrondi workspace creating a configuration file and a migrations directory </summary>
+    /// <param name="options">
+    ///   The initialization options, the path is where the migrondi workspace will be created, if not supplied
+    ///   the current working directory will be used to create the migrondi workspace
+    ///  </param>
+    /// <param name="tryGetOrCreateDirectory">
+    ///   A custom function to generate a directory, it takes a path like string and returns the result of the operation
+    /// </param>
+    /// <param name="tryGetOrCreateConfiguration">
+    ///   A custom function to generate a the configuration file
+    ///   it takes a string: filename and a path like string: migrationsDir
+    /// </param>
     static member RunInit
         (
             options: InitOptions,
-            [<Optional;DefaultParameterValue(null: Func<string, Result<string, exn>>)>] ?tryGetOrCreateDirectory: Func<string, Result<string, exn>>,
-            [<Optional;DefaultParameterValue(null: Func<string, string, Result<MigrondiConfig, exn>> )>] ?tryGetOrCreateConfiguration: Func<string, string, Result<MigrondiConfig, exn>>
+            [<Optional>] ?tryGetOrCreateDirectory: Func<string, Result<string, exn>>,
+            [<Optional>] ?tryGetOrCreateConfiguration: Func<string, string, Result<MigrondiConfig, exn>>
         ) : Result<int, exn> =
 
         let tryGetOrCreateDirectory =
@@ -414,20 +432,27 @@ type MigrondiRunner() =
 
         Migrations.tryRunMigrationsInit options tryGetOrCreateDirectory tryGetOrCreateConfiguration
 
+    /// <summary>Creates a new SQL migration file &lt;filename&gt;_&lt;timestamp&gt;.sql</summary>
+    /// <param name="options">
+    ///   provides the new migration file creation options
+    ///  </param>
+    /// <param name="tryGetMigrondiConfig">
+    ///   A function to get a migrondi configuration object,
+    ///   if not provided the library will try to find a migrondi.json file
+    ///   in the current working directory
+    /// </param>
+    /// <param name="tryCreateNewMigrationFile">
+    ///   A custom function to generate a the configuration file
+    ///   it takes a string: filename and a path like string: migrationsDir
+    /// </param>
     static member RunNew
         (
             options: NewOptions,
-            ?config: MigrondiConfig,
-            ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
-            ?tryCreateNewMigrationFile: Func<string, string, Result<string, exn>>
+            [<Optional>] ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
+            [<Optional>] ?tryCreateNewMigrationFile: Func<string, string, Result<string, exn>>
         ) : Result<int, exn> =
         result {
-            let! config =
-                result {
-                    match config with
-                    | Some config -> return config
-                    | None -> return! (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
-                }
+            let! config = (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
 
             let tryCreateNewMigrationFile =
                 tryCreateNewMigrationFile
@@ -437,25 +462,48 @@ type MigrondiRunner() =
             return! Migrations.tryRunMigrationsNew options config tryCreateNewMigrationFile
         }
 
+    /// <summary>Run the current pending migrations against the database</summary>
+    /// <param name="options">
+    ///   provides the run options, like amount to run (0 for all) and if it should be a "dry" run or not
+    ///  </param>
+    /// <param name="tryGetMigrondiConfig">
+    ///   A function to get a migrondi configuration object,
+    ///   if not provided the library will try to find a migrondi.json file
+    ///   in the current working directory
+    /// </param>
+    /// <param name="getConnection">
+    ///   A function to obtain a Lazy <see cref="System.Data.IDbConnection">IDbConnection</see>
+    ///   which will be reused by some stages in the internal workings of the function
+    /// </param>
+    /// <param name="runDryMigrations">
+    ///   A custom function to run a set of "dry" migrations, e.g. a fake run against the database.
+    /// </param>
+    /// <param name="runMigrations">
+    ///   A custom function to run a set of "live" migrations agains the database
+    /// </param>
+    /// <param name="ensureMigrationsTable">
+    ///   A custom function to ensure that the "migration" table exists.
+    ///   <remarks>Migrondi uses a table inside the database named "migration" it is required to use the same name at least for now.</remarks>
+    /// </param>
+    /// <param name="getLastMigration">
+    ///   A custom function to query the database and try to get the last migration present in the database
+    /// </param>
+    /// <param name="getMigrationsFromDisk">
+    ///   A custom function to obtain an array of <see cref="Migrondi.Types.MigrationFile">MigrationFile</see>s existing in the user's drive
+    /// </param>
     static member RunUp
         (
             options: UpOptions,
-            ?config: MigrondiConfig,
-            ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
-            ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
-            ?runDryMigrations: Func<Driver, MigrationType, MigrationFile array, Tuple<string, IDictionary<string, obj>, string> array>,
-            ?runMigrations: Func<Driver, IDbConnection, MigrationType, MigrationFile array, Result<int array, exn>>,
-            ?ensureMigrationsTable: Func<Driver, IDbConnection, Result<unit, exn>>,
-            ?getLastMigration: Func<IDbConnection, Result<Migration option, exn>>,
-            ?getMigrationsFromDisk: Func<string, MigrationFile array>
+            [<Optional>] ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
+            [<Optional>] ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
+            [<Optional>] ?runDryMigrations: Func<Driver, MigrationType, MigrationFile array, Tuple<string, IDictionary<string, obj>, string> array>,
+            [<Optional>] ?runMigrations: Func<Driver, IDbConnection, MigrationType, MigrationFile array, Result<int array, exn>>,
+            [<Optional>] ?ensureMigrationsTable: Func<Driver, IDbConnection, Result<unit, exn>>,
+            [<Optional>] ?getLastMigration: Func<IDbConnection, Result<Migration option, exn>>,
+            [<Optional>] ?getMigrationsFromDisk: Func<string, MigrationFile array>
         ) : Result<int, exn> =
         result {
-            let! config =
-                result {
-                    match config with
-                    | Some config -> return config
-                    | None -> return! (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
-                }
+            let! config = (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
 
             let runDryMigrations =
                 runDryMigrations
@@ -496,25 +544,48 @@ type MigrondiRunner() =
                     getMigrationsFromDisk
         }
 
+    /// <summary>Roll back the current existing migrations in the database</summary>
+    /// <param name="options">
+    ///   provides the run options, like amount to run (0 for all) and if it should be a "dry" run or not
+    ///  </param>
+    /// <param name="tryGetMigrondiConfig">
+    ///   A function to get a migrondi configuration object,
+    ///   if not provided the library will try to find a migrondi.json file
+    ///   in the current working directory
+    /// </param>
+    /// <param name="getConnection">
+    ///   A function to obtain a Lazy <see cref="System.Data.IDbConnection">IDbConnection</see>
+    ///   which will be reused by some stages in the internal workings of the function
+    /// </param>
+    /// <param name="runDryMigrations">
+    ///   A custom function to run a set of "dry" migrations, e.g. a fake run against the database.
+    /// </param>
+    /// <param name="runMigrations">
+    ///   A custom function to run a set of "live" migrations agains the database
+    /// </param>
+    /// <param name="ensureMigrationsTable">
+    ///   A custom function to ensure that the "migration" table exists.
+    ///   <remarks>Migrondi uses a table inside the database named "migration" it is required to use the same name at least for now.</remarks>
+    /// </param>
+    /// <param name="getLastMigration">
+    ///   A custom function to query the database and try to get the last migration present in the database
+    /// </param>
+    /// <param name="getMigrationsFromDisk">
+    ///   A custom function to obtain an array of <see cref="Migrondi.Types.MigrationFile">MigrationFile</see>s existing in the user's drive
+    /// </param>
     static member RunDown
         (
             options: DownOptions,
-            ?config: MigrondiConfig,
-            ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
-            ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
-            ?runDryMigrations: Func<Driver, MigrationType, MigrationFile array, Tuple<string, IDictionary<string, obj>, string> array>,
-            ?runMigrations: Func<Driver, IDbConnection, MigrationType, MigrationFile array, Result<int array, exn>>,
-            ?ensureMigrationsTable: Func<Driver, IDbConnection, Result<unit, exn>>,
-            ?getLastMigration: Func<IDbConnection, Result<Migration option, exn>>,
-            ?getMigrationsFromDisk: Func<string, MigrationFile array>
+            [<Optional>] ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
+            [<Optional>] ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
+            [<Optional>] ?runDryMigrations: Func<Driver, MigrationType, MigrationFile array, Tuple<string, IDictionary<string, obj>, string> array>,
+            [<Optional>] ?runMigrations: Func<Driver, IDbConnection, MigrationType, MigrationFile array, Result<int array, exn>>,
+            [<Optional>] ?ensureMigrationsTable: Func<Driver, IDbConnection, Result<unit, exn>>,
+            [<Optional>] ?getLastMigration: Func<IDbConnection, Result<Migration option, exn>>,
+            [<Optional>] ?getMigrationsFromDisk: Func<string, MigrationFile array>
         ) : Result<int, exn> =
         result {
-            let! config =
-                result {
-                    match config with
-                    | Some config -> return config
-                    | None -> return! (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
-                }
+            let! config = (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
 
             let runDryMigrations =
                 runDryMigrations
@@ -555,22 +626,35 @@ type MigrondiRunner() =
                     getMigrationsFromDisk
         }
 
+    /// <summary>Run the current pending migrations against the database</summary>
+    /// <param name="options">
+    ///   Options to list migrations that are either pending, missing, or both in the database
+    ///  </param>
+    /// <param name="tryGetMigrondiConfig">
+    ///   A function to get a migrondi configuration object,
+    ///   if not provided the library will try to find a migrondi.json file
+    ///   in the current working directory
+    /// </param>
+    /// <param name="getConnection">
+    ///   A function to obtain a Lazy <see cref="System.Data.IDbConnection">IDbConnection</see>
+    ///   which will be reused by some stages in the internal workings of the function
+    /// </param>
+    /// <param name="getLastMigration">
+    ///   A custom function to query the database and try to get the last migration present in the database
+    /// </param>
+    /// <param name="getMigrationsFromDisk">
+    ///   A custom function to obtain an array of <see cref="Migrondi.Types.MigrationFile">MigrationFile</see>s existing in the user's drive
+    /// </param>
     static member RunList
         (
             options: ListOptions,
-            ?config: MigrondiConfig,
-            ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
-            ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
-            ?getLastMigration: Func<IDbConnection, Result<Migration option, exn>>,
-            ?getMigrationsFromDisk: Func<string, MigrationFile array>
+            [<Optional>] ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
+            [<Optional>] ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
+            [<Optional>] ?getLastMigration: Func<IDbConnection, Result<Migration option, exn>>,
+            [<Optional>] ?getMigrationsFromDisk: Func<string, MigrationFile array>
         ) : Result<int, exn> =
         result {
-            let! config =
-                result {
-                    match config with
-                    | Some config -> return config
-                    | None -> return! (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
-                }
+            let! config = (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
 
 
             let getLastMigration =
@@ -598,17 +682,12 @@ type MigrondiRunner() =
     static member RunStatus
         (
             options: StatusOptions,
-            ?config: MigrondiConfig,
-            ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
-            ?tryGetByFilename: Func<IDbConnection, string, Result<bool, exn>>
+            [<Optional>] ?tryGetMigrondiConfig: Func<Result<MigrondiConfig, exn>>,
+            [<Optional>] ?getConnection: Func<string, Driver, Lazy<IDbConnection>>,
+            [<Optional>] ?tryGetByFilename: Func<IDbConnection, string, Result<bool, exn>>
         ) : Result<int, exn> =
         result {
-            let! config =
-                result {
-                    match config with
-                    | Some config -> return config
-                    | None -> return! FileSystem.TryGetMigrondiConfig()
-                }
+            let! config = (MigrondiRunner.tryGetMigrondiConfig tryGetMigrondiConfig) ()
 
             let getConnection: GetConnection =
                 getConnection

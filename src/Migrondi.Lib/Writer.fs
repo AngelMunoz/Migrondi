@@ -20,21 +20,27 @@ type ConsoleOutput =
         | Danger value
         | Success value -> value
 
+/// Serves as an envelope to output information to the stdout as a single json object
 type JsonOutput =
     { FullContent: string
       Parts: ConsoleOutput list }
 
+    /// convert a list of outputs into a JsonOutput
     static member FromParts(parts: ConsoleOutput list) =
         { FullContent = System.String.Join("", parts |> List.map (fun o -> o.Value))
           Parts = parts }
 
+/// Used to difference between JSON and Text based stdout output
 type MigrondiOutput =
     | ConsoleOutput of ConsoleOutput list
     | JsonOutput of JsonOutput
 
+/// A function that will convert a json output into a string
 type JsonWriter = JsonOutput -> string
+/// A function that will convert a list of console outputs into a single string
 type ConsoleWriter = ConsoleOutput list -> string
 
+/// A function that takes a migrondi output and returns a string (used before writing to the stdout)
 type MigrondiWriter = MigrondiOutput -> string
 
 [<RequireQualifiedAccess>]
@@ -45,7 +51,11 @@ module Json =
              opts.Converters.Add(JsonFSharpConverter())
              opts.AllowTrailingCommas <- true
              opts.ReadCommentHandling <- JsonCommentHandling.Skip
+#if NET5_0 || NETCOREAPP3_1
+             opts.IgnoreNullValues <- true
+#else
              opts.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
+#endif
              opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
              opts)
 
@@ -56,9 +66,13 @@ module Json =
              opts.WriteIndented <- true
              opts)
 
+    /// Default json serialization mechanism, unless you want to modify the serialization mechanism use this
     let defaultJsonWriter: JsonWriter =
         fun json -> JsonSerializer.Serialize(json, defaultOptions.Value)
 
+    /// <summary>Converts an object into a byte array</summary>
+    /// <param name="content">An object to be serialized into bytes</param>
+    /// <param name="indented">Write the resulting json as a "pretty" output or a minified string</param>
     let serializeBytes content (indented: bool) =
         JsonSerializer.SerializeToUtf8Bytes(
             content,
@@ -68,6 +82,7 @@ module Json =
                 defaultOptions.Value
         )
 
+    /// Takes a byte array formed from a JSON string and tries to deserialize it into a <see cref="Migrondi.Types.MigrondiConfig">MigrondiConfig</see> object
     let tryDeserializeFile (bytes: byte array) =
         try
             JsonSerializer.Deserialize<MigrondiConfig>(ReadOnlySpan(bytes), defaultOptions.Value)
@@ -78,7 +93,7 @@ module Json =
 [<RequireQualifiedAccess>]
 module Writer =
 
-    let Writer
+    let private DefaultWriter
         (jsonWriter: JsonOutput -> string)
         (consoleWriter: ConsoleOutput list -> string)
         (output: MigrondiOutput)
@@ -109,13 +124,16 @@ module Writer =
 
             String.Join("", colored)
 
+    /// <summary>Provides a default MigrondiWriter for Stdout operations</summary>
+    /// <param name="withColor">Set false to prevent any kind of color in the stdout</param>
     let GetMigrondiWriter (withColor: bool) : MigrondiWriter =
         if withColor then
-            Writer Json.defaultJsonWriter coloredConsoleWriter
+            DefaultWriter Json.defaultJsonWriter coloredConsoleWriter
         else
-            Writer Json.defaultJsonWriter noColorConsoleWriter
+            DefaultWriter Json.defaultJsonWriter noColorConsoleWriter
 
 type MigrondiConsole() =
+    // Logs information to the stdout, if this doesn't suit your needs you can provide your own writer
     static member Log(output: ConsoleOutput list, ?noColor: bool, ?isJson: bool, ?withWriter: MigrondiWriter) =
         let noColor = defaultArg noColor false
         let isJson = defaultArg isJson false
@@ -149,31 +167,40 @@ module BuilderCE =
         member _.Source(s: ConsoleOutput list) = s
 
         [<CustomOperation("normal")>]
+        /// No particular style will be applied to the string value
         member _.Normal(state: ConsoleOutput list, value: string) = ConsoleOutput.Normal value :: state
 
         [<CustomOperation("normalln")>]
+        /// No particular style will be applied to the string value, but a '\n' be added at the end
         member _.NormalLn(state: ConsoleOutput list, value: string) =
             ConsoleOutput.Normal $"{value}\n" :: state
 
         [<CustomOperation("warning")>]
+        /// A yelow style will be applied to the string value
         member _.Warning(state: ConsoleOutput list, value: string) = ConsoleOutput.Warning value :: state
 
         [<CustomOperation("warningln")>]
+        /// A yellow style will be applied to the string value and, a '\n' will be added at the end
         member _.WarningLn(state: ConsoleOutput list, value: string) =
             ConsoleOutput.Warning $"{value}\n" :: state
 
         [<CustomOperation("danger")>]
+        /// A red style will be applied to the string value
         member _.Danger(state: ConsoleOutput list, value: string) = ConsoleOutput.Danger value :: state
 
         [<CustomOperation("dangerln")>]
+        /// A red style will be applied to the string value and, a '\n' will be added at the end
         member _.DangerLn(state: ConsoleOutput list, value: string) =
             ConsoleOutput.Danger $"{value}\n" :: state
 
         [<CustomOperation("success")>]
+        /// A green style will be applied to the string value
         member _.Success(state: ConsoleOutput list, value: string) = ConsoleOutput.Success value :: state
 
         [<CustomOperation("successln")>]
+        /// A green style will be applied to the string value and, a '\n' will be added at the end
         member _.SuccessLn(state: ConsoleOutput list, value: string) =
             ConsoleOutput.Success $"{value}\n" :: state
 
+    /// A rather simple ConsoleOutput builder
     let migrondiOutput = MigrondiOutputListBuilder()

@@ -16,17 +16,35 @@ open FsToolkit.ErrorHandling
 
 open Migrondi.Types
 
+/// A function that takes an ADO compatible connection string
+/// A supported Driver
+/// and returns a Lazy Connection, this connection might be reused by internal functions
+/// so it's advisable to not close the connection until you're sure you will not use it anymore
 type GetConnection = string -> Driver -> Lazy<IDbConnection>
+/// A function that takes an optional migration and compare it with an existing migration file array
+/// and return those migration files that have not been used yet (for either run up or down)
 type GetMigrations = Migration option -> MigrationFile array -> MigrationFile array
+/// Take a migration source and return the migration's name
 type GetMigrationName = MigrationSource -> string
 
+/// A function that fakes a migraion "run" for either Up or Down, return the migration name, the parameters and the content of said migration
 type RunDryMigrations =
     Driver -> MigrationType -> MigrationFile array -> (string * IDictionary<string, obj> * string) array
 
+/// A function that will perform a live run against the database for either Up or Down operations, return the array of database response (affected rows)
 type RunMigrations = Driver -> IDbConnection -> MigrationType -> MigrationFile array -> Result<int array, exn>
+
+/// A function used to ensure the "migration" table exists in the database
 type TryEnsureMigrationsTableExists = Driver -> IDbConnection -> Result<unit, exn>
+
+/// Check the database and retrieve the last migration in the "migration" table
 type TryGetLastMigrationInDatabase = IDbConnection -> Result<Migration option, exn>
+/// <summary>
+/// RepoDB requires drivers to be initialized, check <see href="https://repodb.net/tutorial/installation#installation">RepoDB's Docs</see>
+/// </summary>
 type InitializeDriver = Driver -> unit
+
+// Check if a particular migration name exists within the database
 type TryGetByFilename = IDbConnection -> string -> Result<bool, exn>
 
 [<RequireQualifiedAccess>]
