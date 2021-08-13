@@ -3,9 +3,7 @@ namespace Migrondi.Tests
 open System
 open Microsoft.VisualStudio.TestTools.UnitTesting
 open System.IO
-open System.Text
 open Migrondi.FileSystem
-open Migrondi.Options
 open Migrondi.Migrations
 open Migrondi.Database
 open Migrondi.Types

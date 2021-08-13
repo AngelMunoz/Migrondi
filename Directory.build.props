@@ -1,0 +1,28 @@
+<Project>
+    <PropertyGroup>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <Copyright>Copyright 2020 Angel D. Munoz.</Copyright>
+        <Authors>Angel Munoz and contributors</Authors>
+
+        <Description>
+            This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
+        </Description>
+        <Summary>
+            This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
+        </Summary>
+
+        <Title>Migrondi</Title>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryType>git</RepositoryType>
+        <ProjectUrl>https://github.com/AngelMunoz/Migrondi</ProjectUrl>
+        <RepositoryUrl>https://github.com/AngelMunoz/Migrondi.git</RepositoryUrl>
+        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+        <PackageOutputPath>.\dist</PackageOutputPath>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <WarnOn>3390;$(WarnOn)</WarnOn>
+    </PropertyGroup>
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)\LICENSE" Pack="true" PackagePath="LICENSE" />
+        <None Include="$(MSBuildThisFileDirectory)\README.md" Pack="true" PackagePath="README.md" />
+    </ItemGroup>
+</Project>

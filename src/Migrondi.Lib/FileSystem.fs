@@ -7,11 +7,22 @@ open FsToolkit.ErrorHandling
 
 open Migrondi.Types
 open Migrondi.Writer
-
+/// A function that takes a path an creates a directory it should return the path of the newly created directory
 type TryGetOrCreateDirectoryFn = string -> Result<string, exn>
+/// <summary>
+/// A funcion that takes a filename, a path like string and creates a <see cref="Migrondi.Types.MigrondiConfig">MigrondiConfig</see> file
+/// </summary>
+/// <remarks>
+/// As of version 0.7.0 the filename is always assumed to be "migrondi.json" in several internal parts of the Migrondi Lib
+/// this should change eventually
+/// </remarks>
 type TryGetOrCreateConfigFn = string -> string -> Result<MigrondiConfig, exn>
+/// <summary>A function that Gets a <see cref="Migrondi.Types.MigrondiConfig">MigrondiConfig</see> object</summary>
 type TryGetMigrondiConfigFn = unit -> Result<MigrondiConfig, exn>
+/// A function that takes a path like string and tries to get all the migrations present in the user's disk
 type TryGetMigrationsFn = string -> MigrationFile array
+/// A function that takes a path like string where the migrations are stored (migrationsDir) and the name of the migration
+/// This should return the path of the migration file or an exception in case the operation was not successful
 type TryCreateFileFn = string -> string -> Result<string, exn>
 
 [<RequireQualifiedAccess>]
