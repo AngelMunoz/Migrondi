@@ -11,7 +11,7 @@ open Migrondi.Database
 
 open FsToolkit.ErrorHandling
 
-// A function that should initialize the migrondi workspace by creating a configuration file and a migrations directory
+/// A function that should initialize the migrondi workspace by creating a configuration file and a migrations directory
 type TryRunInit = InitOptions -> TryGetOrCreateDirectoryFn -> TryGetOrCreateConfigFn -> Result<int, exn>
 
 /// A function that should create a new SQL migration file using the provided options and configuration
@@ -78,6 +78,10 @@ module Migrations =
         }
         |> Seq.toList
 
+    /// <summary>
+    ///   Creates a "migrondi.json" file and a "migrations" directory on the given path,
+    ///   or the current working directory if a path is not specified
+    ///</summary>
     let tryRunMigrationsInit: TryRunInit =
         fun options tryGetOrCreateDirectory tryGetOrCreateConfig ->
             result {
@@ -100,6 +104,10 @@ module Migrations =
                 return 0
             }
 
+    /// <summary>
+    ///   Creates a &lt;migration name&gt;_&lt;timestamp&gt;.sql file inside
+    ///   the directory provided by the migrondi configuration.
+    /// </summary>
     let tryRunMigrationsNew: TryRunMigrationsNew =
         fun options config createMigration ->
             let logCreated (name: string) =
@@ -121,6 +129,7 @@ module Migrations =
             createMigration config.migrationsDir options.name
             |> Result.map logCreated
 
+    /// Runs a set of migrations against the database or print to the console if a "dry-run" is specified
     let tryRunMigrationsUp: TryRunMigrationsUp =
         fun options config initializeDriver getConnection getPendingMigrations runDryMigrations runMigrations tryEnsureMigrationsTableExists tryGetLastMigrationPresent tryGetMigrationFiles ->
 
@@ -198,6 +207,7 @@ module Migrations =
                 return 0
             }
 
+    /// Rolls back a set of migrations from the database or print to the console if a "dry-run" is specified
     let tryRunMigrationsDown: TryRunMigrationsDown =
         fun options config initializeDriver getConnection getAppliedMigrations runDryMigrations runMigrations tryEnsureMigrationsTableExists tryGetLastMigrationPresent tryGetMigrationFiles ->
 
@@ -281,6 +291,7 @@ module Migrations =
                 return 0
             }
 
+    /// checks the database and tries to list if migrations are present, missing or both depending on the supplied options
     let tryListMigrations: TryListMigrations =
         fun options config initializeDriver getConnection getAppliedMigrations getPendingMigrations tryGetLastMigrationPresent tryGetMigrationFiles ->
             result {
@@ -385,6 +396,9 @@ module Migrations =
                 return 0
             }
 
+/// This is the default migrondi runner takes all of the existing functions
+/// and wires them together inside each run method, it allows you to supply your own
+/// functions in case you need to customize or modify the way things are done by migrondi
 type MigrondiRunner() =
 
     static member inline private tryGetMigrondiConfig
@@ -678,7 +692,24 @@ type MigrondiRunner() =
                     getLastMigration
                     getMigrationsFromDisk
         }
-
+    /// <summary>
+    /// Checks if a given filename of an SQL migration is present in the database 
+    /// </summary>
+    /// <param name="options">
+    ///   Options to list migrations that are either pending, missing, or both in the database
+    ///  </param>
+    /// <param name="tryGetMigrondiConfig">
+    ///   A function to get a migrondi configuration object,
+    ///   if not provided the library will try to find a migrondi.json file
+    ///   in the current working directory
+    /// </param>
+    /// <param name="getConnection">
+    ///   A function to obtain a Lazy <see cref="System.Data.IDbConnection">IDbConnection</see>
+    ///   which will be reused by some stages in the internal workings of the function
+    /// </param>
+    /// <param name="tryGetByFilename">
+    ///   A function to search the migration file in the database.
+    /// </param>
     static member RunStatus
         (
             options: StatusOptions,
