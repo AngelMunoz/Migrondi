@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Reactive;
 using System.Text;
 using DynamicData.Binding;
@@ -10,15 +12,23 @@ namespace FromCSharp.ViewModels
 {
     public class MainWindowViewModel : ReactiveObject, IScreen
     {
+        private ObservableCollection<MigrondiWorkspace> _workspaces = new ObservableCollection<MigrondiWorkspace>();
+
         public RoutingState Router { get; } = new RoutingState();
 
-        public ObservableCollectionExtended<MigrondiWorkspace> workspaces { get; private set; } =
-            new ObservableCollectionExtended<MigrondiWorkspace>();
-
+        public ObservableCollection<MigrondiWorkspace> Workspaces { get => _workspaces; private set => this.RaiseAndSetIfChanged(ref _workspaces, value); }
+        public Action<string> OnFolderSelected { get; private set; }
 
         public MainWindowViewModel()
         {
             LoadWorkspaces();
+            OnFolderSelected += path =>
+            {
+                var pathId = Database.AddWorkspace(path);
+                var workspace = MigrondiWorkspace.Create(path);
+                Debug.WriteLine($"Added: {pathId}, Workspace: {workspace}", nameof(MainWindowViewModel));
+                Workspaces.Add(workspace);
+            };
         }
 
 
@@ -31,8 +41,12 @@ namespace FromCSharp.ViewModels
         private void LoadWorkspaces()
         {
             var results = Database.GetWorkspaces();
-            workspaces.Clear();
-            workspaces.AddRange(results);
+            Debug.WriteLine($"Got Results: {results.Length}", nameof(MainWindowViewModel));
+            Workspaces.Clear();
+            foreach (var workspace in results)
+            {
+                Workspaces.Add(workspace);
+            }
         }
     }
 }

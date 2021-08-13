@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Collections.Generic;
 using FromCSharp.Types;
 using LiteDB;
@@ -7,21 +8,29 @@ namespace FromCSharp
 {
     public static class Database
     {
-        private static LiteDatabase GetDatabase() => new LiteDatabase("./migrondiui.db");
+        private static ILiteDatabase GetDatabase() => new LiteDatabase("Filename=./migrondiui.db");
 
-
-        public static IEnumerable<MigrondiWorkspace> GetWorkspaces()
+        private static ILiteCollection<MigrondiWorkspace> Workspaces(ILiteDatabase db)
         {
-            using var db = GetDatabase();
             var collection = db.GetCollection<MigrondiWorkspace>();
-            return collection.FindAll();
+            collection.EnsureIndex(ws => ws.DisplayName);
+            return collection;
         }
 
-        public static ObjectId AddWorkspace(string path, string? displayName)
+
+        public static MigrondiWorkspace[] GetWorkspaces()
+        {
+            using var db = GetDatabase();
+            var collection = Workspaces(db);
+            var results = collection.FindAll();
+            return results.ToArray();
+        }
+
+        public static ObjectId AddWorkspace(string path, string? displayName = null)
         {
             var workspace = MigrondiWorkspace.Create(path, displayName);
             using var db = GetDatabase();
-            var collection = db.GetCollection<MigrondiWorkspace>();
+            var collection = Workspaces(db);
             var id = collection.Insert(workspace);
             return id.AsObjectId;
         }
@@ -29,7 +38,7 @@ namespace FromCSharp
         public static bool RemoveWorkspace(ObjectId id)
         {
             using var db = GetDatabase();
-            var collection = db.GetCollection<MigrondiWorkspace>();
+            var collection = Workspaces(db);
             return collection.Delete(id);
         }
     }

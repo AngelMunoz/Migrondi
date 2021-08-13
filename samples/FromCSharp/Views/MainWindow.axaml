@@ -11,9 +11,21 @@
     <Grid>
         <rxui:RoutedViewHost Grid.Row="0" Router="{Binding Router}">
             <rxui:RoutedViewHost.DefaultContent>
-                <TextBlock Text="Default content"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
+                <StackPanel>
+                    <TextBlock Text="You don't have any workspaces"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                    <Button Content="Select A New Workspace" Click="SelectFolder" />
+                    <ListBox Items="{Binding Workspaces, Mode=OneWay}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="Red" CornerRadius="4" Padding="4">
+                                    <TextBlock Text="{Binding Path}"/>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
             </rxui:RoutedViewHost.DefaultContent>
         </rxui:RoutedViewHost>
     </Grid>

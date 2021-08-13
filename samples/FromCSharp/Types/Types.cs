@@ -11,7 +11,7 @@ namespace FromCSharp.Types
         DateTime CreatedAt
     )
     {
-        public static MigrondiWorkspace Create(string path, string? displayName)
+        public static MigrondiWorkspace Create(string path, string? displayName = null)
         {
             var dName = displayName ?? System.IO.Path.GetDirectoryName(path) ?? "Workspace";
             return new MigrondiWorkspace(
