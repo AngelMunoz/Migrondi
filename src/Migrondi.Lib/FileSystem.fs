@@ -21,7 +21,7 @@ type TryGetOrCreateConfigFn = string -> string -> Result<MigrondiConfig, exn>
 type TryGetMigrondiConfigFn = unit -> Result<MigrondiConfig, exn>
 /// A function that takes a path like string and tries to get all the migrations present in the user's disk
 type TryGetMigrationsFn = string -> MigrationFile array
-/// A function that takes a path like string where the migrations are stored (migrationsDir) and the name of the migration
+/// A function that takes a path like string where the migrations are stored (migrationsDir) and the name of the migration file
 /// This should return the path of the migration file or an exception in case the operation was not successful
 type TryCreateFileFn = string -> string -> Result<string, exn>
 

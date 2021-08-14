@@ -457,7 +457,7 @@ type MigrondiRunner() =
     /// </param>
     /// <param name="tryCreateNewMigrationFile">
     ///   A custom function to generate a the configuration file
-    ///   it takes a string: filename and a path like string: migrationsDir
+    ///   it takes a string: path like string (e.g. "./migrations") and the supplied filename from the options
     /// </param>
     static member RunNew
         (
@@ -693,7 +693,7 @@ type MigrondiRunner() =
                     getMigrationsFromDisk
         }
     /// <summary>
-    /// Checks if a given filename of an SQL migration is present in the database 
+    /// Checks if a given filename of an SQL migration is present in the database
     /// </summary>
     /// <param name="options">
     ///   Options to list migrations that are either pending, missing, or both in the database
