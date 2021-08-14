@@ -32,10 +32,32 @@ let runtimes =
        "osx-x64" |]
 
 Target.initEnvironment ()
-Target.create "CleanRelease" (fun _ -> !! "dist" |> Shell.cleanDirs)
+Target.create "Clean" (fun _ -> !! "dist" |> Shell.cleanDirs)
 
 Target.create
-    "Publish"
+    "PackNugets"
+    (fun _ ->
+        let result = Target.runSimple "Clean" []
+
+        match result.Error with
+        | Some err -> eprintfn "%O" err
+        | None ->
+            DotNet.pack
+                (fun opts ->
+                    { opts with
+                          Configuration = DotNet.BuildConfiguration.Release
+                          OutputPath = Some $"{output}" })
+                "src/Migrondi"
+
+            DotNet.pack
+                (fun opts ->
+                    { opts with
+                          Configuration = DotNet.BuildConfiguration.Release
+                          OutputPath = Some $"{output}" })
+                "src/Migrondi.Lib")
+
+Target.create
+    "BuildBinaries"
     (fun _ ->
         let args = MSBuild.CliArguments.Create()
 
@@ -52,21 +74,7 @@ Target.create
         let getPublishCmd getOpts runtime =
             DotNet.publish (getOpts runtime) "src/Migrondi/Migrondi.fsproj"
 
-        Array.iter (getPublishCmd getOpts) runtimes
-
-        DotNet.pack
-            (fun opts ->
-                { opts with
-                      Configuration = DotNet.BuildConfiguration.Release
-                      OutputPath = Some $"{output}" })
-            "src/Migrondi"
-
-        DotNet.pack
-            (fun opts ->
-                { opts with
-                      Configuration = DotNet.BuildConfiguration.Release
-                      OutputPath = Some $"{output}" })
-            "src/Migrondi.Lib")
+        Array.iter (getPublishCmd getOpts) runtimes)
 
 Target.create
     "Zip"
@@ -75,6 +83,8 @@ Target.create
         |> Array.Parallel.iter
             (fun runtime -> ZipFile.CreateFromDirectory($"{output}/{runtime}", $"{output}/{runtime}.zip")))
 
-"CleanRelease" ==> "Publish" ==> "Zip"
+Target.create "Default" (fun _ -> Target.runSimple "Zip" [] |> ignore)
 
-Target.runOrDefault "Zip"
+"Clean" ==> "BuildBinaries" ==> "Default"
+
+Target.runOrDefault "Default"
