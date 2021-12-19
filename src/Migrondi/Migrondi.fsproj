@@ -8,7 +8,7 @@
     <Summary>
       This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
     </Summary>
-    <Version>0.7.0</Version>
+    <Version>0.7.1</Version>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>migrondi</ToolCommandName>
     <IsPackable>true</IsPackable>
