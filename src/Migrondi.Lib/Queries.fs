@@ -111,7 +111,7 @@ module Queries =
         match driver with
         | Driver.Sqlite ->
             """
-            CREATE TABLE migration(
+            CREATE TABLE IF NOT EXISTS migration(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name VARCHAR(255) NOT NULL,
                 timestamp BIGINT NOT NULL
@@ -119,7 +119,7 @@ module Queries =
             """
         | Driver.Postgresql ->
             """
-            CREATE TABLE migration(
+            CREATE TABLE IF NOT EXISTS migration(
                id SERIAL PRIMARY KEY,
                name VARCHAR(255) NOT NULL,
                timestamp BIGINT NOT NULL
@@ -127,7 +127,7 @@ module Queries =
             """
         | Driver.Mysql ->
             """
-            CREATE TABLE migration(
+            CREATE TABLE IF NOT EXISTS migration(
                id INT AUTO_INCREMENT PRIMARY KEY,
                name VARCHAR(255) NOT NULL,
                timestamp BIGINT NOT NULL
@@ -135,7 +135,7 @@ module Queries =
             """
         | Driver.Mssql ->
             """
-            CREATE TABLE dbo.migration(
+            CREATE TABLE IF NOT EXISTS dbo.migration(
                id INT PRIMARY KEY,
                name VARCHAR(255) NOT NULL,
                timestamp BIGINT NOT NULL
