@@ -48,14 +48,9 @@ module Json =
     let private defaultOptions =
         lazy
             (let opts = JsonSerializerOptions()
-             opts.Converters.Add(JsonFSharpConverter())
              opts.AllowTrailingCommas <- true
              opts.ReadCommentHandling <- JsonCommentHandling.Skip
-#if NET5_0 || NETCOREAPP3_1
-             opts.IgnoreNullValues <- true
-#else
              opts.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
-#endif
              opts.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
              opts)
 
@@ -106,13 +101,12 @@ module Writer =
         fun parts ->
             let colored =
                 parts
-                |> List.map
-                    (fun o ->
-                        match o with
-                        | Normal value -> Markup.Escape(value)
-                        | Warning value -> $"[yellow]{Markup.Escape(value)}[/]"
-                        | Danger value -> $"[red]{Markup.Escape(value)}[/]"
-                        | Success value -> $"[green]{Markup.Escape(value)}[/]")
+                |> List.map (fun o ->
+                    match o with
+                    | Normal value -> Markup.Escape(value)
+                    | Warning value -> $"[yellow]{Markup.Escape(value)}[/]"
+                    | Danger value -> $"[red]{Markup.Escape(value)}[/]"
+                    | Success value -> $"[green]{Markup.Escape(value)}[/]")
 
             String.Join("", colored)
 
@@ -144,8 +138,7 @@ type MigrondiConsole() =
             else
                 ConsoleOutput output
 
-        let writer =
-            defaultArg withWriter (Writer.GetMigrondiWriter(noColor |> not))
+        let writer = defaultArg withWriter (Writer.GetMigrondiWriter(noColor |> not))
 
         match output with
         | JsonOutput jsonOutput ->
@@ -167,38 +160,30 @@ module BuilderCE =
         member _.Source(s: ConsoleOutput list) = s
 
         [<CustomOperation("normal")>]
-        /// No particular style will be applied to the string value
         member _.Normal(state: ConsoleOutput list, value: string) = ConsoleOutput.Normal value :: state
 
         [<CustomOperation("normalln")>]
-        /// No particular style will be applied to the string value, but a '\n' be added at the end
         member _.NormalLn(state: ConsoleOutput list, value: string) =
             ConsoleOutput.Normal $"{value}\n" :: state
 
         [<CustomOperation("warning")>]
-        /// A yelow style will be applied to the string value
         member _.Warning(state: ConsoleOutput list, value: string) = ConsoleOutput.Warning value :: state
 
         [<CustomOperation("warningln")>]
-        /// A yellow style will be applied to the string value and, a '\n' will be added at the end
         member _.WarningLn(state: ConsoleOutput list, value: string) =
             ConsoleOutput.Warning $"{value}\n" :: state
 
         [<CustomOperation("danger")>]
-        /// A red style will be applied to the string value
         member _.Danger(state: ConsoleOutput list, value: string) = ConsoleOutput.Danger value :: state
 
         [<CustomOperation("dangerln")>]
-        /// A red style will be applied to the string value and, a '\n' will be added at the end
         member _.DangerLn(state: ConsoleOutput list, value: string) =
             ConsoleOutput.Danger $"{value}\n" :: state
 
         [<CustomOperation("success")>]
-        /// A green style will be applied to the string value
         member _.Success(state: ConsoleOutput list, value: string) = ConsoleOutput.Success value :: state
 
         [<CustomOperation("successln")>]
-        /// A green style will be applied to the string value and, a '\n' will be added at the end
         member _.SuccessLn(state: ConsoleOutput list, value: string) =
             ConsoleOutput.Success $"{value}\n" :: state
 

@@ -37,9 +37,9 @@ type MigrationFile =
       /// when rolling back migrations from the database
       downContent: string }
 
-[<RequireQualifiedAccess>]
 /// Migration information can be obtained from a file or the database
 /// this DU allows to identify where the information is coming from
+[<RequireQualifiedAccess>]
 type MigrationSource =
     | File of MigrationFile
     | Database of Migration

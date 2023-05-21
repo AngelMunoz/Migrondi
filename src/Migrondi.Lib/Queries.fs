@@ -4,8 +4,7 @@ open System
 open System.Collections
 open System.Collections.Generic
 open System.Data
-open System.Data.SQLite
-open System.Data.SqlClient
+open Microsoft.Data.SqlClient
 
 open RepoDb
 open RepoDb.Enumerations
@@ -21,9 +20,11 @@ open Migrondi.Types
 /// and returns a Lazy Connection, this connection might be reused by internal functions
 /// so it's advisable to not close the connection until you're sure you will not use it anymore
 type GetConnection = string -> Driver -> Lazy<IDbConnection>
+
 /// A function that takes an optional migration and compare it with an existing migration file array
 /// and return those migration files that have not been used yet (for either run up or down)
 type GetMigrations = Migration option -> MigrationFile array -> MigrationFile array
+
 /// Take a migration source and return the migration's name
 type GetMigrationName = MigrationSource -> string
 
@@ -39,6 +40,7 @@ type TryEnsureMigrationsTableExists = Driver -> IDbConnection -> Result<unit, ex
 
 /// Check the database and retrieve the last migration in the "migration" table
 type TryGetLastMigrationInDatabase = IDbConnection -> Result<Migration option, exn>
+
 /// <summary>
 /// RepoDB requires drivers to be initialized, check <see href="https://repodb.net/tutorial/installation#installation">RepoDB's Docs</see>
 /// </summary>
@@ -96,16 +98,19 @@ module Queries =
             lazy
                 (match driver with
                  | Driver.Mssql -> new SqlConnection(connectionString) :> IDbConnection
-                 | Driver.Sqlite -> new SQLiteConnection(connectionString) :> IDbConnection
+                 | Driver.Sqlite -> new SqlConnection(connectionString) :> IDbConnection
                  | Driver.Mysql -> new MySqlConnection(connectionString) :> IDbConnection
                  | Driver.Postgresql -> new NpgsqlConnection(connectionString) :> IDbConnection)
 
     let initializeDriver (driver: Driver) =
+        let setup = GlobalConfiguration.Setup()
+
         match driver with
-        | Driver.Mssql -> RepoDb.SqlServerBootstrap.Initialize()
-        | Driver.Sqlite -> RepoDb.SqLiteBootstrap.Initialize()
-        | Driver.Mysql -> RepoDb.MySqlBootstrap.Initialize()
-        | Driver.Postgresql -> RepoDb.PostgreSqlBootstrap.Initialize()
+        | Driver.Mssql -> setup.UseMySql()
+        | Driver.Sqlite -> setup.UseSqlite()
+        | Driver.Mysql -> setup.UseMySql()
+        | Driver.Postgresql -> setup.UsePostgreSql()
+        |> ignore
 
     let private createTableQuery driver =
         match driver with
@@ -149,7 +154,7 @@ module Queries =
                     connection.ExecuteNonQuery(createTableQuery driver)
                     |> ignore
             with
-            | :? System.Data.SQLite.SQLiteException as ex ->
+            | :? Microsoft.Data.Sqlite.SqliteException as ex ->
                 if ex.Message.Contains("already exists") then
                     return ()
                 else
@@ -159,16 +164,14 @@ module Queries =
 
     let getLastMigration (connection: IDbConnection) =
         result {
-            let orderBy =
-                seq { OrderField("timestamp", Order.Descending) }
+            let orderBy = seq { OrderField("timestamp", Order.Descending) }
 
             try
-                let result =
-                    connection.QueryAll<Migration>("migration", orderBy = orderBy)
+                let result = connection.QueryAll<Migration>("migration", orderBy = orderBy)
 
                 return result |> Seq.tryHead
             with
-            | :? RepoDb.Exceptions.MissingFieldsException -> return None
+            | :? Exceptions.MissingFieldsException -> return None
             | ex -> return! (Error(FailedToExecuteQuery ex.Message))
         }
 
@@ -223,11 +226,9 @@ module Queries =
         let content = extractContent migrationType migration
         let insert = getInsertStatement migrationType
 
-        let migrationContent =
-            prepareMigrationContent driver content insert
+        let migrationContent = prepareMigrationContent driver content insert
 
-        let queryParams =
-            prepareQueryParams migrationType migration
+        let queryParams = prepareQueryParams migrationType migration
 
         try
             connection.ExecuteNonQuery(migrationContent, queryParams)
@@ -265,11 +266,9 @@ module Queries =
             let content = extractContent migrationType migration
             let insert = getInsertStatement migrationType
 
-            let content =
-                prepareMigrationContent driver content insert
+            let content = prepareMigrationContent driver content insert
 
-            let queryParams =
-                prepareQueryParams migrationType migration
+            let queryParams = prepareQueryParams migrationType migration
 
             migration.name, queryParams, content
 
@@ -306,8 +305,7 @@ module Queries =
                     }
 
                 try
-                    let result =
-                        connection.Count("migration", {| name = name; timestamp = timestamp |})
+                    let result = connection.Count("migration", {| name = name; timestamp = timestamp |})
 
                     return result >= 1L
                 with
