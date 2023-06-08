@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Library.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="4.6.0" />
+    <PackageReference Include="Thoth.Json.Net" Version="11.0.0" />
+
+    <!-- RepoDB Packages to handle SQL Servers -->
+    <PackageReference Include="RepoDb" Version="1.13.1" />
+    <PackageReference Include="RepoDb.SqlServer" Version="1.13.1" />
+    <PackageReference Include="RepoDb.PostgreSql" Version="1.13.1" />
+    <PackageReference Include="RepoDb.Sqlite.Microsoft" Version="1.13.1" />
+    <PackageReference Include="RepoDb.MySqlConnector" Version="1.13.1" />
+  </ItemGroup>
+
+
+</Project>
