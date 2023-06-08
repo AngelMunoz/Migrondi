@@ -92,6 +92,7 @@ type MigrationSerializer =
   /// Takes a string and returns a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// </summary>
   /// <param name="content">The string to deserialize</param>
+  /// <param name="migrationName">Optional migration name in case we're decoding v0 migrations format</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.Serialization.SerializationError">SerializationError</see>
@@ -100,7 +101,8 @@ type MigrationSerializer =
   /// The string is the content of the migration file
   /// </remarks>
   abstract member DecodeText:
-    content: string -> Result<Migration, SerializationError>
+    content: string * ?migationName: string ->
+      Result<Migration, SerializationError>
 
 [<Interface>]
 type MigrationRecordSerializer =
@@ -210,7 +212,6 @@ module Migration =
     //
     // -- ---------- MIGRONDI:UP ----------
     // -- Write how to revert the migration here
-    //
 
     let sb = StringBuilder()
     let name = migrationDelimiter("NAME", Some migration.name)
@@ -239,7 +240,7 @@ module Migration =
 
   let DecodeTextV0
     (content: string)
-    (name: string)
+    (name: string option)
     : Result<Migration, string> =
     result {
       // Migrations Format V0 are already encoded like this:
@@ -248,6 +249,8 @@ module Migration =
       //
       //-- ---------- MIGRONDI:DOWN:1586550686936 --------------
       //-- Write how to revert the migration here
+      let! name =
+        name |> Result.requireSome "Migration name is required for format v0"
 
       let matcher =
         new Regex(
@@ -298,9 +301,91 @@ module Migration =
       }
     }
 
+  let DecodeTextV1 (content: string) : Result<Migration, string> = result {
+    // GOAL: Migrations Format V1 are encoded like this:
+    // -- Do not remove MIGRONDI comments.
+    // -- MIGRONDI:Name=AddUsersTable
+    // -- MIGRONDI:TIMESTAMP=1586550686936
+    // -- ---------- MIGRONDI:UP ----------
+    // -- Write your Up migrations here
+    //
+    // -- ---------- MIGRONDI:UP ----------
+    // -- Write how to revert the migration here
+    let upDownMatcher =
+      new Regex(
+        "-- ---------- MIGRONDI:(?<Identifier>UP|DOWN) ----------",
+        RegexOptions.Multiline
+      )
 
-  let DecodeText (content: string) : Result<Migration, string> =
-    raise(NotImplementedException())
+    let metadataMatcher =
+      new Regex(
+        "-- MIGRONDI:(?<Key>[A-Z]+)=(?<Value>.*)",
+        RegexOptions.Multiline
+      )
+
+    let upDownCollection = upDownMatcher.Matches(content)
+    let metadataCollection = metadataMatcher.Matches(content)
+
+    let! name =
+      metadataCollection
+      |> Seq.find(fun value -> value.Groups["Key"].Value = "NAME")
+      |> fun value -> value.Groups["Value"].Value |> Option.ofObj
+      |> Result.requireSome "Missing Migration Name In metadata"
+
+    let! timestamp =
+      metadataCollection
+      |> Seq.find(fun value -> value.Groups["Key"].Value = "TIMESTAMP")
+      |> fun value -> value.Groups["Value"].Value |> Option.ofObj
+      |> Result.requireSome "Missing Migration Timestamp In metadata"
+      |> Result.bind(fun value ->
+        try
+          int64 value |> Ok
+        with ex ->
+          Error $"Invalid timestamp: {ex.Message}"
+      )
+
+
+    do!
+      upDownCollection.Count = 2
+      |> Result.requireTrue "Invalid Migrations Format"
+      |> Result.ignore
+
+    let upIndex =
+      upDownCollection
+      |> Seq.find(fun value -> value.Groups["Identifier"].Value = "UP")
+      |> fun value -> value.Index
+
+    let downIndex =
+      upDownCollection
+      |> Seq.find(fun value -> value.Groups["Identifier"].Value = "DOWN")
+      |> fun value -> value.Index
+
+    return {
+      name = name
+      upContent = content[upIndex..downIndex]
+      downContent = content[downIndex..]
+      timestamp = timestamp
+    }
+  }
+
+  let DecodeText
+    (
+      content: string,
+      name: string option
+    ) : Result<Migration, string> =
+    let matcher =
+      new Regex(
+        "-- ---------- MIGRONDI:(?<Identifier>UP|DOWN):(?<Timestamp>[0-9]+) ----------",
+        RegexOptions.Multiline
+      )
+
+    // If it has at least one match it's a v0 migration
+    if matcher.Matches(content) |> Seq.length > 0 then
+      DecodeTextV0 content name
+    else
+      DecodeTextV1 content
+
+
 
   let DecodeJson: Decoder<Migration> =
     Decode.object(fun get -> {
@@ -379,12 +464,12 @@ module SerializerImpl =
           Migration.EncodeText content
 
         member _.DecodeText
-          (content: string)
-          : Result<Migration, SerializationError> =
-          Migration.DecodeText content
+          (
+            content: string,
+            ?name: string
+          ) : Result<Migration, SerializationError> =
+          Migration.DecodeText(content, name)
           |> Result.mapError(fun error -> MalformedContent(content, error))
-
-
     }
 
 type SerializerImpl =
