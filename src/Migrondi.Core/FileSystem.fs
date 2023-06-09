@@ -366,14 +366,10 @@ module PhysicalFileSystemImpl =
 [<Class>]
 type FileSystemImpl =
 
-  static member BuildDefaultEnv(?rootUri: Uri) =
+  static member BuildDefaultEnv(rootUri: Uri) =
 
     { new FileSystemEnv with
-        member _.RootPath: Uri =
-          rootUri
-          |> Option.defaultWith(fun () ->
-            IO.Directory.GetCurrentDirectory() |> Uri
-          )
+        member _.RootPath: Uri = rootUri
 
         member this.ListMigrations
           (

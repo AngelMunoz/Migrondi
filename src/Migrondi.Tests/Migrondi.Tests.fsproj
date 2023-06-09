@@ -1,23 +1,20 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
-
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <GenerateProgramFile>false</GenerateProgramFile>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
-
   <ItemGroup>
     <Compile Include="Serialization.fs" />
+    <Compile Include="FileSystem.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.6.2" />
     <PackageReference Include="MSTest.TestAdapter" Version="3.0.4" />
     <PackageReference Include="MSTest.TestFramework" Version="3.0.4" />
   </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
   </ItemGroup>
