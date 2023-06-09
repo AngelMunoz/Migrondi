@@ -99,7 +99,7 @@ type MigrationSerializer =
   /// The string is the content of the migration file
   /// </remarks>
   abstract member DecodeText:
-    content: string * ?migationName: string ->
+    content: string * ?migrationName: string ->
       Result<Migration, SerializationError>
 
 [<Interface>]
@@ -166,6 +166,7 @@ module MigrondiConfig =
       Encode.object [
         "connection", Encode.string config.connection
         "migrations", Encode.string config.migrations
+        "tableName", Encode.string config.tableName
         "driver", MigrondiDriver.Encode config.driver
       ]
 
@@ -184,12 +185,18 @@ module MigrondiConfig =
 
 module Migration =
   let migrationDelimiter (key: string, value: string option) =
+    let start =
+      match value with
+      | Some _ -> "-- "
+      | None -> "-- ---------- "
+
     let value =
       match value with
       | Some value -> $"={value}"
-      | None -> ""
+      | None -> " ----------"
 
-    $"-- ---------- MIGRONDI:%s{key}{value} ----------"
+
+    $"{start}MIGRONDI:%s{key}{value}"
 
   let EncodeJson: Encoder<Migration> =
     fun (migration: Migration) ->
@@ -203,7 +210,7 @@ module Migration =
   let EncodeText (migration: Migration) : string =
     // GOAL: Migrations Format V1 have to be encoded like this:
     // -- Do not remove MIGRONDI comments.
-    // -- MIGRONDI:Name=AddUsersTable
+    // -- MIGRONDI:NAME=AddUsersTable
     // -- MIGRONDI:TIMESTAMP=1586550686936
     // -- ---------- MIGRONDI:UP ----------
     // -- Write your Up migrations here
@@ -251,7 +258,7 @@ module Migration =
         name |> Result.requireSome "Migration name is required for format v0"
 
       let matcher =
-        new Regex(
+        Regex(
           "-- ---------- MIGRONDI:(?<Identifier>UP|DOWN):(?<Timestamp>[0-9]+) ----------",
           RegexOptions.Multiline
         )
@@ -273,6 +280,13 @@ module Migration =
         |> Seq.find(fun value -> value.Groups["Identifier"].Value = "DOWN")
         |> fun value -> value.Index
 
+      // we've found the up delimiter, skip it and go straight for the content
+      let slicedUp = content[upIndex..downIndex - 1]
+      let fromUp = slicedUp.IndexOf('\n') + 1
+      // we've found the down delimiter, skip it and go straight for the content
+      let slicedDown = content[downIndex..]
+      let fromDown = content.Substring(downIndex).IndexOf('\n') + 1
+
       let! timestamp =
         try
           collection[0].Groups["Timestamp"].Value |> int64 |> Ok
@@ -281,20 +295,20 @@ module Migration =
 
       let! upContent =
         try
-          content[upIndex..downIndex] |> Ok
+          slicedUp[fromUp..] |> Ok
         with ex ->
           Error $"Invalid up content: {ex.Message}"
 
       let! downContent =
         try
-          content[downIndex..] |> Ok
+          slicedDown[fromDown..] |> Ok
         with ex ->
           Error $"Invalid down content: {ex.Message}"
 
       return {
         name = name
-        upContent = upContent
-        downContent = downContent
+        upContent = upContent.Trim()
+        downContent = downContent.Trim()
         timestamp = timestamp
       }
     }
@@ -310,14 +324,14 @@ module Migration =
     // -- ---------- MIGRONDI:UP ----------
     // -- Write how to revert the migration here
     let upDownMatcher =
-      new Regex(
+      Regex(
         "-- ---------- MIGRONDI:(?<Identifier>UP|DOWN) ----------",
         RegexOptions.Multiline
       )
 
     let metadataMatcher =
-      new Regex(
-        "-- MIGRONDI:(?<Key>[A-Z]+)=(?<Value>.*)",
+      Regex(
+        "-- MIGRONDI:(?<Key>[a-zA-Z0-9_-]+)=(?<Value>[a-zA-Z0-9_-]+)",
         RegexOptions.Multiline
       )
 
@@ -358,10 +372,29 @@ module Migration =
       |> Seq.find(fun value -> value.Groups["Identifier"].Value = "DOWN")
       |> fun value -> value.Index
 
+    // we've found the up delimiter, skip it and go straight for the content
+    let slicedUp = content[upIndex..downIndex - 1]
+    let fromUp = slicedUp.IndexOf('\n') + 1
+    // we've found the down delimiter, skip it and go straight for the content
+    let slicedDown = content[downIndex..]
+    let fromDown = content.Substring(downIndex).IndexOf('\n') + 1
+
+    let! upContent =
+      try
+        slicedUp[fromUp..] |> Ok
+      with ex ->
+        Error $"Invalid up content: {ex.Message}"
+
+    let! downContent =
+      try
+        slicedDown[fromDown..] |> Ok
+      with ex ->
+        Error $"Invalid down content: {ex.Message}"
+
     return {
       name = name
-      upContent = content[upIndex..downIndex]
-      downContent = content[downIndex..]
+      upContent = upContent.Trim()
+      downContent = downContent.Trim()
       timestamp = timestamp
     }
   }
@@ -372,7 +405,7 @@ module Migration =
       name: string option
     ) : Result<Migration, string> =
     let matcher =
-      new Regex(
+      Regex(
         "-- ---------- MIGRONDI:(?<Identifier>UP|DOWN):(?<Timestamp>[0-9]+) ----------",
         RegexOptions.Multiline
       )
@@ -411,6 +444,9 @@ module MigrationRecord =
       name = get.Required.Field "name" Decode.string
       timestamp = get.Required.Field "timestamp" Decode.int64
     })
+
+module MigrationRecordData =
+    ()
 
 [<Interface>]
 type SerializerEnv =
