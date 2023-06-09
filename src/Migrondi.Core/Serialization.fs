@@ -28,8 +28,6 @@ type SerializationError =
     match this with
     | MalformedContent(_, reason) -> reason
 
-
-
 [<Interface>]
 type ConfigurationSerializer =
 
@@ -472,9 +470,10 @@ module SerializerImpl =
           |> Result.mapError(fun error -> MalformedContent(content, error))
     }
 
+[<Class>]
 type SerializerImpl =
 
-  static member BuildEnv
+  static member BuildDefaultEnv
     (
       ?configurationSerializer: ConfigurationSerializer,
       ?migrationRecordSerializer: MigrationRecordSerializer,
