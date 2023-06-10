@@ -1,0 +1,9 @@
+###############################################################################
+# Set default behavior to automatically normalize line endings.
+###############################################################################
+* text=auto encoding=UTF-8
+
+*.txt	text
+*.fs text eol=lf
+*.fsi text eol=lf
+*.fsx text eol=lf

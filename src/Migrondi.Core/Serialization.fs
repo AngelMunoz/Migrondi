@@ -233,12 +233,13 @@ module Migration =
       // but it always has to include the up and down delimiter
       // Note: we may add metadata in the future above the up delimiter
       sb
-        .AppendLine(name)
-        .AppendLine(timestamp)
-        .AppendLine(up)
-        .AppendLine(migration.upContent)
-        .AppendLine(down)
-        .AppendLine(migration.downContent)
+        // manually set the line endings to \n
+        .Append(name).Append('\n')
+        .Append(timestamp).Append('\n')
+        .Append(up).Append('\n')
+        .Append(migration.upContent).Append('\n')
+        .Append(down).Append('\n')
+        .Append(migration.downContent).Append('\n')
         .ToString()
 
     content

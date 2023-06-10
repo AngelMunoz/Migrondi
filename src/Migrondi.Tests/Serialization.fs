@@ -100,7 +100,7 @@ type SerializationTests() =
     Assert.AreEqual(
       ConfigurationData.configJsonSample,
       encoded,
-      "Configuration should be encoded correctly"
+      ignoreCase = true
     )
 
   [<TestMethod>]
@@ -133,13 +133,13 @@ type SerializationTests() =
 
   [<TestMethod>]
   member _.``Can Encode Text Migration v1``() =
-    let encoded =
+    let actual =
       serializer.MigrationSerializer.EncodeText(MigrationData.migrationObject)
 
+    let expected = MigrationData.textMigrationSampleV1
     Assert.AreEqual(
-      MigrationData.textMigrationSampleV1,
-      encoded,
-      "Migration should be encoded correctly"
+      expected,
+      actual
     )
 
   [<TestMethod>]

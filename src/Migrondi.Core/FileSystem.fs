@@ -130,7 +130,7 @@ type FileSystemEnv =
   /// A unit result object that means that the operation was successful
   /// </returns>
   abstract member WriteMigration:
-    serializer: #SerializerEnv * Migration * string<RelativeUserPath> -> unit
+    serializer: #SerializerEnv * migration: Migration * writeTo: string<RelativeUserPath> -> unit
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
@@ -142,7 +142,7 @@ type FileSystemEnv =
   /// A unit result object that means that the operation was successful
   /// </returns>
   abstract member WriteMigrationAsync:
-    serializer: #SerializerEnv * Migration * string<RelativeUserPath> ->
+    serializer: #SerializerEnv * migration: Migration * writeTo: string<RelativeUserPath> ->
       Async<unit>
 
   /// <summary>
@@ -168,7 +168,7 @@ type FileSystemEnv =
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member ListMigrationsAsync:
-    serializer: #SerializerEnv * string<RelativeUserDirectoryPath> ->
+    serializer: #SerializerEnv * readFrom: string<RelativeUserDirectoryPath> ->
       Async<Result<Migration list, ReadFileError list>>
 
 module PhysicalFileSystemImpl =

@@ -13,16 +13,21 @@ open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
 open Migrondi.Core.FileSystem.Units
 
+open FsToolkit.ErrorHandling
 
 module MigrondiConfigData =
+
   [<Literal>]
-  let fsMigrondiPath = "fs-migrondi-config/migrondi.json"
+  let directoryName = "fs-migrondi-config"
+
+  [<Literal>]
+  let fsMigrondiPath = directoryName + "/" + "migrondi.json"
 
   let fsMigrondiConfigPath (root: string) =
-    Path.Combine(root, "fs-migrondi-config", "migrondi.json")
+    Path.Combine(root, directoryName, "migrondi.json")
 
   let fsRelativeMigrondiConfigPath =
-    Path.Combine("fs-migrondi-config", "migrondi.json")
+    Path.Combine(directoryName, "migrondi.json")
 
   let configSampleObject = {
     connection = "connection"
@@ -31,13 +36,37 @@ module MigrondiConfigData =
     driver = MigrondiDriver.Sqlite
   }
 
+module MigrationData =
+  [<Literal>]
+  let directoryName = "fs-migrations"
+
+  let getMigrationObjects(amount: int) =
+    [
+      for i in 1.. amount + 1 do
+        // ensure the timestamps are different
+        let timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1L
+        {
+          name = $"AddTable{i}"
+          upContent = "CREATE TABLE IF NOT EXISTS migration(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name VARCHAR(255) NOT NULL,
+  timestamp BIGINT NOT NULL
+);"
+          downContent = $"DROP TABLE migration;"
+          timestamp = timestamp
+        },
+        Path.Combine(directoryName, $"AddTable{i}_{timestamp}.sql")
+    ]
+
 
 [<TestClass>]
 type FileSystemTests() =
 
   let baseUri =
     let tmp = Path.GetTempPath()
-    let path = $"{Path.Combine(tmp, Guid.NewGuid().ToString())}/"
+
+    let path = $"{Path.Combine(tmp, Guid.NewGuid().ToString())}%c{Path.DirectorySeparatorChar}"
+
     Uri(path, UriKind.Absolute)
 
   let rootDir = DirectoryInfo(baseUri.LocalPath)
@@ -45,17 +74,11 @@ type FileSystemTests() =
   let fileSystem = FileSystemImpl.BuildDefaultEnv(baseUri)
   let serializer = SerializerImpl.BuildDefaultEnv()
 
-
-  [<TestInitialize>]
-  member _.InitializeTest() =
-    rootDir.Create()
-    rootDir.CreateSubdirectory("fs-migrondi-config") |> ignore
-    rootDir.CreateSubdirectory("fs-migrations") |> ignore
-
-    printfn $"Created temporary root dir at: '{rootDir.FullName}'"
+  do
+    printfn $"Using '{rootDir.FullName}' as Root Directory"
 
   [<TestCleanup>]
-  member _.CleanupTest() =
+  member _.TestCleanup() =
     // We're done with these tests remove any temporary files
     rootDir.Delete(true)
     printfn $"Deleted temporary root dir at: '{rootDir.FullName}'"
@@ -178,3 +201,51 @@ type FileSystemTests() =
         )
     }
     :> Task
+
+  [<TestMethod>]
+  member _.``Can write a migration file``() =
+      let migrationsDirPath = Path.Combine(rootDir.FullName, MigrationData.directoryName)
+
+      let migrations  =
+        MigrationData.getMigrationObjects 3
+
+
+      let encoded =
+        migrations
+        |> List.map (fun (migration, name) ->
+          let encoded = serializer.MigrationSerializer.EncodeText migration
+          let name = Path.GetFileName(name)
+          name, encoded
+        )
+        |> Map.ofList
+
+      // write them to disk
+      migrations
+      |> List.iter(fun (migration, name) ->
+        fileSystem.WriteMigration(
+          serializer,
+          migration,
+          UMX.tag<RelativeUserPath> name
+        )
+      )
+
+      let files =
+        Directory.GetFiles migrationsDirPath
+        |> Array.Parallel.map(fun file -> (Path.GetFileName file), (File.ReadAllText file))
+        |> Array.toList
+
+      let validations =
+        files |> List.traverseResultA(fun (name, actual)->
+          match encoded |> Map.tryFind name with
+          | Some expected ->
+            Ok (expected, actual)
+          | None ->
+            Error $"Could not find file: '{name}' in expected files map"
+        )
+
+      match validations with
+      | Ok validations ->
+        validations |> List.iter Assert.AreEqual
+      | Error errs ->
+        let errors = String.Join('\n', errs)
+        Assert.Fail("Could not validate files:\n" + errors)
