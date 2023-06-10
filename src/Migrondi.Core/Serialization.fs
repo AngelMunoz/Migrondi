@@ -234,12 +234,18 @@ module Migration =
       // Note: we may add metadata in the future above the up delimiter
       sb
         // manually set the line endings to \n
-        .Append(name).Append('\n')
-        .Append(timestamp).Append('\n')
-        .Append(up).Append('\n')
-        .Append(migration.upContent).Append('\n')
-        .Append(down).Append('\n')
-        .Append(migration.downContent).Append('\n')
+        .Append(name)
+        .Append('\n')
+        .Append(timestamp)
+        .Append('\n')
+        .Append(up)
+        .Append('\n')
+        .Append(migration.upContent)
+        .Append('\n')
+        .Append(down)
+        .Append('\n')
+        .Append(migration.downContent)
+        .Append('\n')
         .ToString()
 
     content
@@ -282,7 +288,7 @@ module Migration =
         |> fun value -> value.Index
 
       // we've found the up delimiter, skip it and go straight for the content
-      let slicedUp = content[upIndex..downIndex - 1]
+      let slicedUp = content[upIndex .. downIndex - 1]
       let fromUp = slicedUp.IndexOf('\n') + 1
       // we've found the down delimiter, skip it and go straight for the content
       let slicedDown = content[downIndex..]
@@ -374,7 +380,7 @@ module Migration =
       |> fun value -> value.Index
 
     // we've found the up delimiter, skip it and go straight for the content
-    let slicedUp = content[upIndex..downIndex - 1]
+    let slicedUp = content[upIndex .. downIndex - 1]
     let fromUp = slicedUp.IndexOf('\n') + 1
     // we've found the down delimiter, skip it and go straight for the content
     let slicedDown = content[downIndex..]
@@ -447,7 +453,7 @@ module MigrationRecord =
     })
 
 module MigrationRecordData =
-    ()
+  ()
 
 [<Interface>]
 type SerializerEnv =

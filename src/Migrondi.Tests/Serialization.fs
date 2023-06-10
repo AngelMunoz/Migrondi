@@ -137,10 +137,7 @@ type SerializationTests() =
       serializer.MigrationSerializer.EncodeText(MigrationData.migrationObject)
 
     let expected = MigrationData.textMigrationSampleV1
-    Assert.AreEqual(
-      expected,
-      actual
-    )
+    Assert.AreEqual(expected, actual)
 
   [<TestMethod>]
   member _.``Can Decode Text Migration v0``() =
