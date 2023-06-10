@@ -1,6 +1,7 @@
 namespace Migrondi.Core.FileSystem
 
 open System
+open System.Text.RegularExpressions
 
 open FSharp.UMX
 
@@ -130,7 +131,10 @@ type FileSystemEnv =
   /// A unit result object that means that the operation was successful
   /// </returns>
   abstract member WriteMigration:
-    serializer: #SerializerEnv * migration: Migration * writeTo: string<RelativeUserPath> -> unit
+    serializer: #SerializerEnv *
+    migration: Migration *
+    writeTo: string<RelativeUserPath> ->
+      unit
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
@@ -142,33 +146,41 @@ type FileSystemEnv =
   /// A unit result object that means that the operation was successful
   /// </returns>
   abstract member WriteMigrationAsync:
-    serializer: #SerializerEnv * migration: Migration * writeTo: string<RelativeUserPath> ->
+    serializer: #SerializerEnv *
+    migration: Migration *
+    writeTo: string<RelativeUserPath> ->
       Async<unit>
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
   /// </summary>
-  /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
-  /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
+  /// <param name="serializer">A serializer that will be used to encode configuration into a string.</param>
+  /// <param name="nameSchema">A regex that will be used to match the name of the files that can be read.</param>
+  /// <param name="readFrom">A path Relative to the RootPath that targets to the migration.</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member ListMigrations:
-    serializer: #SerializerEnv * readFrom: string<RelativeUserDirectoryPath> ->
+    serializer: #SerializerEnv *
+    nameSchema: Regex *
+    readFrom: string<RelativeUserDirectoryPath> ->
       Result<Migration list, ReadFileError list>
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
   /// </summary>
   /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
+  /// <param name="nameSchema">A regex that will be used to match the name of the files that can be read.</param>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member ListMigrationsAsync:
-    serializer: #SerializerEnv * readFrom: string<RelativeUserDirectoryPath> ->
+    serializer: #SerializerEnv *
+    nameSchema: Regex *
+    readFrom: string<RelativeUserDirectoryPath> ->
       Async<Result<Migration list, ReadFileError list>>
 
 module PhysicalFileSystemImpl =
@@ -305,6 +317,7 @@ module PhysicalFileSystemImpl =
     (
       serializer: #SerializerEnv,
       root: Uri,
+      nameSchema: Regex,
       readFrom: string<RelativeUserDirectoryPath>
     ) =
     result {
@@ -314,8 +327,11 @@ module PhysicalFileSystemImpl =
 
       let files =
         directory.GetFileSystemInfos()
-        |> Array.Parallel.map(fun file ->
-          file.Name, file.FullName |> File.ReadAllText
+        |> Array.Parallel.choose(fun file ->
+          if (nameSchema.IsMatch(file.Name)) then
+            Some(file.Name, file.FullName |> File.ReadAllText)
+          else
+            None
         )
         |> Array.toList
 
@@ -332,6 +348,7 @@ module PhysicalFileSystemImpl =
     (
       serializer: #SerializerEnv,
       root: Uri,
+      nameSchema: Regex,
       readFrom: string<RelativeUserDirectoryPath>
     ) =
     asyncResult {
@@ -341,6 +358,9 @@ module PhysicalFileSystemImpl =
 
       let! files =
         directory.GetFileSystemInfos()
+        |> Array.Parallel.choose(fun file ->
+          if (nameSchema.IsMatch(file.Name)) then Some file else None
+        )
         |> Array.Parallel.map(fun file -> async {
           let name = file.Name
 
@@ -374,22 +394,26 @@ type FileSystemImpl =
         member this.ListMigrations
           (
             serializer: #SerializerEnv,
+            nameSchema: Regex,
             readFrom: string<RelativeUserDirectoryPath>
           ) : Result<Migration list, ReadFileError list> =
           PhysicalFileSystemImpl.listMigrations(
             serializer,
             this.RootPath,
+            nameSchema,
             readFrom
           )
 
         member this.ListMigrationsAsync
           (
             serializer: #SerializerEnv,
+            nameSchema: Regex,
             arg1: string<RelativeUserDirectoryPath>
           ) : Async<Result<Migration list, ReadFileError list>> =
           PhysicalFileSystemImpl.listMigrationsAsync(
             serializer,
             this.RootPath,
+            nameSchema,
             arg1
           )
 

@@ -40,23 +40,26 @@ module MigrationData =
   [<Literal>]
   let directoryName = "fs-migrations"
 
-  let getMigrationObjects(amount: int) =
-    [
-      for i in 1.. amount + 1 do
-        // ensure the timestamps are different
-        let timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1L
-        {
-          name = $"AddTable{i}"
-          upContent = "CREATE TABLE IF NOT EXISTS migration(
+  let nameSchema = Text.RegularExpressions.Regex("(.+)_([0-9]+).(sql|SQL)")
+
+  let getMigrationObjects (amount: int) = [
+    for i in 1 .. amount + 1 do
+      // ensure the timestamps are different
+      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1L
+
+      {
+        name = $"AddTable{i}"
+        upContent =
+          "CREATE TABLE IF NOT EXISTS migration(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name VARCHAR(255) NOT NULL,
   timestamp BIGINT NOT NULL
 );"
-          downContent = $"DROP TABLE migration;"
-          timestamp = timestamp
-        },
-        Path.Combine(directoryName, $"AddTable{i}_{timestamp}.sql")
-    ]
+        downContent = $"DROP TABLE migration;"
+        timestamp = timestamp
+      },
+      Path.Combine(directoryName, $"AddTable{i}_{timestamp}.sql")
+  ]
 
 
 [<TestClass>]
@@ -65,7 +68,8 @@ type FileSystemTests() =
   let baseUri =
     let tmp = Path.GetTempPath()
 
-    let path = $"{Path.Combine(tmp, Guid.NewGuid().ToString())}%c{Path.DirectorySeparatorChar}"
+    let path =
+      $"{Path.Combine(tmp, Guid.NewGuid().ToString())}%c{Path.DirectorySeparatorChar}"
 
     Uri(path, UriKind.Absolute)
 
@@ -74,8 +78,7 @@ type FileSystemTests() =
   let fileSystem = FileSystemImpl.BuildDefaultEnv(baseUri)
   let serializer = SerializerImpl.BuildDefaultEnv()
 
-  do
-    printfn $"Using '{rootDir.FullName}' as Root Directory"
+  do printfn $"Using '{rootDir.FullName}' as Root Directory"
 
   [<TestCleanup>]
   member _.TestCleanup() =
@@ -204,15 +207,64 @@ type FileSystemTests() =
 
   [<TestMethod>]
   member _.``Can write a migration file``() =
-      let migrationsDirPath = Path.Combine(rootDir.FullName, MigrationData.directoryName)
+    let migrationsDirPath =
+      Path.Combine(rootDir.FullName, MigrationData.directoryName)
 
-      let migrations  =
-        MigrationData.getMigrationObjects 3
+    let migrations = MigrationData.getMigrationObjects 3
 
+
+    let encoded =
+      migrations
+      |> List.map(fun (migration, name) ->
+        let encoded = serializer.MigrationSerializer.EncodeText migration
+        let name = Path.GetFileName(name)
+        name, encoded
+      )
+      |> Map.ofList
+
+    // write them to disk
+    migrations
+    |> List.iter(fun (migration, name) ->
+      fileSystem.WriteMigration(
+        serializer,
+        migration,
+        UMX.tag<RelativeUserPath> name
+      )
+    )
+
+    let files =
+      Directory.GetFiles migrationsDirPath
+      |> Array.Parallel.map(fun file ->
+        (Path.GetFileName file), (File.ReadAllText file)
+      )
+      |> Array.toList
+
+    let validations =
+      files
+      |> List.traverseResultA(fun (name, actual) ->
+        match encoded |> Map.tryFind name with
+        | Some expected -> Ok(expected, actual)
+        | None -> Error $"Could not find file: '{name}' in expected files map"
+      )
+
+    match validations with
+    | Ok validations -> validations |> List.iter Assert.AreEqual
+    | Error errs ->
+      let errors = String.Join('\n', errs)
+      Assert.Fail("Could not validate files:\n" + errors)
+
+
+  [<TestMethod>]
+  member _.``Can write a migration file async``() =
+    task {
+      let migrationsDirPath =
+        Path.Combine(rootDir.FullName, MigrationData.directoryName)
+
+      let migrations = MigrationData.getMigrationObjects 3
 
       let encoded =
         migrations
-        |> List.map (fun (migration, name) ->
+        |> List.map(fun (migration, name) ->
           let encoded = serializer.MigrationSerializer.EncodeText migration
           let name = Path.GetFileName(name)
           name, encoded
@@ -220,32 +272,300 @@ type FileSystemTests() =
         |> Map.ofList
 
       // write them to disk
-      migrations
-      |> List.iter(fun (migration, name) ->
-        fileSystem.WriteMigration(
-          serializer,
-          migration,
-          UMX.tag<RelativeUserPath> name
-        )
-      )
+      for migration, name in migrations do
+        do!
+          fileSystem.WriteMigrationAsync(
+            serializer,
+            migration,
+            UMX.tag<RelativeUserPath> name
+          )
 
-      let files =
+      let! files =
         Directory.GetFiles migrationsDirPath
-        |> Array.Parallel.map(fun file -> (Path.GetFileName file), (File.ReadAllText file))
-        |> Array.toList
+        |> Array.Parallel.map(fun filepath -> async {
+          let filename = Path.GetFileName filepath
+          let! content = File.ReadAllTextAsync filepath |> Async.AwaitTask
+          return filename, content
+        })
+        |> Async.Parallel
 
-      let validations =
-        files |> List.traverseResultA(fun (name, actual)->
+      let! validations =
+        files
+        |> List.ofArray
+        |> List.traverseAsyncResultA(fun (name, actual) -> asyncResult {
           match encoded |> Map.tryFind name with
-          | Some expected ->
-            Ok (expected, actual)
+          | Some expected -> return expected, actual
           | None ->
-            Error $"Could not find file: '{name}' in expected files map"
-        )
+            return!
+              Error $"Could not find file: '{name}' in expected files map"
+        })
 
       match validations with
-      | Ok validations ->
-        validations |> List.iter Assert.AreEqual
+      | Ok validations -> validations |> List.iter Assert.AreEqual
       | Error errs ->
         let errors = String.Join('\n', errs)
         Assert.Fail("Could not validate files:\n" + errors)
+    }
+    :> Task
+
+  [<TestMethod>]
+  member _.``Can read migration``() =
+
+    let migrations = MigrationData.getMigrationObjects 3
+
+    let indexedMigration =
+      migrations
+      |> List.map(fun (migration, _) -> migration.name, migration)
+      |> Map.ofList
+
+    // write them to disk
+    migrations
+    |> List.iter(fun (migration, name) ->
+      fileSystem.WriteMigration(
+        serializer,
+        migration,
+        UMX.tag<RelativeUserPath> name
+      )
+    )
+
+    let foundMigrations =
+      migrations
+      |> List.traverseResultA(fun (_, relativePath) ->
+        let migrationResult =
+          fileSystem.ReadMigration(
+            serializer,
+            UMX.tag<RelativeUserPath> relativePath
+          )
+
+        match migrationResult with
+        | Ok migration -> Ok migration
+        | Error(Malformedfile(filename, error)) ->
+          Error
+            $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
+        | Error(FileNotFound(filepath, filename)) ->
+          Error $"File '{filename}' not found at '{filepath}'"
+      )
+
+    match foundMigrations with
+    | Ok actual ->
+      actual
+      |> List.iter(fun actual ->
+        let expected = indexedMigration |> Map.find actual.name
+        Assert.AreEqual(expected, actual)
+      )
+    | Error error ->
+      let error = String.Join('\n', error)
+      Assert.Fail($"Could not read migrations: {error}")
+
+  [<TestMethod>]
+  member _.``Can read migration async``() =
+    task {
+
+      let migrations = MigrationData.getMigrationObjects 3
+
+      let indexedMigration =
+        migrations
+        |> List.map(fun (migration, _) -> migration.name, migration)
+        |> Map.ofList
+
+      // write them to disk
+      for migration, name in migrations do
+        do!
+          fileSystem.WriteMigrationAsync(
+            serializer,
+            migration,
+            UMX.tag<RelativeUserPath> name
+          )
+
+
+      let! foundMigrations =
+        migrations
+        |> List.traverseAsyncResultA(fun (_, relativePath) -> asyncResult {
+
+          let! migration =
+            fileSystem.ReadMigrationAsync(
+              serializer,
+              UMX.tag<RelativeUserPath> relativePath
+            )
+            |> AsyncResult.mapError(fun error ->
+              match error with
+              | Malformedfile(filename, error) ->
+                Error
+                  $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
+              | FileNotFound(filepath, filename) ->
+                Error $"File '{filename}' not found at '{filepath}'"
+            )
+
+          return migration
+        })
+
+      match foundMigrations with
+      | Ok actual ->
+        actual
+        |> List.iter(fun actual ->
+          let expected = indexedMigration |> Map.find actual.name
+          Assert.AreEqual(expected, actual)
+        )
+      | Error error ->
+        let error = String.Join('\n', error)
+        Assert.Fail($"Could not read migrations: {error}")
+    }
+    :> Task
+
+  [<TestMethod>]
+  member _.``Can list migrations in a directory``() =
+    let migrationsDirPath =
+      Path.Combine(rootDir.FullName, MigrationData.directoryName)
+
+    let migrations = MigrationData.getMigrationObjects 3
+
+    let indexedMigrations =
+      migrations |> List.map(fun (m, _) -> m.name, m) |> Map.ofList
+
+    // write them to disk
+    migrations
+    |> List.iter(fun (migration, name) ->
+      fileSystem.WriteMigration(
+        serializer,
+        migration,
+        UMX.tag<RelativeUserPath> name
+      )
+    )
+
+    let foundMigrations =
+      fileSystem.ListMigrations(
+        serializer,
+        MigrationData.nameSchema,
+        UMX.tag<RelativeUserDirectoryPath> migrationsDirPath
+      )
+      |> Result.mapError(fun error ->
+        error
+        |> List.map(fun error ->
+          match error with
+          | Malformedfile(filename, error) ->
+            $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
+          | FileNotFound(filepath, filename) ->
+            $"File '{filename}' not found at '{filepath}'"
+        )
+      )
+
+    match foundMigrations with
+    | Ok actual ->
+      actual
+      |> List.iter(fun actual ->
+        let expected = indexedMigrations |> Map.find actual.name
+        Assert.AreEqual(expected, actual)
+      )
+    | Error error ->
+      let error = String.Join('\n', error)
+      Assert.Fail($"Could not read migrations: {error}")
+
+  [<TestMethod>]
+  member _.``Can list migrations in a directory async``() =
+    let migrationsDirPath =
+      Path.Combine(rootDir.FullName, MigrationData.directoryName)
+
+    let migrations = MigrationData.getMigrationObjects 3
+
+    let indexedMigrations =
+      migrations |> List.map(fun (m, _) -> m.name, m) |> Map.ofList
+
+    // write them to disk
+    migrations
+    |> List.iter(fun (migration, name) ->
+      fileSystem.WriteMigration(
+        serializer,
+        migration,
+        UMX.tag<RelativeUserPath> name
+      )
+    )
+
+    let foundMigrations =
+      fileSystem.ListMigrations(
+        serializer,
+        MigrationData.nameSchema,
+        UMX.tag<RelativeUserDirectoryPath> migrationsDirPath
+      )
+      |> Result.mapError(fun error ->
+        error
+        |> List.map(fun error ->
+          match error with
+          | Malformedfile(filename, error) ->
+            $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
+          | FileNotFound(filepath, filename) ->
+            $"File '{filename}' not found at '{filepath}'"
+        )
+      )
+
+    match foundMigrations with
+    | Ok actual ->
+      actual
+      |> List.iter(fun actual ->
+        let expected = indexedMigrations |> Map.find actual.name
+        Assert.AreEqual(expected, actual)
+      )
+    | Error error ->
+      let error = String.Join('\n', error)
+      Assert.Fail($"Could not read migrations: {error}")
+
+  [<TestMethod>]
+  member _.``Can list migrations in a directory with mixed files``() =
+    let migrationsDirPath =
+      Path.Combine(rootDir.FullName, MigrationData.directoryName)
+
+    // ensure it exists first
+    Directory.CreateDirectory(migrationsDirPath) |> ignore
+
+    let migrations = MigrationData.getMigrationObjects 3
+
+    // write some random files to the directory
+    File.WriteAllText(
+      Path.Combine(migrationsDirPath, Path.GetRandomFileName()),
+      "random file, this should not be taken into account"
+    )
+
+    File.WriteAllText(
+      Path.Combine(migrationsDirPath, Path.GetRandomFileName()),
+      "random file, this should not be taken into account"
+    )
+
+    let indexedMigrations =
+      migrations |> List.map(fun (m, _) -> m.name, m) |> Map.ofList
+
+    // write them to disk
+    migrations
+    |> List.iter(fun (migration, name) ->
+      fileSystem.WriteMigration(
+        serializer,
+        migration,
+        UMX.tag<RelativeUserPath> name
+      )
+    )
+
+    let foundMigrations =
+      fileSystem.ListMigrations(
+        serializer,
+        MigrationData.nameSchema,
+        UMX.tag<RelativeUserDirectoryPath> migrationsDirPath
+      )
+      |> Result.mapError(fun error ->
+        error
+        |> List.map(fun error ->
+          match error with
+          | Malformedfile(filename, error) ->
+            $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
+          | FileNotFound(filepath, filename) ->
+            $"File '{filename}' not found at '{filepath}'"
+        )
+      )
+
+    match foundMigrations with
+    | Ok actual ->
+      actual
+      |> List.iter(fun actual ->
+        let expected = indexedMigrations |> Map.find actual.name
+        Assert.AreEqual(expected, actual)
+      )
+    | Error error ->
+      let error = String.Join('\n', error)
+      Assert.Fail($"Could not read migrations: {error}")
