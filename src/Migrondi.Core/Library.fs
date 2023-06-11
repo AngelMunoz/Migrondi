@@ -1,5 +1,7 @@
 ﻿namespace Migrondi.Core
 
+open FsToolkit.ErrorHandling
+
 /// DU that represents the currently supported drivers
 [<RequireQualifiedAccess>]
 type MigrondiDriver =
@@ -38,7 +40,42 @@ type Migration = {
   /// the actual SQL statements that will be used to run against the database
   /// when rolling back migrations from the database
   downContent: string
-}
+} with
+
+  static member ExtractFromFilename
+    (filename: string)
+    : Validation<string * int64, string> =
+    validation {
+      let nameSchema =
+        System.Text.RegularExpressions.Regex(
+          "^(?<Name>.+)_(?<Timestamp>[0-9]+).(sql|SQL)$"
+        )
+
+      let value = nameSchema.Match filename
+
+      let name = value.Groups["Name"].Value
+
+      match name |> Option.ofObj with
+      | None -> return! Error "Invalid migration name"
+      | Some _ -> ()
+
+      let timestamp =
+        try
+          value.Groups["Timestamp"].Value |> int64 |> Ok
+        with ex ->
+          Error ex.Message
+
+      match timestamp with
+      | Ok timestamp -> return name, timestamp
+      | Error error -> return! Error error
+    }
+
+  static member ExtractFromPath
+    (path: string)
+    : Validation<string * int64, string> =
+    let filename = System.IO.Path.GetFileName(path)
+    Migration.ExtractFromFilename(filename)
+
 
 /// Migration information can be obtained from a file or the database
 /// this DU allows to identify where the information is coming from

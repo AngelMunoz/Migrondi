@@ -6,6 +6,7 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Library.fs" />
     <Compile Include="Serialization.fs" />
     <Compile Include="FileSystem.fs" />
     <Compile Include="Main.fs" />
