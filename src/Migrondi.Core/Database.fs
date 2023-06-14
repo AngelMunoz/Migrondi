@@ -1,14 +1,18 @@
 namespace Migrondi.Core.Database
 
-open Migrondi.Core
+open System
 open System.Data
+open Microsoft.Data.SqlClient
+open Microsoft.Data.Sqlite
+open MySqlConnector
+open Npgsql
+
+open Migrondi.Core
 
 [<Interface>]
 type DatabaseEnv =
-  /// <summary>
-  /// The driver that is used to interact with the database
-  /// </summary>
-  abstract member Driver: MigrondiDriver
+
+  abstract member Connect: unit -> IDbConnection
 
   /// <summary>
   /// Creates the required tables in the database.
@@ -64,7 +68,7 @@ type DatabaseEnv =
   /// <returns>
   /// A result indicating whether the operation was successful or not
   /// </returns>
-  abstract member SetupDatabaseAsync: unit -> Result<unit, string>
+  abstract member SetupDatabaseAsync: unit -> Async<Result<unit, string>>
 
   ///<summary>
   /// Tries to find a migration by name in the migrations table
@@ -110,81 +114,419 @@ type DatabaseEnv =
   abstract member RollbackMigrationsAsync:
     migrations: Migration list -> Async<Result<MigrationRecord list, string>>
 
+[<RequireQualifiedAccess>]
+module Queries =
+  let createTable driver tableName =
+    match driver with
+    | MigrondiDriver.Sqlite ->
+      $"""CREATE TABLE IF NOT EXISTS %s{tableName}(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name VARCHAR(255) NOT NULL,
+  timestamp BIGINT NOT NULL
+);"""
+    | MigrondiDriver.Postgresql ->
+      $"""CREATE TABLE IF NOT EXISTS %s{tableName}(
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  timestamp BIGINT NOT NULL
+);"""
+    | MigrondiDriver.Mysql ->
+      $"""CREATE TABLE IF NOT EXISTS %s{tableName}(
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  timestamp BIGINT NOT NULL
+);"""
+    | MigrondiDriver.Mssql ->
+      $"""IF OBJECT_ID(N'dbo.{tableName}', N'U') IS NULL
+CREATE TABLE dbo.%s{tableName}(
+  id INT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  timestamp BIGINT NOT NULL
+);
+GO"""
+
+  let insertMigrationRecord tableName =
+    $"INSERT INTO %s{tableName}(name, timestamp) VALUES(@__Name, @__Timestamp);"
+
+  let deleteMigrationRecord tableName =
+    $"DELETE FROM %s{tableName} WHERE timestamp = @__Timestamp;"
 
 module MigrationsImpl =
+  open RepoDb
+
+  let inline private (=>) (a: string) b = a, box b
+
+  let getConnection (connectionString: string, driver: MigrondiDriver) =
+    match driver with
+    | MigrondiDriver.Mssql ->
+      new SqlConnection(connectionString) :> IDbConnection
+    | MigrondiDriver.Sqlite -> new SqliteConnection(connectionString)
+    | MigrondiDriver.Mysql -> new MySqlConnection(connectionString)
+    | MigrondiDriver.Postgresql -> new NpgsqlConnection(connectionString)
+
+  let initializeDriver (driver: MigrondiDriver) =
+    let setup = GlobalConfiguration.Setup()
+
+    match driver with
+    | MigrondiDriver.Sqlite -> setup.UseSqlite()
+    | MigrondiDriver.Mssql -> setup.UseSqlServer()
+    | MigrondiDriver.Postgresql -> setup.UsePostgreSql()
+    | MigrondiDriver.Mysql -> setup.UseMySqlConnector()
+    |> ignore
 
   let setupDatabase
     (connection: IDbConnection)
     (driver: MigrondiDriver)
     (tableName: string)
     =
-    failwith "Not Implemented"
+    initializeDriver driver
 
-  let findMigration (name: string) = failwith "Not Implemented"
-  let FindLastApplied () = failwith "Not Implemented"
-  let ListMigrations () = failwith "Not Implemented"
-  let ApplyMigrations () = failwith "Not Implemented"
+    try
+      connection.ExecuteNonQuery(Queries.createTable driver tableName) |> ignore
+      Ok()
+    with ex ->
+      if
+        ex.Message.Contains(
+          "already exists",
+          StringComparison.InvariantCultureIgnoreCase
+        )
+      then
+        Ok()
+      else
+        Error ex.Message
+
+
+  let findMigration (connection: IDbConnection) tableName name =
+    connection.Query<MigrationRecord>(
+      tableName,
+      fun value -> value.name = name
+    )
+    |> Seq.tryHead
+
+  let findLastApplied (connection: IDbConnection) tableName =
+
+    connection.QueryAll<MigrationRecord>(
+      tableName = tableName,
+      orderBy = [
+        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
+      ]
+    )
+    |> Seq.tryHead
+
+  let listMigrations (connection: IDbConnection) (tableName: string) =
+    connection.QueryAll<MigrationRecord>(
+      tableName = tableName,
+      orderBy = [
+        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
+      ]
+    )
+    |> Seq.toList
+
+  let applyMigrations (connection: IDbConnection) tableName migrations =
+    use transaction = connection.BeginTransaction()
+
+    try
+      for migration in migrations do
+        let insert = Queries.deleteMigrationRecord tableName
+        let content = migration.upContent
+
+        let param =
+          [ "__Name" => migration.name; "__Timestamp" => migration.timestamp ]
+          |> dict
+
+        connection.ExecuteNonQuery(
+          $"{content};;\n{insert};;",
+          param = param,
+          transaction = transaction
+        )
+        |> ignore
+
+      transaction.Commit()
+
+      let orderBy = [
+        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
+      ]
+
+      connection.Query<MigrationRecord>(tableName, orderBy = orderBy)
+      |> Seq.toList
+      |> Ok
+    with ex ->
+      transaction.Rollback()
+      Error ex.Message
+
+  let rollbackMigrations (connection: IDbConnection) tableName migrations =
+    use transaction = connection.BeginTransaction()
+
+    try
+      for migration in migrations do
+        let deleteRecord = Queries.deleteMigrationRecord tableName
+        let content = migration.downContent
+
+        let param = [ "__Timestamp" => migration.timestamp ] |> dict
+
+        connection.ExecuteNonQuery(
+          $"{content};;\n{deleteRecord};;",
+          param = param,
+          transaction = transaction
+        )
+        |> ignore
+
+      transaction.Commit()
+
+      let orderBy = [
+        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
+      ]
+
+      connection.Query<MigrationRecord>(tableName, orderBy = orderBy)
+      |> Seq.toList
+      |> Ok
+    with ex ->
+      transaction.Rollback()
+      Error ex.Message
 
 module MigrationsAsyncImpl =
+  open RepoDb
+  open FsToolkit.ErrorHandling
 
-  let setupDatabaseAsync () = failwith "Not Implemented"
-  let FindMigrationAsync () = failwith "Not Implemented"
-  let FindLastAppliedAsync () = failwith "Not Implemented"
-  let ListMigrationsAsync () = failwith "Not Implemented"
-  let ApplyMigrationsAsync () = failwith "Not Implemented"
-  let RollbackMigrationsAsync () = failwith "Not Implemented"
+  let inline private (=>) (a: string) b = a, box b
+
+  let setupDatabaseAsync
+    (connection: IDbConnection)
+    (driver: MigrondiDriver)
+    (tableName: string)
+    =
+    asyncResult {
+      MigrationsImpl.initializeDriver driver
+
+      try
+        let! _ =
+          connection.ExecuteNonQueryAsync(Queries.createTable driver tableName)
+
+        return ()
+      with ex ->
+        if
+          ex.Message.Contains(
+            "already exists",
+            StringComparison.InvariantCultureIgnoreCase
+          )
+        then
+          return ()
+        else
+          return! Error ex.Message
+    }
+
+  let findMigrationAsync (connection: IDbConnection) tableName name = async {
+    let! result =
+      connection.QueryAsync<MigrationRecord>(
+        tableName,
+        fun value -> value.name = name
+      )
+      |> Async.AwaitTask
+
+    return result |> Seq.tryHead
+  }
+
+  let findLastAppliedAsync (connection: IDbConnection) tableName = async {
+    let! result =
+      connection.QueryAllAsync<MigrationRecord>(
+        tableName = tableName,
+        orderBy = [
+          OrderField.Descending(fun (record: MigrationRecord) ->
+            record.timestamp
+          )
+        ]
+      )
+      |> Async.AwaitTask
+
+    return result |> Seq.tryHead
+  }
+
+  let listMigrationsAsync (connection: IDbConnection) (tableName: string) = async {
+    let! result =
+      connection.QueryAllAsync<MigrationRecord>(
+        tableName = tableName,
+        orderBy = [
+          OrderField.Descending(fun (record: MigrationRecord) ->
+            record.timestamp
+          )
+        ]
+      )
+      |> Async.AwaitTask
+
+    return result |> Seq.toList
+  }
+
+  let applyMigrationsAsync
+    (connection: IDbConnection)
+    tableName
+    (migrations: Migration list)
+    =
+    asyncResult {
+      use transaction = connection.BeginTransaction()
+
+      try
+        for migration in migrations do
+          let insert = Queries.deleteMigrationRecord tableName
+          let content = migration.upContent
+
+          let param =
+            [ "__Name" => migration.name; "__Timestamp" => migration.timestamp ]
+            |> dict
+
+          do!
+            connection.ExecuteNonQueryAsync(
+              $"{content};;\n{insert};;",
+              param = param,
+              transaction = transaction
+            )
+            |> Async.AwaitTask
+            |> Async.Ignore
+
+
+        transaction.Commit()
+
+        let orderBy = [
+          OrderField.Descending(fun (record: MigrationRecord) ->
+            record.timestamp
+          )
+        ]
+
+        let! result =
+          connection.QueryAsync<MigrationRecord>(tableName, orderBy = orderBy)
+          |> Async.AwaitTask
+
+        return result |> Seq.toList
+      with ex ->
+        transaction.Rollback()
+        return! Error ex.Message
+    }
+
+  let rollbackMigrationsAsync
+    (connection: IDbConnection)
+    tableName
+    (migrations: Migration list)
+    =
+    asyncResult {
+      use transaction = connection.BeginTransaction()
+
+      try
+        for migration in migrations do
+          let deleteRecord = Queries.deleteMigrationRecord tableName
+          let content = migration.downContent
+
+          let param = [ "__Timestamp" => migration.timestamp ] |> dict
+
+          do!
+            connection.ExecuteNonQueryAsync(
+              $"{content};;\n{deleteRecord};;",
+              param = param,
+              transaction = transaction
+            )
+            |> Async.AwaitTask
+            |> Async.Ignore
+
+        transaction.Commit()
+
+        let orderBy = [
+          OrderField.Descending(fun (record: MigrationRecord) ->
+            record.timestamp
+          )
+        ]
+
+        let! result =
+          connection.QueryAsync<MigrationRecord>(tableName, orderBy = orderBy)
+
+        return result |> Seq.toList
+      with ex ->
+        transaction.Rollback()
+        return! Error ex.Message
+    }
 
 [<Class>]
 type DatabaseImpl =
 
-  static member Build(connection: IDbConnection, config: MigrondiConfig) =
+  static member Build(config: MigrondiConfig) =
     { new DatabaseEnv with
-        member this.Driver: MigrondiDriver = config.driver
+
+        member _.Connect() =
+          MigrationsImpl.getConnection(config.connection, config.driver)
 
         member this.SetupDatabase() : Result<unit, string> =
-          MigrationsImpl.setupDatabase connection this.Driver config.tableName
+          use connection = this.Connect()
+          MigrationsImpl.setupDatabase connection config.driver config.tableName
 
         member this.FindLastApplied() : MigrationRecord option =
-          failwith "Not Implemented"
+          use connection = this.Connect()
+          MigrationsImpl.findLastApplied connection config.tableName
 
         member this.ApplyMigrations
           (migrations: Migration list)
           : Result<MigrationRecord list, string> =
-          failwith "Not Implemented"
+          use connection = this.Connect()
+          MigrationsImpl.applyMigrations connection config.tableName migrations
 
         member this.FindMigration(name: string) : MigrationRecord option =
-          failwith "Not Implemented"
+          use connection = this.Connect()
+          MigrationsImpl.findMigration connection config.tableName name
 
         member this.ListMigrations() : MigrationRecord list =
-          failwith "Not Implemented"
+          use connection = this.Connect()
+          MigrationsImpl.listMigrations connection config.tableName
 
         member this.RollbackMigrations
           (migrations: Migration list)
           : Result<MigrationRecord list, string> =
-          failwith "Not Implemented"
+          use connection = this.Connect()
+
+          MigrationsImpl.rollbackMigrations
+            connection
+            config.tableName
+            migrations
 
         member this.FindLastAppliedAsync() : Async<MigrationRecord option> =
-          failwith "Not Implemented"
+          use connection = this.Connect()
+          MigrationsAsyncImpl.findLastAppliedAsync connection config.tableName
 
         member this.ApplyMigrationsAsync
           (migrations: Migration list)
           : Async<Result<MigrationRecord list, string>> =
-          failwith "Not Implemented"
+          use connection = this.Connect()
+
+          MigrationsAsyncImpl.applyMigrationsAsync
+            connection
+            config.tableName
+            migrations
 
         member this.RollbackMigrationsAsync
           (migrations: Migration list)
           : Async<Result<MigrationRecord list, string>> =
-          failwith "Not Implemented"
+          use connection = this.Connect()
 
-        member this.SetupDatabaseAsync() : Result<unit, string> =
-          failwith "Not Implemented"
+          MigrationsAsyncImpl.applyMigrationsAsync
+            connection
+            config.tableName
+            migrations
+
+        member this.SetupDatabaseAsync() : Async<Result<unit, string>> =
+          use connection = this.Connect()
+
+          MigrationsAsyncImpl.setupDatabaseAsync
+            connection
+            config.driver
+            config.tableName
 
         member this.FindMigrationAsync
           (name: string)
           : Async<MigrationRecord option> =
-          failwith "Not Implemented"
+          use connection = this.Connect()
+
+          MigrationsAsyncImpl.findMigrationAsync
+            connection
+            config.tableName
+            name
 
         member this.ListMigrationsAsync() : Async<MigrationRecord list> =
-          failwith "Not Implemented"
+          use connection = this.Connect()
+          MigrationsAsyncImpl.listMigrationsAsync connection config.tableName
 
     }
