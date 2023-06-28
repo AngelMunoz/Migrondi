@@ -9,6 +9,7 @@
     <Compile Include="Library.fs" />
     <Compile Include="Serialization.fs" />
     <Compile Include="FileSystem.fs" />
+    <Compile Include="Database.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
   <ItemGroup>

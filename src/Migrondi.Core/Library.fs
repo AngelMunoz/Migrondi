@@ -73,8 +73,7 @@ type Migration = {
   static member ExtractFromPath
     (path: string)
     : Validation<string * int64, string> =
-    let filename = System.IO.Path.GetFileName(path)
-    Migration.ExtractFromFilename(filename)
+    Migration.ExtractFromFilename(path |> System.IO.Path.GetFileName)
 
 
 /// Migration information can be obtained from a file or the database
