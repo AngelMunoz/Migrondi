@@ -225,67 +225,91 @@ module MigrationsImpl =
     )
     |> Seq.toList
 
-  let applyMigrations (connection: IDbConnection) tableName migrations =
-    use transaction = connection.BeginTransaction()
-
-    try
+  let applyMigrations
+    (connection: IDbConnection)
+    tableName
+    (migrations: Migration list)
+    =
+    result {
       for migration in migrations do
-        let insert = Queries.deleteMigrationRecord tableName
         let content = migration.upContent
+        use transaction = connection.EnsureOpen().BeginTransaction()
 
-        let param =
-          [ "__Name" => migration.name; "__Timestamp" => migration.timestamp ]
-          |> dict
+        try
 
-        connection.ExecuteNonQuery(
-          $"{content};;\n{insert};;",
-          param = param,
-          transaction = transaction
+          // execute the user's migration
+          connection.ExecuteNonQuery(content, transaction = transaction)
+          |> ignore
+
+          // Insert the tracking record after the user's migration was executed
+          connection.Insert(
+            tableName = tableName,
+            entity = {|
+              name = migration.name
+              timestamp = migration.timestamp
+            |},
+            fields = Field.From("name", "timestamp"),
+            transaction = transaction
+          )
+          |> ignore
+
+          transaction.Commit()
+        with ex ->
+          transaction.Rollback()
+          return! Error ex.Message
+
+      return
+        connection.QueryAll<MigrationRecord>(
+          tableName = tableName,
+          orderBy = [
+            OrderField.Descending(fun (record: MigrationRecord) ->
+              record.timestamp
+            )
+          ]
         )
-        |> ignore
+        |> Seq.toList
+    }
 
-      transaction.Commit()
-
-      let orderBy = [
-        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
-      ]
-
-      connection.Query<MigrationRecord>(tableName, orderBy = orderBy)
-      |> Seq.toList
-      |> Ok
-    with ex ->
-      transaction.Rollback()
-      Error ex.Message
-
-  let rollbackMigrations (connection: IDbConnection) tableName migrations =
-    use transaction = connection.BeginTransaction()
-
-    try
+  let rollbackMigrations
+    (connection: IDbConnection)
+    tableName
+    (migrations: Migration list)
+    =
+    result {
       for migration in migrations do
-        let deleteRecord = Queries.deleteMigrationRecord tableName
-        let content = migration.downContent
+        use transaction = connection.EnsureOpen().BeginTransaction()
 
-        let param = [ "__Timestamp" => migration.timestamp ] |> dict
+        try
+          let content = migration.downContent
 
-        connection.ExecuteNonQuery(
-          $"{content};;\n{deleteRecord};;",
-          param = param,
-          transaction = transaction
+          // Rollback the migration
+          connection.ExecuteNonQuery($"{content};;", transaction = transaction)
+          |> ignore
+
+          // Remove the existing MigrationRecord that represented this migration
+          connection.Delete(
+            tableName = tableName,
+            where = QueryGroup([ QueryField("timestamp", migration.timestamp) ]),
+            transaction = transaction
+          )
+          |> ignore
+
+          transaction.Commit()
+        with ex ->
+          transaction.Rollback()
+          return! Error ex.Message
+
+      return
+        connection.QueryAll<MigrationRecord>(
+          tableName = tableName,
+          orderBy = [
+            OrderField.Descending(fun (record: MigrationRecord) ->
+              record.timestamp
+            )
+          ]
         )
-        |> ignore
-
-      transaction.Commit()
-
-      let orderBy = [
-        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
-      ]
-
-      connection.Query<MigrationRecord>(tableName, orderBy = orderBy)
-      |> Seq.toList
-      |> Ok
-    with ex ->
-      transaction.Rollback()
-      Error ex.Message
+        |> Seq.toList
+    }
 
 module MigrationsAsyncImpl =
   open RepoDb
