@@ -238,7 +238,7 @@ module MigrationsImpl =
         try
 
           // execute the user's migration
-          connection.ExecuteNonQuery(content, transaction = transaction)
+          connection.ExecuteNonQuery($"{content};;", transaction = transaction)
           |> ignore
 
           // Insert the tracking record after the user's migration was executed
@@ -343,10 +343,12 @@ module MigrationsAsyncImpl =
     }
 
   let findMigrationAsync (connection: IDbConnection) tableName name = async {
+    let queryParams = QueryGroup([ QueryField("name", name) ])
+
     let! result =
       connection.QueryAsync<MigrationRecord>(
-        tableName,
-        fun value -> value.name = name
+        tableName = tableName,
+        where = queryParams
       )
       |> Async.AwaitTask
 
@@ -389,43 +391,52 @@ module MigrationsAsyncImpl =
     (migrations: Migration list)
     =
     asyncResult {
-      use transaction = connection.BeginTransaction()
 
-      try
-        for migration in migrations do
-          let insert = Queries.deleteMigrationRecord tableName
-          let content = migration.upContent
+      for migration in migrations do
+        use transaction = connection.EnsureOpen().BeginTransaction()
+        let content = migration.upContent
 
-          let param =
-            [ "__Name" => migration.name; "__Timestamp" => migration.timestamp ]
-            |> dict
-
+        try
           do!
+            // execute the user's migration
             connection.ExecuteNonQueryAsync(
-              $"{content};;\n{insert};;",
-              param = param,
+              $"{content};;",
               transaction = transaction
             )
             |> Async.AwaitTask
             |> Async.Ignore
 
+          do!
+            // Insert the tracking record after the user's migration was executed
+            connection.InsertAsync(
+              tableName = tableName,
+              entity = {|
+                name = migration.name
+                timestamp = migration.timestamp
+              |},
+              fields = Field.From("name", "timestamp"),
+              transaction = transaction
+            )
+            |> Async.AwaitTask
+            |> Async.Ignore
 
-        transaction.Commit()
+          transaction.Commit()
+        with ex ->
+          transaction.Rollback()
+          return! Error ex.Message
 
-        let orderBy = [
-          OrderField.Descending(fun (record: MigrationRecord) ->
-            record.timestamp
-          )
-        ]
+      let! result =
+        connection.QueryAllAsync<MigrationRecord>(
+          tableName = tableName,
+          orderBy = [
+            OrderField.Descending(fun (record: MigrationRecord) ->
+              record.timestamp
+            )
+          ]
+        )
+        |> Async.AwaitTask
 
-        let! result =
-          connection.QueryAsync<MigrationRecord>(tableName, orderBy = orderBy)
-          |> Async.AwaitTask
-
-        return result |> Seq.toList
-      with ex ->
-        transaction.Rollback()
-        return! Error ex.Message
+      return result |> Seq.toList
     }
 
   let rollbackMigrationsAsync
@@ -434,39 +445,48 @@ module MigrationsAsyncImpl =
     (migrations: Migration list)
     =
     asyncResult {
-      use transaction = connection.BeginTransaction()
 
-      try
-        for migration in migrations do
-          let deleteRecord = Queries.deleteMigrationRecord tableName
-          let content = migration.downContent
+      for migration in migrations do
+        use transaction = connection.EnsureOpen().BeginTransaction()
+        let content = migration.downContent
 
-          let param = [ "__Timestamp" => migration.timestamp ] |> dict
-
+        try
           do!
+            // Rollback the migration
             connection.ExecuteNonQueryAsync(
-              $"{content};;\n{deleteRecord};;",
-              param = param,
+              $"{content};;",
               transaction = transaction
             )
             |> Async.AwaitTask
             |> Async.Ignore
 
-        transaction.Commit()
+          do!
+            // Remove the existing MigrationRecord that represented this migration
+            connection.DeleteAsync(
+              tableName = tableName,
+              where =
+                QueryGroup([ QueryField("timestamp", migration.timestamp) ]),
+              transaction = transaction
+            )
+            |> Async.AwaitTask
+            |> Async.Ignore
 
-        let orderBy = [
-          OrderField.Descending(fun (record: MigrationRecord) ->
-            record.timestamp
-          )
-        ]
+          transaction.Commit()
+        with ex ->
+          transaction.Rollback()
+          return! Error ex.Message
 
-        let! result =
-          connection.QueryAsync<MigrationRecord>(tableName, orderBy = orderBy)
+      let! result =
+        connection.QueryAllAsync<MigrationRecord>(
+          tableName = tableName,
+          orderBy = [
+            OrderField.Descending(fun (record: MigrationRecord) ->
+              record.timestamp
+            )
+          ]
+        )
 
-        return result |> Seq.toList
-      with ex ->
-        transaction.Rollback()
-        return! Error ex.Message
+      return result |> Seq.toList
     }
 
 [<Class>]
@@ -541,7 +561,7 @@ type DatabaseImpl =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          MigrationsAsyncImpl.applyMigrationsAsync
+          MigrationsAsyncImpl.rollbackMigrationsAsync
             connection
             config.tableName
             migrations
