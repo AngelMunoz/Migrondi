@@ -7,12 +7,13 @@ open Microsoft.Data.Sqlite
 open MySqlConnector
 open Npgsql
 
+
+open FsToolkit.ErrorHandling
+
 open Migrondi.Core
 
 [<Interface>]
 type DatabaseEnv =
-
-  abstract member Connect: unit -> IDbConnection
 
   /// <summary>
   /// Creates the required tables in the database.
@@ -182,8 +183,8 @@ module MigrationsImpl =
     initializeDriver driver
 
     try
-      connection.ExecuteNonQuery(Queries.createTable driver tableName) |> ignore
-      Ok()
+      connection.ExecuteNonQuery(Queries.createTable driver tableName)
+      |> Result.requireEqualTo 0 "Failed to create migrations table"
     with ex ->
       if
         ex.Message.Contains(
@@ -197,9 +198,11 @@ module MigrationsImpl =
 
 
   let findMigration (connection: IDbConnection) tableName name =
+    let queryParams = QueryGroup([ QueryField("name", name) ])
+
     connection.Query<MigrationRecord>(
-      tableName,
-      fun value -> value.name = name
+      tableName = tableName,
+      where = queryParams
     )
     |> Seq.tryHead
 
@@ -448,85 +451,101 @@ type DatabaseImpl =
   static member Build(config: MigrondiConfig) =
     { new DatabaseEnv with
 
-        member _.Connect() =
-          MigrationsImpl.getConnection(config.connection, config.driver)
+        member _.SetupDatabase() : Result<unit, string> =
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
 
-        member this.SetupDatabase() : Result<unit, string> =
-          use connection = this.Connect()
           MigrationsImpl.setupDatabase connection config.driver config.tableName
 
-        member this.FindLastApplied() : MigrationRecord option =
-          use connection = this.Connect()
+        member _.FindLastApplied() : MigrationRecord option =
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
+
           MigrationsImpl.findLastApplied connection config.tableName
 
-        member this.ApplyMigrations
+        member _.ApplyMigrations
           (migrations: Migration list)
           : Result<MigrationRecord list, string> =
-          use connection = this.Connect()
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
+
           MigrationsImpl.applyMigrations connection config.tableName migrations
 
-        member this.FindMigration(name: string) : MigrationRecord option =
-          use connection = this.Connect()
+        member _.FindMigration(name: string) : MigrationRecord option =
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
+
           MigrationsImpl.findMigration connection config.tableName name
 
-        member this.ListMigrations() : MigrationRecord list =
-          use connection = this.Connect()
+        member _.ListMigrations() : MigrationRecord list =
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
+
           MigrationsImpl.listMigrations connection config.tableName
 
-        member this.RollbackMigrations
+        member _.RollbackMigrations
           (migrations: Migration list)
           : Result<MigrationRecord list, string> =
-          use connection = this.Connect()
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
 
           MigrationsImpl.rollbackMigrations
             connection
             config.tableName
             migrations
 
-        member this.FindLastAppliedAsync() : Async<MigrationRecord option> =
-          use connection = this.Connect()
+        member _.FindLastAppliedAsync() : Async<MigrationRecord option> =
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
+
           MigrationsAsyncImpl.findLastAppliedAsync connection config.tableName
 
-        member this.ApplyMigrationsAsync
+        member _.ApplyMigrationsAsync
           (migrations: Migration list)
           : Async<Result<MigrationRecord list, string>> =
-          use connection = this.Connect()
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
 
           MigrationsAsyncImpl.applyMigrationsAsync
             connection
             config.tableName
             migrations
 
-        member this.RollbackMigrationsAsync
+        member _.RollbackMigrationsAsync
           (migrations: Migration list)
           : Async<Result<MigrationRecord list, string>> =
-          use connection = this.Connect()
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
 
           MigrationsAsyncImpl.applyMigrationsAsync
             connection
             config.tableName
             migrations
 
-        member this.SetupDatabaseAsync() : Async<Result<unit, string>> =
-          use connection = this.Connect()
+        member _.SetupDatabaseAsync() : Async<Result<unit, string>> =
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
 
           MigrationsAsyncImpl.setupDatabaseAsync
             connection
             config.driver
             config.tableName
 
-        member this.FindMigrationAsync
+        member _.FindMigrationAsync
           (name: string)
           : Async<MigrationRecord option> =
-          use connection = this.Connect()
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
 
           MigrationsAsyncImpl.findMigrationAsync
             connection
             config.tableName
             name
 
-        member this.ListMigrationsAsync() : Async<MigrationRecord list> =
-          use connection = this.Connect()
+        member _.ListMigrationsAsync() : Async<MigrationRecord list> =
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
+
           MigrationsAsyncImpl.listMigrationsAsync connection config.tableName
 
     }
