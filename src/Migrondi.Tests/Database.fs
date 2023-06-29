@@ -16,7 +16,7 @@ module DatabaseData =
   open System.Data
 
   let getConfig (dbName: Guid) = {
-    connection = $"Data Source=./{dbName.ToString()}.db"
+    connection = $"Data Source={IO.Path.Join(IO.Path.GetTempPath(), dbName.ToString())}.db"
     driver = MigrondiDriver.Sqlite
     migrations = "./migrations"
     tableName = "migration_records_database_test"
