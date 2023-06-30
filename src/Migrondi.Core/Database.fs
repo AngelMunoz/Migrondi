@@ -11,6 +11,21 @@ open Npgsql
 open FsToolkit.ErrorHandling
 
 open Migrondi.Core
+open System.Threading
+open System.Threading.Tasks
+
+
+[<AutoOpen>]
+module Exceptions =
+  open System.Runtime.ExceptionServices
+
+  let inline reriseCustom<'ReturnValue> (exn: exn) =
+    ExceptionDispatchInfo.Capture(exn).Throw()
+    Unchecked.defaultof<'ReturnValue>
+
+  exception MigrationApplicationFailed of Migration
+  exception MigrationRollbackFailed of Migration
+  exception SetupDatabaseFailed
 
 [<Interface>]
 type DatabaseEnv =
@@ -21,7 +36,7 @@ type DatabaseEnv =
   /// <returns>
   /// A result indicating whether the operation was successful or not
   /// </returns>
-  abstract member SetupDatabase: unit -> Result<unit, string>
+  abstract member SetupDatabase: unit -> unit
 
   ///<summary>
   /// Tries to find a migration by name in the migrations table
@@ -51,8 +66,15 @@ type DatabaseEnv =
   /// <summary>
   /// Applies the given migrations to the database
   /// </summary>
+  /// <returns>
+  /// A list of migration records that were applied to the database
+  /// </returns>
+  /// <remarks>
+  /// This Method will throw an <see cref="MigrationApplicationFailed"/> exception if
+  /// it fails to apply a migration
+  /// </remarks>
   abstract member ApplyMigrations:
-    migrations: Migration list -> Result<MigrationRecord list, string>
+    migrations: Migration list -> MigrationRecord list
 
   /// <summary>
   /// Rolls back the given migrations from the database
@@ -60,8 +82,12 @@ type DatabaseEnv =
   /// <returns>
   /// A list of migration records that were rolled back from the database
   /// </returns>
+  /// <remarks>
+  /// This Method will throw an <see cref="MigrationRollbackFailed"/> exception if
+  /// it fails to rollback a migration
+  /// </remarks>
   abstract member RollbackMigrations:
-    migrations: Migration list -> Result<MigrationRecord list, string>
+    migrations: Migration list -> MigrationRecord list
 
   /// <summary>
   /// Creates the required tables in the database.
@@ -69,17 +95,20 @@ type DatabaseEnv =
   /// <returns>
   /// A result indicating whether the operation was successful or not
   /// </returns>
-  abstract member SetupDatabaseAsync: unit -> Async<Result<unit, string>>
+  abstract member SetupDatabaseAsync:
+    ?cancellationToken: CancellationToken -> Task
 
   ///<summary>
   /// Tries to find a migration by name in the migrations table
   /// </summary>
   /// <param name="name">The name of the migration to find</param>
+  /// <param name="cancellationToken">A cancellation token</param>
   /// <returns>
   /// An optional migration record if the migration was found
   /// </returns>
   abstract member FindMigrationAsync:
-    name: string -> Async<MigrationRecord option>
+    name: string * ?cancellationToken: CancellationToken ->
+      Task<MigrationRecord option>
 
   /// <summary>
   /// Tries to find the last applied migration in the migrations table
@@ -87,7 +116,8 @@ type DatabaseEnv =
   /// <returns>
   /// An optional migration record if the migration was found
   /// </returns>
-  abstract member FindLastAppliedAsync: unit -> Async<MigrationRecord option>
+  abstract member FindLastAppliedAsync:
+    ?cancellationToken: CancellationToken -> Task<MigrationRecord option>
 
   /// <summary>
   /// Lists the migrations that exist in the database
@@ -95,7 +125,8 @@ type DatabaseEnv =
   /// <returns>
   /// A list of migration records that currently exist in the database
   /// </returns>
-  abstract member ListMigrationsAsync: unit -> Async<MigrationRecord list>
+  abstract member ListMigrationsAsync:
+    ?cancellationToken: CancellationToken -> Task<MigrationRecord list>
 
   /// <summary>
   /// Applies the given migrations to the database
@@ -104,7 +135,8 @@ type DatabaseEnv =
   /// A list of migration records that were applied to the database
   /// </returns>
   abstract member ApplyMigrationsAsync:
-    migrations: Migration list -> Async<Result<MigrationRecord list, string>>
+    migrations: Migration list * ?cancellationToken: CancellationToken ->
+      Task<MigrationRecord list>
 
   /// <summary>
   /// Rolls back the given migrations from the database
@@ -113,7 +145,8 @@ type DatabaseEnv =
   /// A list of migration records that were rolled back from the database
   /// </returns>
   abstract member RollbackMigrationsAsync:
-    migrations: Migration list -> Async<Result<MigrationRecord list, string>>
+    migrations: Migration list * ?cancellationToken: CancellationToken ->
+      Task<MigrationRecord list>
 
 [<RequireQualifiedAccess>]
 module Queries =
@@ -146,11 +179,6 @@ CREATE TABLE dbo.%s{tableName}(
 );
 GO"""
 
-  let insertMigrationRecord tableName =
-    $"INSERT INTO %s{tableName}(name, timestamp) VALUES(@__Name, @__Timestamp);"
-
-  let deleteMigrationRecord tableName =
-    $"DELETE FROM %s{tableName} WHERE timestamp = @__Timestamp;"
 
 module MigrationsImpl =
   open RepoDb
@@ -183,8 +211,7 @@ module MigrationsImpl =
     initializeDriver driver
 
     try
-      connection.ExecuteNonQuery(Queries.createTable driver tableName)
-      |> Result.requireEqualTo 0 "Failed to create migrations table"
+      connection.ExecuteNonQuery(Queries.createTable driver tableName) |> ignore
     with ex ->
       if
         ex.Message.Contains(
@@ -192,9 +219,9 @@ module MigrationsImpl =
           StringComparison.InvariantCultureIgnoreCase
         )
       then
-        Ok()
+        ()
       else
-        Error ex.Message
+        reriseCustom(SetupDatabaseFailed)
 
 
   let findMigration (connection: IDbConnection) tableName name =
@@ -230,104 +257,97 @@ module MigrationsImpl =
     tableName
     (migrations: Migration list)
     =
-    result {
-      for migration in migrations do
-        let content = migration.upContent
-        use transaction = connection.EnsureOpen().BeginTransaction()
+    for migration in migrations do
+      let content = migration.upContent
+      use transaction = connection.EnsureOpen().BeginTransaction()
 
-        try
+      try
 
-          // execute the user's migration
-          connection.ExecuteNonQuery($"{content};;", transaction = transaction)
-          |> ignore
+        // execute the user's migration
+        connection.ExecuteNonQuery($"{content};;", transaction = transaction)
+        |> ignore
 
-          // Insert the tracking record after the user's migration was executed
-          connection.Insert(
-            tableName = tableName,
-            entity = {|
-              name = migration.name
-              timestamp = migration.timestamp
-            |},
-            fields = Field.From("name", "timestamp"),
-            transaction = transaction
-          )
-          |> ignore
-
-          transaction.Commit()
-        with ex ->
-          transaction.Rollback()
-          return! Error ex.Message
-
-      return
-        connection.QueryAll<MigrationRecord>(
+        // Insert the tracking record after the user's migration was executed
+        connection.Insert(
           tableName = tableName,
-          orderBy = [
-            OrderField.Descending(fun (record: MigrationRecord) ->
-              record.timestamp
-            )
-          ]
+          entity = {|
+            name = migration.name
+            timestamp = migration.timestamp
+          |},
+          fields = Field.From("name", "timestamp"),
+          transaction = transaction
         )
-        |> Seq.toList
-    }
+        |> ignore
+
+        transaction.Commit()
+      with _ ->
+        transaction.Rollback()
+        reriseCustom(MigrationApplicationFailed migration)
+
+    connection.QueryAll<MigrationRecord>(
+      tableName = tableName,
+      orderBy = [
+        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
+      ]
+    )
+    |> Seq.toList
 
   let rollbackMigrations
     (connection: IDbConnection)
     tableName
     (migrations: Migration list)
     =
-    result {
-      for migration in migrations do
-        use transaction = connection.EnsureOpen().BeginTransaction()
+    for migration in migrations do
+      use transaction = connection.EnsureOpen().BeginTransaction()
 
-        try
-          let content = migration.downContent
+      try
+        let content = migration.downContent
 
-          // Rollback the migration
-          connection.ExecuteNonQuery($"{content};;", transaction = transaction)
-          |> ignore
+        // Rollback the migration
+        connection.ExecuteNonQuery($"{content};;", transaction = transaction)
+        |> ignore
 
-          // Remove the existing MigrationRecord that represented this migration
-          connection.Delete(
-            tableName = tableName,
-            where = QueryGroup([ QueryField("timestamp", migration.timestamp) ]),
-            transaction = transaction
-          )
-          |> ignore
-
-          transaction.Commit()
-        with ex ->
-          transaction.Rollback()
-          return! Error ex.Message
-
-      return
-        connection.QueryAll<MigrationRecord>(
+        // Remove the existing MigrationRecord that represented this migration
+        connection.Delete(
           tableName = tableName,
-          orderBy = [
-            OrderField.Descending(fun (record: MigrationRecord) ->
-              record.timestamp
-            )
-          ]
+          where = QueryGroup([ QueryField("timestamp", migration.timestamp) ]),
+          transaction = transaction
         )
-        |> Seq.toList
-    }
+        |> ignore
+
+        transaction.Commit()
+      with _ ->
+        transaction.Rollback()
+        reriseCustom(MigrationRollbackFailed migration)
+
+    connection.QueryAll<MigrationRecord>(
+      tableName = tableName,
+      orderBy = [
+        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
+      ]
+    )
+    |> Seq.toList
 
 module MigrationsAsyncImpl =
   open RepoDb
-  open FsToolkit.ErrorHandling
-
-  let inline private (=>) (a: string) b = a, box b
 
   let setupDatabaseAsync
     (connection: IDbConnection)
     (driver: MigrondiDriver)
     (tableName: string)
     =
-    asyncResult {
+    async {
+      let! token = Async.CancellationToken
       MigrationsImpl.initializeDriver driver
 
       try
-        let! _ =
-          connection.ExecuteNonQueryAsync(Queries.createTable driver tableName)
+        do!
+          connection.ExecuteNonQueryAsync(
+            Queries.createTable driver tableName,
+            cancellationToken = token
+          )
+          |> Async.AwaitTask
+          |> Async.Ignore
 
         return ()
       with ex ->
@@ -339,16 +359,18 @@ module MigrationsAsyncImpl =
         then
           return ()
         else
-          return! Error ex.Message
+          reriseCustom(SetupDatabaseFailed)
     }
 
   let findMigrationAsync (connection: IDbConnection) tableName name = async {
+    let! token = Async.CancellationToken
     let queryParams = QueryGroup([ QueryField("name", name) ])
 
     let! result =
       connection.QueryAsync<MigrationRecord>(
         tableName = tableName,
-        where = queryParams
+        where = queryParams,
+        cancellationToken = token
       )
       |> Async.AwaitTask
 
@@ -356,6 +378,8 @@ module MigrationsAsyncImpl =
   }
 
   let findLastAppliedAsync (connection: IDbConnection) tableName = async {
+    let! token = Async.CancellationToken
+
     let! result =
       connection.QueryAllAsync<MigrationRecord>(
         tableName = tableName,
@@ -363,7 +387,8 @@ module MigrationsAsyncImpl =
           OrderField.Descending(fun (record: MigrationRecord) ->
             record.timestamp
           )
-        ]
+        ],
+        cancellationToken = token
       )
       |> Async.AwaitTask
 
@@ -371,6 +396,8 @@ module MigrationsAsyncImpl =
   }
 
   let listMigrationsAsync (connection: IDbConnection) (tableName: string) = async {
+    let! token = Async.CancellationToken
+
     let! result =
       connection.QueryAllAsync<MigrationRecord>(
         tableName = tableName,
@@ -378,7 +405,8 @@ module MigrationsAsyncImpl =
           OrderField.Descending(fun (record: MigrationRecord) ->
             record.timestamp
           )
-        ]
+        ],
+        cancellationToken = token
       )
       |> Async.AwaitTask
 
@@ -390,7 +418,8 @@ module MigrationsAsyncImpl =
     tableName
     (migrations: Migration list)
     =
-    asyncResult {
+    async {
+      let! token = Async.CancellationToken
 
       for migration in migrations do
         use transaction = connection.EnsureOpen().BeginTransaction()
@@ -401,7 +430,8 @@ module MigrationsAsyncImpl =
             // execute the user's migration
             connection.ExecuteNonQueryAsync(
               $"{content};;",
-              transaction = transaction
+              transaction = transaction,
+              cancellationToken = token
             )
             |> Async.AwaitTask
             |> Async.Ignore
@@ -415,15 +445,16 @@ module MigrationsAsyncImpl =
                 timestamp = migration.timestamp
               |},
               fields = Field.From("name", "timestamp"),
-              transaction = transaction
+              transaction = transaction,
+              cancellationToken = token
             )
             |> Async.AwaitTask
             |> Async.Ignore
 
           transaction.Commit()
-        with ex ->
+        with _ ->
           transaction.Rollback()
-          return! Error ex.Message
+          raise(MigrationApplicationFailed migration)
 
       let! result =
         connection.QueryAllAsync<MigrationRecord>(
@@ -432,7 +463,8 @@ module MigrationsAsyncImpl =
             OrderField.Descending(fun (record: MigrationRecord) ->
               record.timestamp
             )
-          ]
+          ],
+          cancellationToken = token
         )
         |> Async.AwaitTask
 
@@ -444,7 +476,8 @@ module MigrationsAsyncImpl =
     tableName
     (migrations: Migration list)
     =
-    asyncResult {
+    async {
+      let! token = Async.CancellationToken
 
       for migration in migrations do
         use transaction = connection.EnsureOpen().BeginTransaction()
@@ -455,7 +488,8 @@ module MigrationsAsyncImpl =
             // Rollback the migration
             connection.ExecuteNonQueryAsync(
               $"{content};;",
-              transaction = transaction
+              transaction = transaction,
+              cancellationToken = token
             )
             |> Async.AwaitTask
             |> Async.Ignore
@@ -466,7 +500,8 @@ module MigrationsAsyncImpl =
               tableName = tableName,
               where =
                 QueryGroup([ QueryField("timestamp", migration.timestamp) ]),
-              transaction = transaction
+              transaction = transaction,
+              cancellationToken = token
             )
             |> Async.AwaitTask
             |> Async.Ignore
@@ -474,7 +509,7 @@ module MigrationsAsyncImpl =
           transaction.Commit()
         with ex ->
           transaction.Rollback()
-          return! Error ex.Message
+          raise(MigrationRollbackFailed migration)
 
       let! result =
         connection.QueryAllAsync<MigrationRecord>(
@@ -483,8 +518,10 @@ module MigrationsAsyncImpl =
             OrderField.Descending(fun (record: MigrationRecord) ->
               record.timestamp
             )
-          ]
+          ],
+          cancellationToken = token
         )
+        |> Async.AwaitTask
 
       return result |> Seq.toList
     }
@@ -495,7 +532,7 @@ type DatabaseImpl =
   static member Build(config: MigrondiConfig) =
     { new DatabaseEnv with
 
-        member _.SetupDatabase() : Result<unit, string> =
+        member _.SetupDatabase() =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
@@ -507,9 +544,7 @@ type DatabaseImpl =
 
           MigrationsImpl.findLastApplied connection config.tableName
 
-        member _.ApplyMigrations
-          (migrations: Migration list)
-          : Result<MigrationRecord list, string> =
+        member _.ApplyMigrations(migrations: Migration list) =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
@@ -527,9 +562,7 @@ type DatabaseImpl =
 
           MigrationsImpl.listMigrations connection config.tableName
 
-        member _.RollbackMigrations
-          (migrations: Migration list)
-          : Result<MigrationRecord list, string> =
+        member _.RollbackMigrations(migrations: Migration list) =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
@@ -538,58 +571,79 @@ type DatabaseImpl =
             config.tableName
             migrations
 
-        member _.FindLastAppliedAsync() : Async<MigrationRecord option> =
+        member _.FindLastAppliedAsync(?cancellationToken) =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          MigrationsAsyncImpl.findLastAppliedAsync connection config.tableName
+          let computation =
+            MigrationsAsyncImpl.findLastAppliedAsync connection config.tableName
+
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+
 
         member _.ApplyMigrationsAsync
-          (migrations: Migration list)
-          : Async<Result<MigrationRecord list, string>> =
+          (
+            migrations: Migration list,
+            ?cancellationToken
+          ) =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          MigrationsAsyncImpl.applyMigrationsAsync
-            connection
-            config.tableName
-            migrations
+          let computation =
+            MigrationsAsyncImpl.applyMigrationsAsync
+              connection
+              config.tableName
+              migrations
+
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
 
         member _.RollbackMigrationsAsync
-          (migrations: Migration list)
-          : Async<Result<MigrationRecord list, string>> =
+          (
+            migrations: Migration list,
+            ?cancellationToken
+          ) =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          MigrationsAsyncImpl.rollbackMigrationsAsync
-            connection
-            config.tableName
-            migrations
+          let computation =
+            MigrationsAsyncImpl.rollbackMigrationsAsync
+              connection
+              config.tableName
+              migrations
 
-        member _.SetupDatabaseAsync() : Async<Result<unit, string>> =
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+
+        member _.SetupDatabaseAsync(?cancellationToken) =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          MigrationsAsyncImpl.setupDatabaseAsync
-            connection
-            config.driver
-            config.tableName
+          let computation =
+            MigrationsAsyncImpl.setupDatabaseAsync
+              connection
+              config.driver
+              config.tableName
 
-        member _.FindMigrationAsync
-          (name: string)
-          : Async<MigrationRecord option> =
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+
+        member _.FindMigrationAsync(name: string, ?cancellationToken) =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          MigrationsAsyncImpl.findMigrationAsync
-            connection
-            config.tableName
-            name
+          let computation =
+            MigrationsAsyncImpl.findMigrationAsync
+              connection
+              config.tableName
+              name
 
-        member _.ListMigrationsAsync() : Async<MigrationRecord list> =
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+
+        member _.ListMigrationsAsync(?cancellationToken) =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          MigrationsAsyncImpl.listMigrationsAsync connection config.tableName
+          let computation =
+            MigrationsAsyncImpl.listMigrationsAsync connection config.tableName
+
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
 
     }

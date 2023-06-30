@@ -20,6 +20,8 @@ module Units =
 
 
 open Units
+open System.Threading.Tasks
+open System.Threading
 
 [<Struct>]
 type ReadFileError =
@@ -55,13 +57,16 @@ type FileSystemEnv =
   /// </summary>
   /// <param name="serializer">A serializer that will be used to decode the string content from the configuration</param>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the configuration file</param>
+  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member ReadConfigurationAsync:
-    serializer: #SerializerEnv * readFrom: string<RelativeUserPath> ->
-      Async<Result<MigrondiConfig, ReadFileError>>
+    serializer: #SerializerEnv *
+    readFrom: string<RelativeUserPath> *
+    ?cancellationToken: CancellationToken ->
+      Task<Result<MigrondiConfig, ReadFileError>>
 
   /// <summary>
   /// Take a configuration object and writes it to a location dictated by the `writeTo` parameter
@@ -85,6 +90,7 @@ type FileSystemEnv =
   /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <param name="config">The configuration object</param>
   /// <param name="writeTo">The path to the configuration file</param>
+  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A unit result object that means that the operation was successful
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
@@ -92,8 +98,9 @@ type FileSystemEnv =
   abstract member WriteConfigurationAsync:
     serializer: #SerializerEnv *
     config: MigrondiConfig *
-    writeTo: string<RelativeUserPath> ->
-      Async<unit>
+    writeTo: string<RelativeUserPath> *
+    ?cancellationToken: CancellationToken ->
+      Task
 
   /// <summary>
   /// Takes a path to a migration, reads its contents and transforms it into a Migration object
@@ -113,13 +120,16 @@ type FileSystemEnv =
   /// </summary>
   /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
+  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member ReadMigrationAsync:
-    serializer: #SerializerEnv * readFrom: string<RelativeUserPath> ->
-      Async<Result<Migration, ReadFileError>>
+    serializer: #SerializerEnv *
+    readFrom: string<RelativeUserPath> *
+    ?cancellationToken: CancellationToken ->
+      Task<Result<Migration, ReadFileError>>
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
@@ -142,14 +152,16 @@ type FileSystemEnv =
   /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <param name="migration">The migration object</param>
   /// <param name="writeTo">The path to the migration file</param>
+  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A unit result object that means that the operation was successful
   /// </returns>
   abstract member WriteMigrationAsync:
     serializer: #SerializerEnv *
     migration: Migration *
-    writeTo: string<RelativeUserPath> ->
-      Async<unit>
+    writeTo: string<RelativeUserPath> *
+    ?cancellationToken: CancellationToken ->
+      Task
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
@@ -173,6 +185,7 @@ type FileSystemEnv =
   /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <param name="nameSchema">A regex that will be used to match the name of the files that can be read.</param>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
+  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
@@ -180,8 +193,9 @@ type FileSystemEnv =
   abstract member ListMigrationsAsync:
     serializer: #SerializerEnv *
     nameSchema: Regex *
-    readFrom: string<RelativeUserDirectoryPath> ->
-      Async<Result<Migration list, ReadFileError list>>
+    readFrom: string<RelativeUserDirectoryPath> *
+    ?cancellationToken: CancellationToken ->
+      Task<Result<Migration list, ReadFileError list>>
 
 module PhysicalFileSystemImpl =
   open System.IO
@@ -206,9 +220,12 @@ module PhysicalFileSystemImpl =
       readFrom: string<RelativeUserPath>
     ) =
     async {
-
+      let! token = Async.CancellationToken
       let path = Uri(root, UMX.untag readFrom)
-      let! contents = path.LocalPath |> File.ReadAllTextAsync |> Async.AwaitTask
+
+      let! contents =
+        File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
+        |> Async.AwaitTask
 
       return
         serializer.ConfigurationSerializer.Decode contents
@@ -239,16 +256,21 @@ module PhysicalFileSystemImpl =
       root: Uri,
       writeTo: string<RelativeUserPath>
     ) =
-    let path = Uri(root, UMX.untag writeTo)
-    let file = FileInfo(path.LocalPath)
+    async {
+      let! token = Async.CancellationToken
+      let path = Uri(root, UMX.untag writeTo)
+      let file = FileInfo(path.LocalPath)
 
-    file.Directory.Create()
+      file.Directory.Create()
 
-    File.WriteAllTextAsync(
-      path.LocalPath,
-      serializer.ConfigurationSerializer.Encode config
-    )
-    |> Async.AwaitTask
+      do!
+        File.WriteAllTextAsync(
+          path.LocalPath,
+          serializer.ConfigurationSerializer.Encode config,
+          cancellationToken = token
+        )
+        |> Async.AwaitTask
+    }
 
   let readMigration
     (
@@ -270,8 +292,12 @@ module PhysicalFileSystemImpl =
       readFrom: string<RelativeUserPath>
     ) =
     async {
+      let! token = Async.CancellationToken
       let path = Uri(root, UMX.untag readFrom)
-      let! contents = path.LocalPath |> File.ReadAllTextAsync |> Async.AwaitTask
+
+      let! contents =
+        File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
+        |> Async.AwaitTask
 
       return
         serializer.MigrationSerializer.DecodeText contents
@@ -302,16 +328,21 @@ module PhysicalFileSystemImpl =
       root: Uri,
       writeTo: string<RelativeUserPath>
     ) =
-    let path = Uri(root, UMX.untag writeTo)
-    let file = FileInfo(path.LocalPath)
+    async {
+      let! token = Async.CancellationToken
+      let path = Uri(root, UMX.untag writeTo)
+      let file = FileInfo(path.LocalPath)
 
-    file.Directory.Create()
+      file.Directory.Create()
 
-    File.WriteAllTextAsync(
-      path.LocalPath,
-      serializer.MigrationSerializer.EncodeText migration
-    )
-    |> Async.AwaitTask
+      do!
+        File.WriteAllTextAsync(
+          path.LocalPath,
+          serializer.MigrationSerializer.EncodeText migration,
+          cancellationToken = token
+        )
+        |> Async.AwaitTask
+    }
 
   let listMigrations
     (
@@ -362,16 +393,16 @@ module PhysicalFileSystemImpl =
           if (nameSchema.IsMatch(file.Name)) then Some file else None
         )
         |> Array.Parallel.map(fun file -> async {
+          let! token = Async.CancellationToken
           let name = file.Name
 
           let! content =
-            file.FullName |> File.ReadAllTextAsync |> Async.AwaitTask
+            File.ReadAllTextAsync(file.FullName, cancellationToken = token)
+            |> Async.AwaitTask
 
           return name, content
         })
         |> Async.Parallel
-
-
 
       return!
         files
@@ -408,14 +439,18 @@ type FileSystemImpl =
           (
             serializer: #SerializerEnv,
             nameSchema: Regex,
-            arg1: string<RelativeUserDirectoryPath>
-          ) : Async<Result<Migration list, ReadFileError list>> =
-          PhysicalFileSystemImpl.listMigrationsAsync(
-            serializer,
-            this.RootPath,
-            nameSchema,
-            arg1
-          )
+            arg1: string<RelativeUserDirectoryPath>,
+            ?cancellationToken
+          ) =
+          let computation =
+            PhysicalFileSystemImpl.listMigrationsAsync(
+              serializer,
+              this.RootPath,
+              nameSchema,
+              arg1
+            )
+
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
 
         member this.ReadConfiguration
           (
@@ -431,13 +466,17 @@ type FileSystemImpl =
         member this.ReadConfigurationAsync
           (
             serializer: #SerializerEnv,
-            readFrom: string<RelativeUserPath>
-          ) : Async<Result<MigrondiConfig, ReadFileError>> =
-          PhysicalFileSystemImpl.readConfigurationAsync(
-            serializer,
-            this.RootPath,
-            readFrom
-          )
+            readFrom: string<RelativeUserPath>,
+            ?cancellationToken
+          ) =
+          let computation =
+            PhysicalFileSystemImpl.readConfigurationAsync(
+              serializer,
+              this.RootPath,
+              readFrom
+            )
+
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
 
         member this.ReadMigration
           (
@@ -453,13 +492,17 @@ type FileSystemImpl =
         member this.ReadMigrationAsync
           (
             serializer: #SerializerEnv,
-            readFrom: string<RelativeUserPath>
-          ) : Async<Result<Migration, ReadFileError>> =
-          PhysicalFileSystemImpl.readMigrationAsync(
-            serializer,
-            this.RootPath,
-            readFrom
-          )
+            readFrom: string<RelativeUserPath>,
+            ?cancellationToken
+          ) =
+          let computation =
+            PhysicalFileSystemImpl.readMigrationAsync(
+              serializer,
+              this.RootPath,
+              readFrom
+            )
+
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
 
         member this.WriteConfiguration
           (
@@ -478,14 +521,18 @@ type FileSystemImpl =
           (
             serializer: #SerializerEnv,
             config: MigrondiConfig,
-            writeTo: string<RelativeUserPath>
-          ) : Async<unit> =
-          PhysicalFileSystemImpl.writeConfigurationAsync(
-            serializer,
-            config,
-            this.RootPath,
-            writeTo
-          )
+            writeTo: string<RelativeUserPath>,
+            ?cancellationToken
+          ) =
+          let comptation =
+            PhysicalFileSystemImpl.writeConfigurationAsync(
+              serializer,
+              config,
+              this.RootPath,
+              writeTo
+            )
+
+          Async.StartAsTask(comptation, ?cancellationToken = cancellationToken)
 
         member this.WriteMigration
           (
@@ -504,12 +551,16 @@ type FileSystemImpl =
           (
             serializer: #SerializerEnv,
             arg1: Migration,
-            arg2: string<RelativeUserPath>
-          ) : Async<unit> =
-          PhysicalFileSystemImpl.writeMigrationAsync(
-            serializer,
-            arg1,
-            this.RootPath,
-            arg2
-          )
+            arg2: string<RelativeUserPath>,
+            ?cancellationToken
+          ) =
+          let computation =
+            PhysicalFileSystemImpl.writeMigrationAsync(
+              serializer,
+              arg1,
+              this.RootPath,
+              arg2
+            )
+
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
     }
