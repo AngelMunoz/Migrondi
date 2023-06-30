@@ -16,7 +16,8 @@ module DatabaseData =
   open System.Data
 
   let getConfig (dbName: Guid) = {
-    connection = $"Data Source={IO.Path.Join(IO.Path.GetTempPath(), dbName.ToString())}.db"
+    connection =
+      $"Data Source={IO.Path.Join(IO.Path.GetTempPath(), dbName.ToString())}.db"
     driver = MigrondiDriver.Sqlite
     migrations = "./migrations"
     tableName = "migration_records_database_test"
@@ -103,7 +104,7 @@ type DatabaseTests() =
   [<TestMethod>]
   member _.``Database Should be Setup Correctly``() =
     let operation = result {
-      do! databaseEnv.SetupDatabase()
+      do databaseEnv.SetupDatabase()
 
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
@@ -123,7 +124,7 @@ type DatabaseTests() =
   [<TestMethod>]
   member _.``Find Migration should find a migration by name``() =
     let operation = validation {
-      do! databaseEnv.SetupDatabase()
+      do databaseEnv.SetupDatabase()
 
       let insertStuff () =
         use connection =
@@ -166,7 +167,7 @@ type DatabaseTests() =
   [<TestMethod>]
   member _.``FindLastApplied should not find anything if table is empty``() =
     let operation = result {
-      do! databaseEnv.SetupDatabase()
+      do databaseEnv.SetupDatabase()
       let migration = databaseEnv.FindLastApplied()
 
       do!
@@ -192,7 +193,7 @@ type DatabaseTests() =
     ()
     =
     let operation = result {
-      do! databaseEnv.SetupDatabase()
+      do databaseEnv.SetupDatabase()
 
       let insertStuff () =
         use connection =
@@ -217,7 +218,7 @@ type DatabaseTests() =
   [<TestMethod>]
   member _.``ListMigrations should not show anything if the table is empty``() =
     let operation = result {
-      do! databaseEnv.SetupDatabase()
+      do databaseEnv.SetupDatabase()
 
       let migrations = databaseEnv.ListMigrations()
 
@@ -236,7 +237,7 @@ type DatabaseTests() =
   [<TestMethod>]
   member _.``ListMigrations should show existing migrations``() =
     let operation = result {
-      do! databaseEnv.SetupDatabase()
+      do databaseEnv.SetupDatabase()
 
       let insertStuff () =
         use connection =
@@ -272,11 +273,11 @@ type DatabaseTests() =
     ()
     =
     let operation = result {
-      do! databaseEnv.SetupDatabase()
+      do databaseEnv.SetupDatabase()
 
       let sampleMigrations = DatabaseData.createTestMigrations 3
 
-      let! migrations = databaseEnv.ApplyMigrations(sampleMigrations)
+      let migrations = databaseEnv.ApplyMigrations(sampleMigrations)
 
       do! migrations |> Result.requireNotEmpty "The list should contain values"
 
@@ -332,15 +333,15 @@ type DatabaseTests() =
     ()
     =
     let operation = result {
-      do! databaseEnv.SetupDatabase()
+      do databaseEnv.SetupDatabase()
 
       let sampleMigrations = DatabaseData.createTestMigrations 3
 
       // Fill the Database with sample migrations
-      do! databaseEnv.ApplyMigrations(sampleMigrations) |> Result.ignore
+      do databaseEnv.ApplyMigrations(sampleMigrations) |> ignore
 
       // rollback two
-      let! afterMigrationRollback =
+      let afterMigrationRollback =
         databaseEnv.RollbackMigrations(
           // Rollback the last two migrations
           sampleMigrations |> List.rev |> List.take 2
@@ -395,89 +396,82 @@ type DatabaseTests() =
   member _.``ApplyMigrations should stop applying migrations as soon as one fails``
     ()
     =
-    let operation = result {
-      do! databaseEnv.SetupDatabase()
+    do databaseEnv.SetupDatabase()
 
-      let sampleMigrations = DatabaseData.createTestMigrations 4
+    let sampleMigrations = DatabaseData.createTestMigrations 4
 
-      let failingMigration = {
-        name = "fail-migration"
-        timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
-        upContent = "create table test_1();"
-        downContent = "drop table test_5;"
-      }
-
-      let runnableMigrations = [
-        sampleMigrations[0]
-        sampleMigrations[1]
-        failingMigration // add failing migration
-        // these will not be applied at all
-        sampleMigrations[2]
-        sampleMigrations[3]
-        sampleMigrations[4]
-
-      ]
-
-      match databaseEnv.ApplyMigrations(runnableMigrations) with
-      | Ok migrations ->
-        return! Error $"Migrations should fail but instead got: %A{migrations}"
-      | Error err ->
-        printfn "%A" err
-
-        return!
-          databaseEnv.FindLastApplied()
-          |> Result.requireSome "There should be at least 1 migration"
+    let failingMigration = {
+      name = "fail-migration"
+      timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
+      upContent = "create table test_1();"
+      downContent = "drop table test_5;"
     }
 
-    match operation with
-    | Ok migration -> Assert.AreEqual("test_2", migration.name)
-    | Error err ->
-      Assert.Fail($"Failed to find the last applied migration: %s{err}")
+    let runnableMigrations = [
+      sampleMigrations[0]
+      sampleMigrations[1]
+      failingMigration // add failing migration
+      // these will not be applied at all
+      sampleMigrations[2]
+      sampleMigrations[3]
+      sampleMigrations[4]
+
+    ]
+
+    let thrown =
+      Assert.ThrowsException<MigrationApplicationFailed>(
+        Action(
+          (fun () -> databaseEnv.ApplyMigrations(runnableMigrations) |> ignore)
+        )
+      )
+
+    Assert.AreEqual(failingMigration, thrown.Data0)
+
+    match databaseEnv.FindLastApplied() with
+    | Some migration -> Assert.AreEqual("test_2", migration.name)
+    | None -> Assert.Fail("There should be a migration in the database")
+
 
   [<TestMethod>]
   member _.``RollbackMigrations should stop rolling back migrations as soon as one fails``
     ()
     =
-    let operation = result {
-      do! databaseEnv.SetupDatabase()
+    do databaseEnv.SetupDatabase()
 
-      let sampleMigrations = DatabaseData.createTestMigrations 4
+    let sampleMigrations = DatabaseData.createTestMigrations 4
 
-      // pre-fill the database
-      do! databaseEnv.ApplyMigrations(sampleMigrations) |> Result.ignore
+    // pre-fill the database
+    do databaseEnv.ApplyMigrations(sampleMigrations) |> ignore
 
-      let failingMigration = {
-        name = "fail-migration"
-        timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
-        upContent = "create table test_1();"
-        downContent = "drop table test_5;"
-      }
-
-      let runnableMigrations = [
-        let sampleMigrations = sampleMigrations |> List.rev
-        sampleMigrations[0]
-        sampleMigrations[1]
-        failingMigration // add failing migration
-        // these migrations should not be rolled back at all
-        sampleMigrations[2]
-        sampleMigrations[3]
-        sampleMigrations[4]
-      ]
-
-      match databaseEnv.RollbackMigrations(runnableMigrations) with
-      | Ok migrations ->
-        return! Error $"Migrations should fail but instead got: %A{migrations}"
-      | Error err ->
-        let! lastApplied =
-          databaseEnv.FindLastApplied()
-          |> Result.requireSome "There should be at least 1 migration"
-
-        return lastApplied, err
+    let failingMigration = {
+      name = "fail-migration"
+      timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
+      upContent = "create table test_1();"
+      downContent = "drop table test_5;"
     }
 
-    match operation with
-    | Ok(migration, err) ->
-      Assert.AreEqual("test_3", migration.name)
-      Assert.AreEqual("SQLite Error 1: 'no such table: test_5'.", err)
-    | Error err ->
-      Assert.Fail($"Failed to find the last applied migration: %s{err}")
+    let runnableMigrations = [
+      let sampleMigrations = sampleMigrations |> List.rev
+      sampleMigrations[0]
+      sampleMigrations[1]
+      failingMigration // add failing migration
+      // these migrations should not be rolled back at all
+      sampleMigrations[2]
+      sampleMigrations[3]
+      sampleMigrations[4]
+    ]
+
+    let thrown =
+      Assert.ThrowsException<MigrationRollbackFailed>(
+        Action(
+          (fun () ->
+            databaseEnv.RollbackMigrations(runnableMigrations) |> ignore
+          )
+        )
+      )
+
+    Assert.AreEqual(failingMigration, thrown.Data0)
+
+    match databaseEnv.FindLastApplied() with
+    | Some migration -> Assert.AreEqual("test_3", migration.name)
+    | None -> Assert.Fail($"Failed to find the last applied migration")

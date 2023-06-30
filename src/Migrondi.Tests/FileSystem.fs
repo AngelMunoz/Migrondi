@@ -387,7 +387,7 @@ type FileSystemTests() =
               serializer,
               UMX.tag<RelativeUserPath> relativePath
             )
-            |> AsyncResult.mapError(fun error ->
+            |> TaskResult.mapError(fun error ->
               match error with
               | Malformedfile(filename, error) ->
                 Error

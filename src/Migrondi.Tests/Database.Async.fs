@@ -74,19 +74,19 @@ type DatabaseAsyncTests() =
 
         let! one =
           databaseEnv.FindMigrationAsync("test_1")
-          |> AsyncResult.requireSome "Migration 1 not found"
+          |> TaskResult.requireSome "Migration 1 not found"
 
         and! two =
           databaseEnv.FindMigrationAsync("test_2")
-          |> AsyncResult.requireSome "Migration 2 not found"
+          |> TaskResult.requireSome "Migration 2 not found"
 
         and! three =
           databaseEnv.FindMigrationAsync("test_3")
-          |> AsyncResult.requireSome "Migration 3 not found"
+          |> TaskResult.requireSome "Migration 3 not found"
 
         and! four =
           databaseEnv.FindMigrationAsync("test_4")
-          |> AsyncResult.requireSome "Migration 4 not found"
+          |> TaskResult.requireSome "Migration 4 not found"
 
         return (one, two, three, four)
       }
@@ -147,7 +147,7 @@ type DatabaseAsyncTests() =
 
         let! migration =
           databaseEnv.FindLastAppliedAsync()
-          |> AsyncResult.requireSome
+          |> TaskResult.requireSome
             "Didn't find a migration when it should have"
 
         return migration
@@ -246,7 +246,7 @@ type DatabaseAsyncTests() =
 
         let! lastApplied =
           databaseEnv.FindLastAppliedAsync()
-          |> AsyncResult.requireSome "There should be at least 1 migration"
+          |> TaskResult.requireSome "There should be at least 1 migration"
 
         let queryMigratedTables = validation {
           use connection =
@@ -305,7 +305,8 @@ type DatabaseAsyncTests() =
         // pre-fill the Database with sample migrations
         do!
           databaseEnv.ApplyMigrationsAsync(sampleMigrations)
-          |> AsyncResult.ignore
+          |> Async.AwaitTask
+          |> Async.Ignore
 
         // rollback two
         let! afterMigrationRollback =
@@ -316,7 +317,7 @@ type DatabaseAsyncTests() =
 
         let! lastApplied =
           databaseEnv.FindLastAppliedAsync()
-          |> AsyncResult.requireSome "There should be at least 1 migration"
+          |> TaskResult.requireSome "There should be at least 1 migration"
 
         let queryMigratedTables = validation {
           use connection =
@@ -368,50 +369,54 @@ type DatabaseAsyncTests() =
     =
     task {
 
-      let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
+      do! databaseEnv.SetupDatabaseAsync()
 
-        let sampleMigrations = DatabaseData.createTestMigrations 4
+      let sampleMigrations = DatabaseData.createTestMigrations 4
 
-        let failingMigration = {
-          name = "fail-migration"
-          timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
-          upContent = "create table test_1();"
-          downContent = "drop table test_5;"
-        }
-
-        let runnableMigrations = [
-          sampleMigrations[0]
-          sampleMigrations[1]
-          failingMigration // add failing migration
-          // these will not be applied at all
-          sampleMigrations[2]
-          sampleMigrations[3]
-          sampleMigrations[4]
-
-        ]
-
-        return! async {
-          let! result = databaseEnv.ApplyMigrationsAsync(runnableMigrations)
-
-          match result with
-          | Ok migrations ->
-            return
-              Error $"Migrations should fail but instead got: %A{migrations}"
-          | Error err ->
-
-            let! lastApplied =
-              databaseEnv.FindLastAppliedAsync()
-              |> AsyncResult.requireSome "There should be at least 1 migration"
-
-            return lastApplied
-        }
+      let failingMigration = {
+        name = "fail-migration"
+        timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
+        upContent = "create table test_1();"
+        downContent = "drop table test_5;"
       }
 
-      match operation with
-      | Ok migration -> Assert.AreEqual("test_2", migration.name)
-      | Error err ->
-        Assert.Fail($"Failed to find the last applied migration: %s{err}")
+      let runnableMigrations = [
+        sampleMigrations[0]
+        sampleMigrations[1]
+        failingMigration // add failing migration
+        // these will not be applied at all
+        sampleMigrations[2]
+        sampleMigrations[3]
+        sampleMigrations[4]
+
+      ]
+
+      let! thrown =
+        Assert.ThrowsExceptionAsync<AggregateException>(
+          Func<Task>(fun _ -> task {
+            do!
+              databaseEnv.ApplyMigrationsAsync(runnableMigrations)
+              |> Async.AwaitTask
+              |> Async.Ignore
+          })
+        )
+
+      let thrown =
+        thrown.InnerExceptions
+        |> Seq.tryPick(fun ex ->
+          match ex with
+          | :? MigrationApplicationFailed as ae -> Some ae
+          | _ -> None
+        )
+        |> Option.defaultWith(fun () ->
+          failwith "MigrationApplicationFailed Not found in inner exceptions"
+        )
+
+      Assert.AreEqual(failingMigration, thrown.Data0)
+
+      match! databaseEnv.FindLastAppliedAsync() with
+      | Some migration -> Assert.AreEqual("test_2", migration.name)
+      | None -> Assert.Fail("Failed to find the last applied migration")
     }
     :> Task
 
@@ -421,57 +426,59 @@ type DatabaseAsyncTests() =
     =
     task {
 
-      let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
+      do! databaseEnv.SetupDatabaseAsync()
 
-        let sampleMigrations = DatabaseData.createTestMigrations 4
+      let sampleMigrations = DatabaseData.createTestMigrations 4
 
-        // pre-fill the database
-        do!
-          databaseEnv.ApplyMigrationsAsync(sampleMigrations)
-          |> AsyncResult.ignore
+      // pre-fill the database
+      do!
+        databaseEnv.ApplyMigrationsAsync(sampleMigrations)
+        |> Async.AwaitTask
+        |> Async.Ignore
 
-        let failingMigration = {
-          name = "fail-migration"
-          timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
-          upContent = "create table test_1();"
-          downContent = "drop table test_5;"
-        }
-
-        let runnableMigrations = [
-          let sampleMigrations = sampleMigrations |> List.rev
-          sampleMigrations[0]
-          sampleMigrations[1]
-          failingMigration // add failing migration
-          // these migrations should not be rolled back at all
-          sampleMigrations[2]
-          sampleMigrations[3]
-          sampleMigrations[4]
-        ]
-
-        return! async {
-          let! result = databaseEnv.RollbackMigrationsAsync(runnableMigrations)
-
-          match result with
-          | Ok migrations ->
-            return
-              Error $"Migrations should fail but instead got: %A{migrations}"
-          | Error err ->
-            let! lastApplied =
-              databaseEnv.FindLastAppliedAsync()
-              |> AsyncResult.requireSome "There should be at least 1 migration"
-              |> AsyncResult.map(fun value -> value, err)
-
-            return lastApplied
-        }
-
+      let failingMigration = {
+        name = "fail-migration"
+        timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
+        upContent = "create table test_1();"
+        downContent = "drop table test_5;"
       }
 
-      match operation with
-      | Ok(migration, err) ->
-        Assert.AreEqual("test_3", migration.name)
-        Assert.AreEqual("One or more errors occurred. (SQLite Error 1: 'no such table: test_5'.)", err)
-      | Error err ->
-        Assert.Fail($"Failed to find the last applied migration: %s{err}")
+      let runnableMigrations = [
+        let sampleMigrations = sampleMigrations |> List.rev
+        sampleMigrations[0]
+        sampleMigrations[1]
+        failingMigration // add failing migration
+        // these migrations should not be rolled back at all
+        sampleMigrations[2]
+        sampleMigrations[3]
+        sampleMigrations[4]
+      ]
+
+      let! thrown =
+        Assert.ThrowsExceptionAsync<AggregateException>(
+          Func<Task>(fun _ -> task {
+            do!
+              databaseEnv.RollbackMigrationsAsync(runnableMigrations)
+              |> Async.AwaitTask
+              |> Async.Ignore
+          })
+        )
+
+      let thrown =
+        thrown.InnerExceptions
+        |> Seq.tryPick(fun ex ->
+          match ex with
+          | :? MigrationRollbackFailed as ae -> Some ae
+          | _ -> None
+        )
+        |> Option.defaultWith(fun () ->
+          failwith "MigrationRollbackFailed Not found in inner exceptions"
+        )
+
+      Assert.AreEqual(failingMigration, thrown.Data0)
+
+      match! databaseEnv.FindLastAppliedAsync() with
+      | Some migration -> Assert.AreEqual("test_3", migration.name)
+      | None -> Assert.Fail("Failed to find the last applied migration")
     }
     :> Task
