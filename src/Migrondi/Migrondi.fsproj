@@ -1,33 +1,31 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net7.0</TargetFramework>
     <Description>
-      This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
+      This is a simple SQL migrations tool
+      Write your Migration SQL apply them or revert them from your database. 
     </Description>
     <Summary>
-      This is a simple SQL migrations tool, it runs sql files against a database each migration is enclosed within a transaction, databases supported: SQLServer, SQLite
+      This is a simple SQL migrations tool
+      Write your Migration SQL apply them or revert them from your database. 
     </Summary>
-    <Version>0.7.1</Version>
+    <Version>$(MigrondiCLIVersion)</Version>
+    <IsPackable>true</IsPackable>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>migrondi</ToolCommandName>
-    <IsPackable>true</IsPackable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Options.fs" />
+    <Compile Include="Handlers.fs" />
+    <Compile Include="Inputs.fs" />
+    <Compile Include="Commands.fs" />
+    <Compile Include="Middleware.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Argu" Version="6.1.1" />
+    <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="$(MSBuildThisFileDirectory)\..\..\LICENSE" Pack="true" PackagePath="LICENSE" />
-    <None Include="$(MSBuildThisFileDirectory)\..\..\README.md" Pack="true" PackagePath="README.md" />
-  </ItemGroup>
-  <ItemGroup>
-    <PackageReference Update="FSharp.Core" Version="5.0.2" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Migrondi.Lib\Migrondi.Lib.fsproj" />
+    <PackageReference Include="FSharp.SystemCommandLine" Version="0.17.0-beta4" />
   </ItemGroup>
 </Project>
