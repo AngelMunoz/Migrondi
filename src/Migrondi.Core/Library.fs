@@ -93,25 +93,48 @@ type MigrationType =
     | Up -> "UP"
     | Down -> "DOWN"
 
-// Migrondi.Core
-// Migrations.fs - Operate on migration
-// - create migration
-// - read migration statement content
-// - list migrations statements
-// Database.fs - relates to the create, read, find, and delete migrations from the database
-// - apply migrations
-// - rollback migrations
-// - list migrations
-// - find migration
-// - find last migration
-// Api.fs - expose the public api to make this a cohesive library
-// - Up
-// - Down
-// - List
-// - Status
 
-// Migrondi.CLI
-// Arguments.fs - CLI arguments
-// Commands.fs - CLI commands
-// Middleware.fs - CLI middleware
-// Program.fs - CLI entry point
+[<Struct>]
+type SerializationError =
+  | MalformedContent of content: string * reason: string
+
+  member this.Value =
+    match this with
+    | MalformedContent(content, reason) -> content, reason
+
+  member this.Content =
+    match this with
+    | MalformedContent(content, _) -> content
+
+  member this.Reason =
+    match this with
+    | MalformedContent(_, reason) -> reason
+
+
+type MigrationStatus =
+  | Applied of Migration
+  | Pending of Migration
+
+  member this.Value =
+    match this with
+    | Applied migration
+    | Pending migration -> migration
+
+[<AutoOpen>]
+module Exceptions =
+  open System.Runtime.ExceptionServices
+
+  let inline reriseCustom<'ReturnValue> (exn: exn) =
+    ExceptionDispatchInfo.Capture(exn).Throw()
+    Unchecked.defaultof<'ReturnValue>
+
+
+exception SetupDatabaseFailed
+exception MigrationApplicationFailed of migration: Migration
+exception MigrationRollbackFailed of migration: Migration
+
+exception SourceNotFound of path: string * name: string
+
+exception MalformedSource of
+  sourceName: string *
+  serializationError: SerializationError

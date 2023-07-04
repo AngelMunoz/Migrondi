@@ -1,1 +1,0 @@
-namespace Migrondi.Core.Migrations

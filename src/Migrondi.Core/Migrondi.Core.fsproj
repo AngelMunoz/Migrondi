@@ -8,8 +8,7 @@
     <Compile Include="Serialization.fs" />
     <Compile Include="FileSystem.fs" />
     <Compile Include="Database.fs" />
-    <Compile Include="Migrations.fs" />
-    <Compile Include="Configuration.fs" />
+    <Compile Include="Migrondi.fs" />
     <Compile Include="Api.fs" />
   </ItemGroup>
   <ItemGroup>

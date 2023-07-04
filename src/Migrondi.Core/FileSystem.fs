@@ -1,7 +1,11 @@
 namespace Migrondi.Core.FileSystem
 
 open System
+open System.Collections.Generic
 open System.Text.RegularExpressions
+open System.Threading
+open System.Threading.Tasks
+open System.Runtime.InteropServices
 
 open FSharp.UMX
 
@@ -20,74 +24,54 @@ module Units =
 
 
 open Units
-open System.Threading.Tasks
-open System.Threading
 
-[<Struct>]
-type ReadFileError =
-  | FileNotFound of filepath: string * filename: string
-  | Malformedfile of
-    malformedFileName: string *
-    serializationError: SerializationError
 
 [<Interface>]
 type FileSystemEnv =
 
   /// <summary>
-  /// Represents the root of the project where the migrondi.json file is located.
+  /// Take the path to a configuration source, reads and transforms it into a configuration object
   /// </summary>
-  /// <remarks>
-  /// For file system/web request operations this should be an absolute path to the migrondi.json file
-  /// </remarks>
-  abstract member RootPath: Uri
-
-
-  /// <summary>
-  /// Take the path to a configuration file, reads and transforms it into a configuration object
-  /// </summary>
-  /// <param name="serializer">A serializer that will be used to decode the string content from the configuration</param>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the configuration file</param>
   /// <returns>A <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object</returns>
-  abstract member ReadConfiguration:
-    serializer: #SerializerEnv * readFrom: string<RelativeUserPath> ->
-      Result<MigrondiConfig, ReadFileError>
+  /// <exception cref="Migrondi.Core.FileSystem.SourceNotFound">
+  /// Thrown when the source is not found
+  /// </exception>
+  /// <exception cref="Migrondi.Core.FileSystem.MalformedSource">
+  /// Thrown when the source is found but can't be deserialized from disk
+  /// </exception>
+  abstract member ReadConfiguration: readFrom: string -> MigrondiConfig
 
   /// <summary>
-  /// Take the path to a configuration file, reads and transforms it into a configuration object
+  /// Take the path to a configuration source, reads and transforms it into a configuration object
   /// </summary>
-  /// <param name="serializer">A serializer that will be used to decode the string content from the configuration</param>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the configuration file</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
+  /// <exception cref="Migrondi.Core.FileSystem.SourceNotFound">
+  /// Thrown when the file is not found
+  /// </exception>
+  /// <exception cref="Migrondi.Core.FileSystem.MalformedSource">
+  /// Thrown when the file is found but can't be deserialized from the source
+  /// </exception>
   abstract member ReadConfigurationAsync:
-    serializer: #SerializerEnv *
-    readFrom: string<RelativeUserPath> *
-    ?cancellationToken: CancellationToken ->
-      Task<Result<MigrondiConfig, ReadFileError>>
+    readFrom: string * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<MigrondiConfig>
 
   /// <summary>
   /// Take a configuration object and writes it to a location dictated by the `writeTo` parameter
   /// </summary>
-  /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <param name="config">The configuration object</param>
   /// <param name="writeTo">The path to the configuration file</param>
-  /// <returns>
-  /// A unit result object that means that the operation was successful
-  /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
-  /// </returns>
   abstract member WriteConfiguration:
-    serializer: #SerializerEnv *
-    config: MigrondiConfig *
-    writeTo: string<RelativeUserPath> ->
-      unit
+    config: MigrondiConfig * writeTo: string -> unit
 
   /// <summary>
   /// Take a configuration object and writes it to a file
   /// </summary>
-  /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <param name="config">The configuration object</param>
   /// <param name="writeTo">The path to the configuration file</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
@@ -96,60 +80,56 @@ type FileSystemEnv =
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member WriteConfigurationAsync:
-    serializer: #SerializerEnv *
     config: MigrondiConfig *
-    writeTo: string<RelativeUserPath> *
-    ?cancellationToken: CancellationToken ->
+    writeTo: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
       Task
 
   /// <summary>
   /// Takes a path to a migration, reads its contents and transforms it into a Migration object
   /// </summary>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
-  /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
-  abstract member ReadMigration:
-    serializer: #SerializerEnv * readFrom: string<RelativeUserPath> ->
-      Result<Migration, ReadFileError>
+  /// <exception cref="Migrondi.Core.FileSystem.SourceNotFound">
+  /// Thrown when the file is not found
+  /// </exception>
+  /// <exception cref="Migrondi.Core.FileSystem.MalformedSource">
+  /// Thrown when the file is found but can't be deserialized from the source
+  /// </exception>
+  abstract member ReadMigration: readFrom: string -> Migration
 
   /// <summary>
   /// Takes a path to a migration, reads its contents and transforms it into a Migration object
   /// </summary>
-  /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
+  /// <exception cref="Migrondi.Core.FileSystem.SourceNotFound">
+  ///  Thrown when the file is not found
+  /// </exception>
   abstract member ReadMigrationAsync:
-    serializer: #SerializerEnv *
-    readFrom: string<RelativeUserPath> *
-    ?cancellationToken: CancellationToken ->
-      Task<Result<Migration, ReadFileError>>
+    readFrom: string * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Migration>
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
   /// </summary>
-  /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <param name="migration">The migration object</param>
   /// <param name="writeTo">The path to the migration file</param>
   /// <returns>
   /// A unit result object that means that the operation was successful
   /// </returns>
-  abstract member WriteMigration:
-    serializer: #SerializerEnv *
-    migration: Migration *
-    writeTo: string<RelativeUserPath> ->
-      unit
+  abstract member WriteMigration: migration: Migration * writeTo: string -> unit
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
   /// </summary>
-  /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
   /// <param name="migration">The migration object</param>
   /// <param name="writeTo">The path to the migration file</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
@@ -157,33 +137,28 @@ type FileSystemEnv =
   /// A unit result object that means that the operation was successful
   /// </returns>
   abstract member WriteMigrationAsync:
-    serializer: #SerializerEnv *
     migration: Migration *
-    writeTo: string<RelativeUserPath> *
-    ?cancellationToken: CancellationToken ->
+    writeTo: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
       Task
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
   /// </summary>
-  /// <param name="serializer">A serializer that will be used to encode configuration into a string.</param>
-  /// <param name="nameSchema">A regex that will be used to match the name of the files that can be read.</param>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the migration.</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
-  abstract member ListMigrations:
-    serializer: #SerializerEnv *
-    nameSchema: Regex *
-    readFrom: string<RelativeUserDirectoryPath> ->
-      Result<Migration list, ReadFileError list>
+  /// <exception cref="System.AggregateException">
+  /// A list of exceptions in case the sources were not readable or malformed
+  /// This normally includes exceptions of the type <see cref="Migrondi.Core.FileSystem.MalformedSource">MalformedSource</see>
+  /// </exception>
+  abstract member ListMigrations: readFrom: string -> Migration IReadOnlyList
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
   /// </summary>
-  /// <param name="serializer">A serializer that will be used to encode configuration into a string</param>
-  /// <param name="nameSchema">A regex that will be used to match the name of the files that can be read.</param>
   /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
@@ -191,14 +166,13 @@ type FileSystemEnv =
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member ListMigrationsAsync:
-    serializer: #SerializerEnv *
-    nameSchema: Regex *
-    readFrom: string<RelativeUserDirectoryPath> *
-    ?cancellationToken: CancellationToken ->
-      Task<Result<Migration list, ReadFileError list>>
+    readFrom: string * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Migration IReadOnlyList>
 
 module PhysicalFileSystemImpl =
   open System.IO
+
+  let nameSchema = Regex("(.+)_([0-9]+).(sql|SQL)")
 
   let readConfiguration
     (
@@ -208,10 +182,19 @@ module PhysicalFileSystemImpl =
     ) =
     let path = Uri(root, UMX.untag readFrom)
 
-    path.LocalPath
-    |> File.ReadAllText
-    |> serializer.ConfigurationSerializer.Decode
-    |> Result.mapError(fun error -> Malformedfile(path.LocalPath, error))
+    let content =
+      try
+        File.ReadAllText path.LocalPath
+      with
+      | :? DirectoryNotFoundException
+      | :? IOException as ex ->
+        reriseCustom(
+          SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
+        )
+
+    match serializer.ConfigurationSerializer.Decode content with
+    | Ok value -> value
+    | Error err -> raise(MalformedSource(path.LocalPath, err))
 
   let readConfigurationAsync
     (
@@ -223,13 +206,24 @@ module PhysicalFileSystemImpl =
       let! token = Async.CancellationToken
       let path = Uri(root, UMX.untag readFrom)
 
-      let! contents =
-        File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
-        |> Async.AwaitTask
+      let! contents = async {
+        try
+          return!
+            File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
+            |> Async.AwaitTask
+        with
+        | :? DirectoryNotFoundException
+        | :? IOException ->
+          return
+            reriseCustom(
+              SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
+            )
+      }
 
       return
-        serializer.ConfigurationSerializer.Decode contents
-        |> Result.mapError(fun error -> Malformedfile(path.LocalPath, error))
+        match serializer.ConfigurationSerializer.Decode contents with
+        | Ok value -> value
+        | Error err -> raise(MalformedSource(path.LocalPath, err))
     }
 
   let writeConfiguration
@@ -280,10 +274,19 @@ module PhysicalFileSystemImpl =
     ) =
     let path = Uri(root, UMX.untag readFrom)
 
-    path.LocalPath
-    |> File.ReadAllText
-    |> serializer.MigrationSerializer.DecodeText
-    |> Result.mapError(fun error -> Malformedfile(path.LocalPath, error))
+    let content =
+      try
+        File.ReadAllText path.LocalPath
+      with
+      | :? DirectoryNotFoundException
+      | :? IOException as ex ->
+        reriseCustom(
+          SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
+        )
+
+    match serializer.MigrationSerializer.DecodeText content with
+    | Ok value -> value
+    | Error err -> raise(MalformedSource(path.LocalPath, err))
 
   let readMigrationAsync
     (
@@ -295,13 +298,24 @@ module PhysicalFileSystemImpl =
       let! token = Async.CancellationToken
       let path = Uri(root, UMX.untag readFrom)
 
-      let! contents =
-        File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
-        |> Async.AwaitTask
+      let! contents = async {
+        try
+          return!
+            File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
+            |> Async.AwaitTask
+        with
+        | :? DirectoryNotFoundException
+        | :? IOException ->
+          return
+            reriseCustom(
+              SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
+            )
+      }
 
       return
-        serializer.MigrationSerializer.DecodeText contents
-        |> Result.mapError(fun error -> Malformedfile(path.LocalPath, error))
+        match serializer.MigrationSerializer.DecodeText contents with
+        | Ok value -> value
+        | Error err -> raise(MalformedSource(path.LocalPath, err))
     }
 
   let writeMigration
@@ -348,10 +362,9 @@ module PhysicalFileSystemImpl =
     (
       serializer: #SerializerEnv,
       root: Uri,
-      nameSchema: Regex,
       readFrom: string<RelativeUserDirectoryPath>
     ) =
-    result {
+    let operation = result {
       let path = Uri(root, UMX.untag readFrom)
 
       let directory = DirectoryInfo(path.LocalPath)
@@ -371,195 +384,170 @@ module PhysicalFileSystemImpl =
         |> List.traverseResultA(fun (name, contents) ->
           match serializer.MigrationSerializer.DecodeText(contents, name) with
           | Ok migration -> Ok migration
-          | Error err -> Error(Malformedfile(name, err))
+          | Error err -> Error(MalformedSource(name, err))
         )
     }
+
+    match operation with
+    | Ok value ->
+      value |> List.sortByDescending(fun migration -> migration.timestamp)
+    | Error err ->
+      raise(AggregateException("Failed to Decode Some Migrations", err))
 
   let listMigrationsAsync
     (
       serializer: #SerializerEnv,
       root: Uri,
-      nameSchema: Regex,
       readFrom: string<RelativeUserDirectoryPath>
     ) =
-    asyncResult {
-      let path = Uri(root, UMX.untag readFrom)
+    async {
+      let! operation = asyncResult {
+        let path = Uri(root, UMX.untag readFrom)
 
-      let directory = DirectoryInfo(path.LocalPath)
+        let directory = DirectoryInfo(path.LocalPath)
 
-      let! files =
-        directory.GetFileSystemInfos()
-        |> Array.Parallel.choose(fun file ->
-          if (nameSchema.IsMatch(file.Name)) then Some file else None
-        )
-        |> Array.Parallel.map(fun file -> async {
-          let! token = Async.CancellationToken
-          let name = file.Name
+        let! files =
+          directory.GetFileSystemInfos()
+          |> Array.Parallel.choose(fun file ->
+            if (nameSchema.IsMatch(file.Name)) then Some file else None
+          )
+          |> Array.Parallel.map(fun file -> async {
+            let! token = Async.CancellationToken
+            let name = file.Name
 
-          let! content =
-            File.ReadAllTextAsync(file.FullName, cancellationToken = token)
-            |> Async.AwaitTask
+            let! content =
+              File.ReadAllTextAsync(file.FullName, cancellationToken = token)
+              |> Async.AwaitTask
 
-          return name, content
-        })
-        |> Async.Parallel
+            return name, content
+          })
+          |> Async.Parallel
 
-      return!
-        files
-        |> Array.toList
-        |> List.traverseResultA(fun (name, contents) ->
-          match serializer.MigrationSerializer.DecodeText(contents, name) with
-          | Ok migration -> Ok migration
-          | Error err -> Error(Malformedfile(name, err))
-        )
+        return!
+          files
+          |> Array.toList
+          |> List.traverseResultA(fun (name, contents) ->
+            match
+              serializer.MigrationSerializer.DecodeText(contents, name)
+            with
+            | Ok migration -> Ok migration
+            | Error err -> Error(MalformedSource(name, err))
+          )
+      }
+
+      return
+        match operation with
+        | Ok value ->
+          value |> List.sortByDescending(fun migration -> migration.timestamp)
+          :> IReadOnlyList<_>
+        | Error err ->
+          raise(AggregateException("Failed to Decode Some Migrations", err))
     }
 
 [<Class>]
 type FileSystemImpl =
 
-  static member BuildDefaultEnv(rootUri: Uri) =
-
+  static member BuildDefaultEnv(serializer: #SerializerEnv, rootUri: Uri) =
     { new FileSystemEnv with
-        member _.RootPath: Uri = rootUri
-
-        member this.ListMigrations
-          (
-            serializer: #SerializerEnv,
-            nameSchema: Regex,
-            readFrom: string<RelativeUserDirectoryPath>
-          ) : Result<Migration list, ReadFileError list> =
+        member _.ListMigrations(readFrom) =
           PhysicalFileSystemImpl.listMigrations(
             serializer,
-            this.RootPath,
-            nameSchema,
-            readFrom
+            rootUri,
+            UMX.tag readFrom
           )
 
-        member this.ListMigrationsAsync
-          (
-            serializer: #SerializerEnv,
-            nameSchema: Regex,
-            arg1: string<RelativeUserDirectoryPath>,
-            ?cancellationToken
-          ) =
+        member _.ListMigrationsAsync(arg1, [<Optional>] ?cancellationToken) =
           let computation =
             PhysicalFileSystemImpl.listMigrationsAsync(
               serializer,
-              this.RootPath,
-              nameSchema,
-              arg1
+              rootUri,
+              UMX.tag arg1
             )
 
           Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
 
-        member this.ReadConfiguration
-          (
-            serializer: #SerializerEnv,
-            readFrom: string<RelativeUserPath>
-          ) : Result<MigrondiConfig, ReadFileError> =
+        member _.ReadConfiguration(readFrom) =
           PhysicalFileSystemImpl.readConfiguration(
             serializer,
-            this.RootPath,
-            readFrom
+            rootUri,
+            UMX.tag readFrom
           )
 
-        member this.ReadConfigurationAsync
+        member _.ReadConfigurationAsync
           (
-            serializer: #SerializerEnv,
-            readFrom: string<RelativeUserPath>,
-            ?cancellationToken
+            readFrom,
+            [<Optional>] ?cancellationToken
           ) =
           let computation =
             PhysicalFileSystemImpl.readConfigurationAsync(
               serializer,
-              this.RootPath,
-              readFrom
+              rootUri,
+              UMX.tag readFrom
             )
 
           Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
 
-        member this.ReadMigration
-          (
-            serializer: #SerializerEnv,
-            readFrom: string<RelativeUserPath>
-          ) : Result<Migration, ReadFileError> =
+        member _.ReadMigration readFrom =
           PhysicalFileSystemImpl.readMigration(
             serializer,
-            this.RootPath,
-            readFrom
+            rootUri,
+            UMX.tag readFrom
           )
 
-        member this.ReadMigrationAsync
-          (
-            serializer: #SerializerEnv,
-            readFrom: string<RelativeUserPath>,
-            ?cancellationToken
-          ) =
+        member _.ReadMigrationAsync(readFrom, [<Optional>] ?cancellationToken) =
           let computation =
             PhysicalFileSystemImpl.readMigrationAsync(
               serializer,
-              this.RootPath,
-              readFrom
+              rootUri,
+              UMX.tag readFrom
             )
 
           Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
 
-        member this.WriteConfiguration
-          (
-            serializer: #SerializerEnv,
-            config: MigrondiConfig,
-            writeTo: string<RelativeUserPath>
-          ) : unit =
+        member _.WriteConfiguration(config: MigrondiConfig, writeTo) : unit =
           PhysicalFileSystemImpl.writeConfiguration(
             serializer,
             config,
-            this.RootPath,
-            writeTo
+            rootUri,
+            UMX.tag writeTo
           )
 
-        member this.WriteConfigurationAsync
+        member _.WriteConfigurationAsync
           (
-            serializer: #SerializerEnv,
             config: MigrondiConfig,
-            writeTo: string<RelativeUserPath>,
-            ?cancellationToken
+            writeTo,
+            [<Optional>] ?cancellationToken
           ) =
           let comptation =
             PhysicalFileSystemImpl.writeConfigurationAsync(
               serializer,
               config,
-              this.RootPath,
-              writeTo
+              rootUri,
+              UMX.tag writeTo
             )
 
           Async.StartAsTask(comptation, ?cancellationToken = cancellationToken)
 
-        member this.WriteMigration
-          (
-            serializer: #SerializerEnv,
-            arg1: Migration,
-            arg2: string<RelativeUserPath>
-          ) : unit =
+        member _.WriteMigration(arg1: Migration, arg2) : unit =
           PhysicalFileSystemImpl.writeMigration(
             serializer,
             arg1,
-            this.RootPath,
-            arg2
+            rootUri,
+            UMX.tag arg2
           )
 
-        member this.WriteMigrationAsync
+        member _.WriteMigrationAsync
           (
-            serializer: #SerializerEnv,
             arg1: Migration,
-            arg2: string<RelativeUserPath>,
-            ?cancellationToken
+            arg2,
+            [<Optional>] ?cancellationToken
           ) =
           let computation =
             PhysicalFileSystemImpl.writeMigrationAsync(
               serializer,
               arg1,
-              this.RootPath,
-              arg2
+              rootUri,
+              UMX.tag arg2
             )
 
           Async.StartAsTask(computation, ?cancellationToken = cancellationToken)

@@ -12,22 +12,6 @@ open FsToolkit.ErrorHandling
 
 open Migrondi.Core
 
-[<Struct>]
-type SerializationError =
-  | MalformedContent of content: string * reason: string
-
-  member this.Value =
-    match this with
-    | MalformedContent(content, reason) -> content, reason
-
-  member this.Content =
-    match this with
-    | MalformedContent(content, _) -> content
-
-  member this.Reason =
-    match this with
-    | MalformedContent(_, reason) -> reason
-
 [<Interface>]
 type ConfigurationSerializer =
 
@@ -451,9 +435,6 @@ module MigrationRecord =
       name = get.Required.Field "name" Decode.string
       timestamp = get.Required.Field "timestamp" Decode.int64
     })
-
-module MigrationRecordData =
-  ()
 
 [<Interface>]
 type SerializerEnv =
