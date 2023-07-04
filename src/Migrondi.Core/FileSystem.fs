@@ -192,9 +192,9 @@ module PhysicalFileSystemImpl =
           SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
         )
 
-    match serializer.ConfigurationSerializer.Decode content with
-    | Ok value -> value
-    | Error err -> raise(MalformedSource(path.LocalPath, err))
+    try 
+      serializer.ConfigurationSerializer.Decode content
+    with | :? DeserializationFailed as ex -> reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
 
   let readConfigurationAsync
     (
@@ -220,10 +220,10 @@ module PhysicalFileSystemImpl =
             )
       }
 
-      return
-        match serializer.ConfigurationSerializer.Decode contents with
-        | Ok value -> value
-        | Error err -> raise(MalformedSource(path.LocalPath, err))
+      try 
+        return serializer.ConfigurationSerializer.Decode contents
+      with | :? DeserializationFailed as ex ->
+        return reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
     }
 
   let writeConfiguration
@@ -284,9 +284,9 @@ module PhysicalFileSystemImpl =
           SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
         )
 
-    match serializer.MigrationSerializer.DecodeText content with
-    | Ok value -> value
-    | Error err -> raise(MalformedSource(path.LocalPath, err))
+    try 
+      serializer.MigrationSerializer.DecodeText content
+    with | :? DeserializationFailed as ex -> reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
 
   let readMigrationAsync
     (
@@ -311,11 +311,9 @@ module PhysicalFileSystemImpl =
               SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
             )
       }
-
-      return
-        match serializer.MigrationSerializer.DecodeText contents with
-        | Ok value -> value
-        | Error err -> raise(MalformedSource(path.LocalPath, err))
+      try 
+        return serializer.MigrationSerializer.DecodeText contents 
+      with | :? DeserializationFailed as ex -> return reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
     }
 
   let writeMigration
@@ -382,9 +380,9 @@ module PhysicalFileSystemImpl =
       return!
         files
         |> List.traverseResultA(fun (name, contents) ->
-          match serializer.MigrationSerializer.DecodeText(contents, name) with
-          | Ok migration -> Ok migration
-          | Error err -> Error(MalformedSource(name, err))
+          try serializer.MigrationSerializer.DecodeText(contents, name) |> Ok
+          with | :? DeserializationFailed as ex ->
+            MalformedSource(name, ex.Reason, ex.Source) |> Error
         )
     }
 
@@ -427,11 +425,9 @@ module PhysicalFileSystemImpl =
           files
           |> Array.toList
           |> List.traverseResultA(fun (name, contents) ->
-            match
-              serializer.MigrationSerializer.DecodeText(contents, name)
-            with
-            | Ok migration -> Ok migration
-            | Error err -> Error(MalformedSource(name, err))
+            try serializer.MigrationSerializer.DecodeText(contents, name) |> Ok
+            with | :? DeserializationFailed as ex ->
+              MalformedSource(name, ex.Reason, ex.Source) |> Error
           )
       }
 

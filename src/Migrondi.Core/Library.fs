@@ -94,23 +94,6 @@ type MigrationType =
     | Down -> "DOWN"
 
 
-[<Struct>]
-type SerializationError =
-  | MalformedContent of content: string * reason: string
-
-  member this.Value =
-    match this with
-    | MalformedContent(content, reason) -> content, reason
-
-  member this.Content =
-    match this with
-    | MalformedContent(content, _) -> content
-
-  member this.Reason =
-    match this with
-    | MalformedContent(_, reason) -> reason
-
-
 type MigrationStatus =
   | Applied of Migration
   | Pending of Migration
@@ -130,11 +113,23 @@ module Exceptions =
 
 
 exception SetupDatabaseFailed
-exception MigrationApplicationFailed of migration: Migration
-exception MigrationRollbackFailed of migration: Migration
+exception MigrationApplicationFailed of Migration: Migration
+exception MigrationRollbackFailed of Migration: Migration
 
 exception SourceNotFound of path: string * name: string
 
+exception DeserializationFailed of Content: string * Reason: string
+
 exception MalformedSource of
-  sourceName: string *
-  serializationError: SerializationError
+  SourceName: string *
+  Content: string * 
+  Reason: string
+
+
+type MalformedSource with 
+
+  member this.Value = this.SourceName, this.Content, this.Reason
+
+type DeserializationFailed with 
+
+  member this.Value = this.Content, this.Reason

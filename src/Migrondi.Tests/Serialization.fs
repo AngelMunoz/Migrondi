@@ -106,13 +106,9 @@ type SerializationTests() =
   [<TestMethod>]
   member _.``Can Decode Configuration``() =
     let decoded =
-      match
-        serializer.ConfigurationSerializer.Decode(
-          ConfigurationData.configJsonSample
-        )
-      with
-      | Ok x -> x
-      | Error e -> failwith $"Decoding Failed: {e}"
+      serializer.ConfigurationSerializer.Decode(
+        ConfigurationData.configJsonSample
+      )
 
     Assert.AreEqual(
       ConfigurationData.configJsonObject,
@@ -142,14 +138,10 @@ type SerializationTests() =
   [<TestMethod>]
   member _.``Can Decode Text Migration v0``() =
     let decoded =
-      match
-        serializer.MigrationSerializer.DecodeText(
-          MigrationData.textMigrationSampleV0,
-          MigrationData.migrationObject.name
-        )
-      with
-      | Ok x -> x
-      | Error e -> failwith $"Decoding Failed: {e}"
+      serializer.MigrationSerializer.DecodeText(
+        MigrationData.textMigrationSampleV0,
+        MigrationData.migrationObject.name
+      )
 
     Assert.AreEqual(
       MigrationData.migrationObject,
@@ -160,13 +152,9 @@ type SerializationTests() =
   [<TestMethod>]
   member _.``Can Decode Text Migration v1``() =
     let decoded =
-      match
-        serializer.MigrationSerializer.DecodeText(
-          MigrationData.textMigrationSampleV1
-        )
-      with
-      | Ok x -> x
-      | Error e -> failwith $"Decoding Failed: {e}"
+      serializer.MigrationSerializer.DecodeText(
+        MigrationData.textMigrationSampleV1
+      )
 
     Assert.AreEqual(
       MigrationData.migrationObject,
@@ -177,13 +165,9 @@ type SerializationTests() =
   [<TestMethod>]
   member _.``Can Decode Json MigrationRecord``() =
     let decoded =
-      match
-        serializer.MigrationRecordSerializer.Decode(
-          MigrationRecordData.migrationRecordJsonSample
-        )
-      with
-      | Ok x -> x
-      | Error e -> failwith $"Decoding Failed: {e}"
+      serializer.MigrationRecordSerializer.Decode(
+        MigrationRecordData.migrationRecordJsonSample
+      )
 
     Assert.AreEqual(
       MigrationRecordData.migrationRecordObject,

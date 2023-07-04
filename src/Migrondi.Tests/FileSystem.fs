@@ -117,7 +117,6 @@ type FileSystemTests() =
 
       File.ReadAllText(MigrondiConfigData.fsMigrondiConfigPath rootDir.FullName)
       |> serializer.ConfigurationSerializer.Decode
-      |> Result.defaultWith(fun _ -> failwith "Could not decode config file")
 
     let fileResult =
       fileSystem.ReadConfiguration(
@@ -162,12 +161,7 @@ type FileSystemTests() =
             MigrondiConfigData.fsMigrondiConfigPath rootDir.FullName
           )
 
-        return
-          result
-          |> serializer.ConfigurationSerializer.Decode
-          |> Result.defaultWith(fun _ ->
-            failwith "Could not decode config file"
-          )
+        return result |> serializer.ConfigurationSerializer.Decode
       }
 
       let! fileResult =
@@ -298,9 +292,7 @@ type FileSystemTests() =
         | :? SourceNotFound as e ->
           Error($"File '{e.name}' not found at '{e.path}'")
         | :? MalformedSource as e ->
-          Error(
-            $"File '{e.sourceName}' is malformed: {e.serializationError.Reason}\n{e.serializationError.Content}"
-          )
+          Error($"File '{e.SourceName}' is malformed: {e.Reason}\n{e.Content}")
       )
 
     match foundMigrations with
@@ -344,7 +336,7 @@ type FileSystemTests() =
             | :? MalformedSource as e ->
               return
                 Error(
-                  $"File '{e.sourceName}' is malformed: {e.serializationError.Reason}\n{e.serializationError.Content}"
+                  $"File '{e.SourceName}' is malformed: {e.Reason}\n{e.Content}"
                 )
           }
 
@@ -396,7 +388,7 @@ type FileSystemTests() =
           let err = err :?> MalformedSource
 
           Error
-            $"File '{err.sourceName}' is malformed: {err.serializationError.Reason}\n{err.serializationError.Content}"
+            $"File '{err.SourceName}' is malformed: {err.Reason}\n{err.Content}"
         )
 
 
@@ -443,7 +435,7 @@ type FileSystemTests() =
           let err = err :?> MalformedSource
 
           Error
-            $"File '{err.sourceName}' is malformed: {err.serializationError.Reason}\n{err.serializationError.Content}"
+            $"File '{err.SourceName}' is malformed: {err.Reason}\n{err.Content}"
         )
 
     match foundMigrations with
@@ -503,7 +495,7 @@ type FileSystemTests() =
           let err = err :?> MalformedSource
 
           Error
-            $"File '{err.sourceName}' is malformed: {err.serializationError.Reason}\n{err.serializationError.Content}"
+            $"File '{err.SourceName}' is malformed: {err.Reason}\n{err.Content}"
         )
 
     match foundMigrations with

@@ -412,7 +412,7 @@ type DatabaseAsyncTests() =
           failwith "MigrationApplicationFailed Not found in inner exceptions"
         )
 
-      Assert.AreEqual(failingMigration, thrown.migration)
+      Assert.AreEqual(failingMigration, thrown.Migration)
 
       match! databaseEnv.FindLastAppliedAsync() with
       | Some migration -> Assert.AreEqual("test_2", migration.name)
@@ -475,7 +475,7 @@ type DatabaseAsyncTests() =
           failwith "MigrationRollbackFailed Not found in inner exceptions"
         )
 
-      Assert.AreEqual(failingMigration, thrown.migration)
+      Assert.AreEqual(failingMigration, thrown.Migration)
 
       match! databaseEnv.FindLastAppliedAsync() with
       | Some migration -> Assert.AreEqual("test_3", migration.name)

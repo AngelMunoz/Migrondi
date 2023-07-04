@@ -425,7 +425,7 @@ type DatabaseTests() =
         )
       )
 
-    Assert.AreEqual(failingMigration, thrown.migration)
+    Assert.AreEqual(failingMigration, thrown.Migration)
 
     match databaseEnv.FindLastApplied() with
     | Some migration -> Assert.AreEqual("test_2", migration.name)
@@ -470,7 +470,7 @@ type DatabaseTests() =
         )
       )
 
-    Assert.AreEqual(failingMigration, thrown.migration)
+    Assert.AreEqual(failingMigration, thrown.Migration)
 
     match databaseEnv.FindLastApplied() with
     | Some migration -> Assert.AreEqual("test_3", migration.name)

@@ -1,10 +1,9 @@
 namespace Migrondi.Core.Serialization
 
 
-open System
-open System.IO
 open System.Text
 open System.Text.RegularExpressions
+open System.Runtime.InteropServices
 
 open Thoth.Json.Net
 
@@ -26,12 +25,11 @@ type ConfigurationSerializer =
   /// Takes a string and returns a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object
   /// </summary>
   /// <param name="content">The string to deserialize</param>
-  /// <returns>
-  /// A Result that may contain a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object
-  /// or a <see cref="Migrondi.Core.Serialization.SerializationError">SerializationError</see>
-  /// </returns>
+  /// <exception cref="Migrondi.Core.DeserializationFailed">
+  /// Thrown when the serialization fails
+  /// </exception>
   abstract member Decode:
-    content: string -> Result<MigrondiConfig, SerializationError>
+    content: string -> MigrondiConfig
 
 [<Interface>]
 type MigrationSerializer =
@@ -67,8 +65,11 @@ type MigrationSerializer =
   /// <remarks>
   /// The string is the content of the migration file
   /// </remarks>
+    /// <exception cref="Migrondi.Core.DeserializationFailed">
+  /// Thrown when the serialization fails
+  /// </exception>
   abstract member DecodeJson:
-    content: string -> Result<Migration, SerializationError>
+    content: string -> Migration
 
   /// <summary>
   /// Takes a string and returns a <see cref="Migrondi.Core.Migration">Migration</see> object
@@ -82,9 +83,11 @@ type MigrationSerializer =
   /// <remarks>
   /// The string is the content of the migration file
   /// </remarks>
+    /// <exception cref="Migrondi.Core.DeserializationFailed">
+  /// Thrown when the serialization fails
+  /// </exception>
   abstract member DecodeText:
-    content: string * ?migrationName: string ->
-      Result<Migration, SerializationError>
+    content: string * [<Optional>] ?migrationName: string -> Migration
 
 [<Interface>]
 type MigrationRecordSerializer =
@@ -110,8 +113,11 @@ type MigrationRecordSerializer =
   /// <remarks>
   /// The string is the content of the migration file
   /// </remarks>
+  /// <exception cref="Migrondi.Core.DeserializationFailed">
+  /// Thrown when the serialization fails
+  /// </exception>
   abstract member Decode:
-    content: string -> Result<MigrationRecord, SerializationError>
+    content: string -> MigrationRecord
 
 [<RequireQualifiedAccess;
   CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -163,6 +169,7 @@ module MigrondiConfig =
         get.Optional.Field "tableName" Decode.string
         |> Option.defaultValue "__migrondi_migrations"
     })
+
 
 [<RequireQualifiedAccess;
   CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -447,10 +454,13 @@ module SerializerImpl =
   let configSerializer () =
     { new ConfigurationSerializer with
         member _.Decode
-          (content: string)
-          : Result<MigrondiConfig, SerializationError> =
+          (content: string) =
           Decode.fromString MigrondiConfig.Decode content
-          |> Result.mapError(fun error -> MalformedContent(content, error))
+          |> function
+          | Ok value -> value
+          | Error err ->
+            DeserializationFailed(content, err)
+            |> raise
 
         member _.Encode(content: MigrondiConfig) : string =
           let content = MigrondiConfig.Encode content
@@ -460,10 +470,13 @@ module SerializerImpl =
   let migrationRecordSerializer () =
     { new MigrationRecordSerializer with
         member _.Decode
-          (content: string)
-          : Result<MigrationRecord, SerializationError> =
+          (content: string) =
           Decode.fromString MigrationRecord.Decode content
-          |> Result.mapError(fun error -> MalformedContent(content, error))
+          |> function
+          | Ok value -> value
+          | Error err ->
+            DeserializationFailed(content, err)
+            |> raise
 
         member _.Encode(content: MigrationRecord) : string =
           let content = MigrationRecord.Encode content
@@ -473,10 +486,13 @@ module SerializerImpl =
   let migrationSerializer () =
     { new MigrationSerializer with
         member _.DecodeJson
-          (content: string)
-          : Result<Migration, SerializationError> =
+          (content: string) =
           Decode.fromString Migration.DecodeJson content
-          |> Result.mapError(fun error -> MalformedContent(content, error))
+          |> function
+          | Ok value -> value
+          | Error err ->
+            DeserializationFailed(content, err)
+            |> raise
 
         member _.EncodeJson(content: Migration) : string =
           let content = Migration.EncodeJson content
@@ -489,9 +505,13 @@ module SerializerImpl =
           (
             content: string,
             ?name: string
-          ) : Result<Migration, SerializationError> =
+          ) =
           Migration.DecodeText(content, name)
-          |> Result.mapError(fun error -> MalformedContent(content, error))
+          |> function
+          | Ok value -> value
+          | Error err ->
+            DeserializationFailed(content, err)
+            |> raise
     }
 
 [<Class>]
