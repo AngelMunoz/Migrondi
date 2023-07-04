@@ -11,10 +11,10 @@ open Migrondi.Core.Database
 open Migrondi.Core.Migrondi
 
 
-let rootUri (cwd: string option) =
+let inline rootUri (cwd: string option) =
   Uri(defaultArg cwd Environment.CurrentDirectory, UriKind.Absolute)
 
-let fileSystem serializer cwd =
+let inline fileSystem serializer cwd =
   FileSystemImpl.BuildDefaultEnv(serializer, rootUri cwd)
 
 /// <summary>
@@ -62,7 +62,10 @@ type Migrondi
         [<Optional>] ?amount,
         [<Optional>] ?cancellationToken
       ) =
-      migrondi.DryRunDownAsync()
+      migrondi.DryRunDownAsync(
+        ?amount = amount,
+        ?cancellationToken = cancellationToken
+      )
 
     member _.DryRunUp([<Optional>] ?amount: int) =
 
@@ -73,7 +76,10 @@ type Migrondi
         [<Optional>] ?amount,
         [<Optional>] ?cancellationToken
       ) =
-      migrondi.DryRunUpAsync()
+      migrondi.DryRunUpAsync(
+        ?amount = amount,
+        ?cancellationToken = cancellationToken
+      )
 
     member _.MigrationsList() = migrondi.MigrationsList()
 
@@ -89,7 +95,10 @@ type Migrondi
         [<Optional>] ?amount,
         [<Optional>] ?cancellationToken
       ) =
-      migrondi.RunDownAsync()
+      migrondi.RunDownAsync(
+        ?amount = amount,
+        ?cancellationToken = cancellationToken
+      )
 
     member _.RunUp([<Optional>] ?amount: int) =
 
@@ -97,7 +106,10 @@ type Migrondi
 
     member _.RunUpAsync([<Optional>] ?amount, [<Optional>] ?cancellationToken) =
 
-      migrondi.RunUpAsync()
+      migrondi.RunUpAsync(
+        ?amount = amount,
+        ?cancellationToken = cancellationToken
+      )
 
     member _.ScriptStatus(migrationPath: string) =
 
@@ -105,11 +117,18 @@ type Migrondi
 
     member _.ScriptStatusAsync(arg1: string, [<Optional>] ?cancellationToken) =
 
-      migrondi.ScriptStatusAsync(arg1)
+      migrondi.ScriptStatusAsync(arg1, ?cancellationToken = cancellationToken)
 
+/// <summary>
+/// An F# Flavored Migrondi API that provides a default <see cref="Migrondi.Core.Migrondi.MigrondiService">MigrondiService</see>
+/// </summary>
 [<RequireQualifiedAccessAttribute>]
 module Migrondi =
 
+  /// <summary>
+  /// In case you'd need to customize the <see cref="Migrondi.Core.Migrondi.MigrondiService">MigrondiService</see> instance that is used by other
+  /// functions in the Migrondi module, you can use the Api functions to provide your own instance of the service
+  /// </summary>
   module Api =
     open System.Threading
 
@@ -205,33 +224,117 @@ module Migrondi =
   [<CompiledNameAttribute "DefaultMigrondi">]
   let defaultMigrondi = Migrondi()
 
+  /// <summary>
+  /// Runs a specific amount pending migrations against the database
+  /// </summary>
+  /// <param name="amount">The amount of migrations to apply</param>
+  /// <returns>
+  /// A list of all migrations that were applied including previously applied ones
+  /// </returns>
+  /// <remarks>
+  /// This method coordinates between the source scripts and the database
+  /// </remarks>
   let inline runUp (amount: int) =
     Api.runDownWithMigrondi defaultMigrondi (Some(amount)) |> Seq.toList
 
+  /// <summary>
+  /// Runs all pending migrations against the database
+  /// </summary>
+  /// <returns>
+  /// A list of all migrations that were applied including previously applied ones
+  /// </returns>
+  /// <remarks>
+  /// This method coordinates between the source scripts and the database
+  /// </remarks>
   let inline runAllUp () =
     Api.runUpWithMigrondi defaultMigrondi None |> Seq.toList
 
+  /// <summary>
+  /// Reverts a specific amount of migrations that were previously applied
+  /// </summary>
+  /// <param name="amount">The amount of migrations to roll back</param>
+  /// <returns>
+  /// A list of all migrations that were reverted including previously applied ones
+  /// </returns>
+  /// <remarks>
+  /// This method coordinates between the source scripts and the database
+  /// </remarks>
   let inline runDown (amount: int) =
     Api.runDownWithMigrondi defaultMigrondi (Some(amount)) |> Seq.toList
 
+  /// <summary>
+  /// Reverts all migrations that were previously applied
+  /// </summary>
+  /// <returns>
+  /// A list of all migrations that were reverted including previously applied ones
+  /// </returns>
+  /// <remarks>
+  /// This method coordinates between the source scripts and the database
+  /// </remarks>
   let inline runAllDown () =
     Api.runDownWithMigrondi defaultMigrondi None |> Seq.toList
 
+  /// <summary>
+  /// Makes a list with the amount of the pending migrations that would be applied
+  /// </summary>
+  /// <param name="amount">The amount of migrations to apply</param>
+  /// <returns>
+  /// A list of all migrations that would be applied
+  /// </returns>
   let inline dryRunUp (amount: int) =
     Api.dryRunUpWithMigrondi defaultMigrondi (Some(amount)) |> Seq.toList
 
+  /// <summary>
+  /// Makes a list of the pending migrations that would be applied
+  /// </summary>
+  /// <returns>
+  /// A list of all migrations that would be applied
+  /// </returns>
   let inline dryRunAllUp () =
     Api.dryRunUpWithMigrondi defaultMigrondi None |> Seq.toList
 
+  /// <summary>
+  /// Makes a list of the pending migrations that would be reverted
+  /// </summary>
+  /// <param name="amount">The amount of migrations to roll back</param>
+  /// <returns>
+  /// A list of all migrations that would be reverted
+  /// </returns>
   let inline dryRunDown (amount: int) =
     Api.dryRunDownWithMigrondi defaultMigrondi (Some(amount)) |> Seq.toList
 
+  /// <summary>
+  /// Makes a list of the pending migrations that would be reverted
+  /// </summary>
+  /// <returns>
+  /// A list of all migrations that would be reverted
+  /// </returns>
   let inline dryRunAllDown () =
     Api.dryRunDownWithMigrondi defaultMigrondi None |> Seq.toList
 
+  /// <summary>
+  /// Makes a list of all migrations and their status
+  /// </summary>
+  /// <returns>
+  /// A list of all migrations and their status
+  /// </returns>
+  /// <remarks>
+  /// This method coordinates between the source scripts and the database
+  /// </remarks>
   let inline migrationsList () =
     Api.migrationsListWithMigrondi defaultMigrondi |> Seq.toList
 
+  /// <summary>
+  /// Takes a relative path to the migrations dir to a migration file
+  /// and returns its status
+  /// </summary>
+  /// <param name="migrationPath">The relative path to the migration file</param>
+  /// <returns>
+  /// The status of the migration
+  /// </returns>
+  /// <remarks>
+  /// This method coordinates between the source scripts and the database
+  /// </remarks>
   let inline scriptStatus (migrationPath: string) =
     Api.scriptStatusWithMigrondi defaultMigrondi migrationPath
 
