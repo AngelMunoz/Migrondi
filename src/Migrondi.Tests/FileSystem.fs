@@ -75,8 +75,9 @@ type FileSystemTests() =
 
   let rootDir = DirectoryInfo(baseUri.LocalPath)
 
-  let fileSystem = FileSystemImpl.BuildDefaultEnv(baseUri)
   let serializer = SerializerImpl.BuildDefaultEnv()
+
+  let fileSystem = FileSystemImpl.BuildDefaultEnv(serializer, baseUri)
 
   do printfn $"Using '{rootDir.FullName}' as Root Directory"
 
@@ -95,9 +96,8 @@ type FileSystemTests() =
         MigrondiConfigData.configSampleObject
 
     fileSystem.WriteConfiguration(
-      serializer,
       MigrondiConfigData.configSampleObject,
-      UMX.tag<RelativeUserPath> MigrondiConfigData.fsRelativeMigrondiConfigPath
+      MigrondiConfigData.fsRelativeMigrondiConfigPath
     )
 
     let actual =
@@ -111,10 +111,8 @@ type FileSystemTests() =
     let expected =
 
       fileSystem.WriteConfiguration(
-        serializer,
         MigrondiConfigData.configSampleObject,
-        UMX.tag<RelativeUserPath>
-          MigrondiConfigData.fsRelativeMigrondiConfigPath
+        MigrondiConfigData.fsRelativeMigrondiConfigPath
       )
 
       File.ReadAllText(MigrondiConfigData.fsMigrondiConfigPath rootDir.FullName)
@@ -123,21 +121,10 @@ type FileSystemTests() =
 
     let fileResult =
       fileSystem.ReadConfiguration(
-        serializer,
-        UMX.tag<RelativeUserPath>
-          MigrondiConfigData.fsRelativeMigrondiConfigPath
+        MigrondiConfigData.fsRelativeMigrondiConfigPath
       )
 
-    match fileResult with
-    | Ok actual ->
-
-      Assert.AreEqual(expected, actual)
-    | Error(ReadFileError.FileNotFound(filepath, filename)) ->
-      Assert.Fail($"File '{filename}' not found at '{filepath}'")
-    | Error(ReadFileError.Malformedfile(filename, serializationError)) ->
-      Assert.Fail(
-        $"File '{filename}' is malformed: {serializationError.Reason}\n{serializationError.Content}"
-      )
+    Assert.AreEqual(expected, fileResult)
 
   [<TestMethod>]
   member _.``Can write a migrondi.json file async``() =
@@ -148,10 +135,8 @@ type FileSystemTests() =
 
       do!
         fileSystem.WriteConfigurationAsync(
-          serializer,
           MigrondiConfigData.configSampleObject,
-          UMX.tag<RelativeUserPath>
-            MigrondiConfigData.fsRelativeMigrondiConfigPath
+          MigrondiConfigData.fsRelativeMigrondiConfigPath
         )
 
       let! actual =
@@ -168,10 +153,8 @@ type FileSystemTests() =
       let! expected = task {
         do!
           fileSystem.WriteConfigurationAsync(
-            serializer,
             MigrondiConfigData.configSampleObject,
-            UMX.tag<RelativeUserPath>
-              MigrondiConfigData.fsRelativeMigrondiConfigPath
+            MigrondiConfigData.fsRelativeMigrondiConfigPath
           )
 
         let! result =
@@ -189,19 +172,10 @@ type FileSystemTests() =
 
       let! fileResult =
         fileSystem.ReadConfigurationAsync(
-          serializer,
-          UMX.tag<RelativeUserPath>
-            MigrondiConfigData.fsRelativeMigrondiConfigPath
+          MigrondiConfigData.fsRelativeMigrondiConfigPath
         )
 
-      match fileResult with
-      | Ok actual -> Assert.AreEqual(expected, actual)
-      | Error(ReadFileError.FileNotFound(filepath, filename)) ->
-        Assert.Fail($"File '{filename}' not found at '{filepath}'")
-      | Error(ReadFileError.Malformedfile(filename, serializationError)) ->
-        Assert.Fail(
-          $"File '{filename}' is malformed: {serializationError.Reason}\n{serializationError.Content}"
-        )
+      Assert.AreEqual(expected, fileResult)
     }
     :> Task
 
@@ -225,11 +199,7 @@ type FileSystemTests() =
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(
-        serializer,
-        migration,
-        UMX.tag<RelativeUserPath> name
-      )
+      fileSystem.WriteMigration(migration, name)
     )
 
     let files =
@@ -273,12 +243,7 @@ type FileSystemTests() =
 
       // write them to disk
       for migration, name in migrations do
-        do!
-          fileSystem.WriteMigrationAsync(
-            serializer,
-            migration,
-            UMX.tag<RelativeUserPath> name
-          )
+        do! fileSystem.WriteMigrationAsync(migration, name)
 
       let! files =
         Directory.GetFiles migrationsDirPath
@@ -321,29 +286,21 @@ type FileSystemTests() =
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(
-        serializer,
-        migration,
-        UMX.tag<RelativeUserPath> name
-      )
+      fileSystem.WriteMigration(migration, name)
     )
 
     let foundMigrations =
       migrations
       |> List.traverseResultA(fun (_, relativePath) ->
-        let migrationResult =
-          fileSystem.ReadMigration(
-            serializer,
-            UMX.tag<RelativeUserPath> relativePath
+        try
+          fileSystem.ReadMigration(relativePath) |> Ok
+        with
+        | :? SourceNotFound as e ->
+          Error($"File '{e.name}' not found at '{e.path}'")
+        | :? MalformedSource as e ->
+          Error(
+            $"File '{e.sourceName}' is malformed: {e.serializationError.Reason}\n{e.serializationError.Content}"
           )
-
-        match migrationResult with
-        | Ok migration -> Ok migration
-        | Error(Malformedfile(filename, error)) ->
-          Error
-            $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
-        | Error(FileNotFound(filepath, filename)) ->
-          Error $"File '{filename}' not found at '{filepath}'"
       )
 
     match foundMigrations with
@@ -370,31 +327,26 @@ type FileSystemTests() =
 
       // write them to disk
       for migration, name in migrations do
-        do!
-          fileSystem.WriteMigrationAsync(
-            serializer,
-            migration,
-            UMX.tag<RelativeUserPath> name
-          )
+        do! fileSystem.WriteMigrationAsync(migration, name)
 
 
       let! foundMigrations =
         migrations
         |> List.traverseAsyncResultA(fun (_, relativePath) -> asyncResult {
 
-          let! migration =
-            fileSystem.ReadMigrationAsync(
-              serializer,
-              UMX.tag<RelativeUserPath> relativePath
-            )
-            |> TaskResult.mapError(fun error ->
-              match error with
-              | Malformedfile(filename, error) ->
-                Error
-                  $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
-              | FileNotFound(filepath, filename) ->
-                Error $"File '{filename}' not found at '{filepath}'"
-            )
+          let! migration = task {
+            try
+              let! value = fileSystem.ReadMigrationAsync(relativePath)
+              return Ok value
+            with
+            | :? SourceNotFound as e ->
+              return Error($"File '{e.name}' not found at '{e.path}'")
+            | :? MalformedSource as e ->
+              return
+                Error(
+                  $"File '{e.sourceName}' is malformed: {e.serializationError.Reason}\n{e.serializationError.Content}"
+                )
+          }
 
           return migration
         })
@@ -425,29 +377,28 @@ type FileSystemTests() =
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(
-        serializer,
-        migration,
-        UMX.tag<RelativeUserPath> name
-      )
+      fileSystem.WriteMigration(migration, name)
     )
 
     let foundMigrations =
-      fileSystem.ListMigrations(
-        serializer,
-        MigrationData.nameSchema,
-        UMX.tag<RelativeUserDirectoryPath> migrationsDirPath
-      )
-      |> Result.mapError(fun error ->
-        error
-        |> List.map(fun error ->
-          match error with
-          | Malformedfile(filename, error) ->
-            $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
-          | FileNotFound(filepath, filename) ->
-            $"File '{filename}' not found at '{filepath}'"
+      try
+        fileSystem.ListMigrations(migrationsDirPath) |> List.ofSeq |> Ok
+      with :? AggregateException as e ->
+        e.InnerExceptions
+        |> Seq.filter(fun err ->
+          if err.GetType() = typeof<MalformedSource> then
+            true
+          else
+            false
         )
-      )
+        |> List.ofSeq
+        |> List.traverseResultA(fun (err) ->
+          let err = err :?> MalformedSource
+
+          Error
+            $"File '{err.sourceName}' is malformed: {err.serializationError.Reason}\n{err.serializationError.Content}"
+        )
+
 
     match foundMigrations with
     | Ok actual ->
@@ -473,29 +424,27 @@ type FileSystemTests() =
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(
-        serializer,
-        migration,
-        UMX.tag<RelativeUserPath> name
-      )
+      fileSystem.WriteMigration(migration, name)
     )
 
     let foundMigrations =
-      fileSystem.ListMigrations(
-        serializer,
-        MigrationData.nameSchema,
-        UMX.tag<RelativeUserDirectoryPath> migrationsDirPath
-      )
-      |> Result.mapError(fun error ->
-        error
-        |> List.map(fun error ->
-          match error with
-          | Malformedfile(filename, error) ->
-            $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
-          | FileNotFound(filepath, filename) ->
-            $"File '{filename}' not found at '{filepath}'"
+      try
+        fileSystem.ListMigrations(migrationsDirPath) |> List.ofSeq |> Ok
+      with :? AggregateException as e ->
+        e.InnerExceptions
+        |> Seq.filter(fun err ->
+          if err.GetType() = typeof<MalformedSource> then
+            true
+          else
+            false
         )
-      )
+        |> List.ofSeq
+        |> List.traverseResultA(fun (err) ->
+          let err = err :?> MalformedSource
+
+          Error
+            $"File '{err.sourceName}' is malformed: {err.serializationError.Reason}\n{err.serializationError.Content}"
+        )
 
     match foundMigrations with
     | Ok actual ->
@@ -535,29 +484,27 @@ type FileSystemTests() =
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(
-        serializer,
-        migration,
-        UMX.tag<RelativeUserPath> name
-      )
+      fileSystem.WriteMigration(migration, name)
     )
 
     let foundMigrations =
-      fileSystem.ListMigrations(
-        serializer,
-        MigrationData.nameSchema,
-        UMX.tag<RelativeUserDirectoryPath> migrationsDirPath
-      )
-      |> Result.mapError(fun error ->
-        error
-        |> List.map(fun error ->
-          match error with
-          | Malformedfile(filename, error) ->
-            $"File '{filename}' is malformed: {error.Reason}\n{error.Content}"
-          | FileNotFound(filepath, filename) ->
-            $"File '{filename}' not found at '{filepath}'"
+      try
+        fileSystem.ListMigrations(migrationsDirPath) |> List.ofSeq |> Ok
+      with :? AggregateException as e ->
+        e.InnerExceptions
+        |> Seq.filter(fun err ->
+          if err.GetType() = typeof<MalformedSource> then
+            true
+          else
+            false
         )
-      )
+        |> List.ofSeq
+        |> List.traverseResultA(fun (err) ->
+          let err = err :?> MalformedSource
+
+          Error
+            $"File '{err.sourceName}' is malformed: {err.serializationError.Reason}\n{err.serializationError.Content}"
+        )
 
     match foundMigrations with
     | Ok actual ->

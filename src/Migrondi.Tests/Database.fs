@@ -230,7 +230,7 @@ type DatabaseTests() =
     }
 
     match operation with
-    | Ok value -> Assert.AreEqual(0, value.Length)
+    | Ok value -> Assert.AreEqual(0, value.Count)
     | Error err ->
       Assert.Fail($"Failed to find the last applied migration: %s{err}")
 
@@ -260,7 +260,7 @@ type DatabaseTests() =
     // the test has to account for the order as well, not just the size of the list
     match operation with
     | Ok value ->
-      Assert.AreEqual(4, value.Length)
+      Assert.AreEqual(4, value.Count)
       Assert.AreEqual("test_4", value[0].name)
       Assert.AreEqual("test_3", value[1].name)
       Assert.AreEqual("test_2", value[2].name)
@@ -319,7 +319,7 @@ type DatabaseTests() =
 
     match operation with
     | Ok(migrations, lastApplied) ->
-      Assert.AreEqual(4, migrations.Length)
+      Assert.AreEqual(4, migrations.Count)
       Assert.AreEqual("test_4", migrations[0].name)
       Assert.AreEqual("test_3", migrations[1].name)
       Assert.AreEqual("test_2", migrations[2].name)
@@ -385,7 +385,7 @@ type DatabaseTests() =
 
     match operation with
     | Ok(migrations, lastApplied) ->
-      Assert.AreEqual(2, migrations.Length)
+      Assert.AreEqual(2, migrations.Count)
       Assert.AreEqual("test_2", migrations[0].name)
       Assert.AreEqual("test_1", migrations[1].name)
       Assert.AreEqual("test_2", lastApplied.name)
@@ -425,7 +425,7 @@ type DatabaseTests() =
         )
       )
 
-    Assert.AreEqual(failingMigration, thrown.Data0)
+    Assert.AreEqual(failingMigration, thrown.migration)
 
     match databaseEnv.FindLastApplied() with
     | Some migration -> Assert.AreEqual("test_2", migration.name)
@@ -470,7 +470,7 @@ type DatabaseTests() =
         )
       )
 
-    Assert.AreEqual(failingMigration, thrown.Data0)
+    Assert.AreEqual(failingMigration, thrown.migration)
 
     match databaseEnv.FindLastApplied() with
     | Some migration -> Assert.AreEqual("test_3", migration.name)

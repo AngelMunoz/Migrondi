@@ -11,6 +11,7 @@
     <Compile Include="FileSystem.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="Database.Async.fs" />
+    <Compile Include="Migrondi.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
   <ItemGroup>
