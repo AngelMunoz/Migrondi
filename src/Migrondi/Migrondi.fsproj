@@ -18,6 +18,7 @@
   <ItemGroup>
     <Compile Include="Handlers.fs" />
     <Compile Include="Inputs.fs" />
+    <Compile Include="Env.fs" />
     <Compile Include="Commands.fs" />
     <Compile Include="Middleware.fs" />
     <Compile Include="Program.fs" />
@@ -27,5 +28,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.SystemCommandLine" Version="0.17.0-beta4" />
+    <PackageReference Include="Serilog" Version="3.0.1" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
   </ItemGroup>
 </Project>

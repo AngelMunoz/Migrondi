@@ -1,7 +1,6 @@
 namespace Migrondi.Inputs
 
 open System.CommandLine
-open System.CommandLine.Invocation
 open System.CommandLine.Parsing
 open System.IO
 
@@ -11,7 +10,6 @@ open FSharp.SystemCommandLine
 
 
 open Migrondi.Core
-open Migrondi.Core.Migrondi
 
 
 [<RequireQualifiedAccess>]
@@ -44,7 +42,7 @@ module SharedArguments =
 
 [<RequireQualifiedAccess>]
 module ListArgs =
-  let migrationKind =
+  let MigrationKind =
     let op =
       let parseArgument (result: ArgumentResult) =
         match result.Tokens |> Seq.tryHead with
@@ -60,4 +58,4 @@ module ListArgs =
         Description = ""
       )
 
-    op
+    op |> Input.OfOption
