@@ -55,7 +55,13 @@ type Migrondi
   ) =
   let serializer = defaultArg serializer (SerializerImpl.BuildDefaultEnv())
   let fs = defaultArg fs (fileSystem serializer rootUri)
-  let config = fs.ReadConfiguration(defaultArg configPath "./migrondi.json")
+
+  let config =
+    try
+      fs.ReadConfiguration(defaultArg configPath "./migrondi.json")
+    with :? SourceNotFound ->
+      MigrondiConfig.Default
+
   let db = defaultArg db (DatabaseImpl.Build(config))
 
   let migrondi = MigrondiServiceImpl.BuildDefaultEnv(db, fs, config)

@@ -22,7 +22,14 @@ type MigrondiConfig = {
   /// a string that represents the drivers that can be used
   /// mysql | postgres | mssql | sqlite
   driver: MigrondiDriver
-}
+} with
+
+  static member Default: MigrondiConfig = {
+    connection = "./migrondi.db"
+    migrations = "./migrations"
+    tableName = "__migrondi_migrations"
+    driver = MigrondiDriver.Sqlite
+  }
 
 /// Represents a migration stored in the database
 type MigrationRecord = {
@@ -122,14 +129,14 @@ exception DeserializationFailed of Content: string * Reason: string
 
 exception MalformedSource of
   SourceName: string *
-  Content: string * 
+  Content: string *
   Reason: string
 
 
-type MalformedSource with 
+type MalformedSource with
 
   member this.Value = this.SourceName, this.Content, this.Reason
 
-type DeserializationFailed with 
+type DeserializationFailed with
 
   member this.Value = this.Content, this.Reason
