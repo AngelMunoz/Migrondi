@@ -68,7 +68,7 @@ module Database =
     (appEnv: AppEnv)
     (command: Command, _: KeyValuePair<string, string seq> seq)
     =
-    let db = appEnv.Database
+    let db = appEnv.MigrondiEnv.Database
 
     result {
       do! Helpers.ShouldRunFor command.Name [ "status"; "up"; "down"; "list" ]

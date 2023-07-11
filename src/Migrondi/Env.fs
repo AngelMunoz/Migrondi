@@ -11,6 +11,4 @@ type AppEnv(logger: ILogger, migrondi: MigrondiEnv) =
 
   member _.Logger: ILogger = logger
 
-  member _.Migrondi: MigrondiService = migrondi.Migrondi
-
-  member _.Database: DatabaseService = migrondi.Database
+  member _.MigrondiEnv: MigrondiEnv = migrondi

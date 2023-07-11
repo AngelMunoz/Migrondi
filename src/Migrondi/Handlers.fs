@@ -3,12 +3,28 @@ namespace Migrondi.Handlers
 open System
 open System.IO
 
+open Serilog
+
 open Migrondi.Core
+open Migrondi.Core.FileSystem
 open Migrondi.Core.Migrondi
 
 [<RequireQualifiedAccess>]
 module Init =
-  let handler (path: DirectoryInfo, migrondi: MigrondiService) = 0
+  let handler (path: DirectoryInfo, fs: #FileSystemService, logger: #ILogger) =
+    logger.Information
+      $"Initializing a new migrondi project at: {path.FullName} ."
+
+    let configPath = Path.Combine(path.FullName, "./migrondi.json")
+    let config = MigrondiConfig.Default
+    fs.WriteConfiguration(config, configPath)
+    let subpath = path.CreateSubdirectory(config.migrations)
+
+    logger.Information
+      $"migrondi.json and {subpath.Name} directory created successfully."
+
+    0
+
 
 [<RequireQualifiedAccess>]
 module Migrations =
