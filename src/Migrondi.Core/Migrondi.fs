@@ -111,7 +111,7 @@ type MigrondiService =
     string * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationStatus>
 
-module MigrondiEnvImpl =
+module MigrondiserviceImpl =
   open FsToolkit.ErrorHandling
 
   let obtainPendingUp
@@ -154,8 +154,8 @@ module MigrondiEnvImpl =
 
 
   let runUp
-    (db: #DatabaseEnv)
-    (fs: #FileSystemEnv)
+    (db: #DatabaseService)
+    (fs: #FileSystemService)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -168,8 +168,8 @@ module MigrondiEnvImpl =
     db.ApplyMigrations pendingMigrations[0..amount]
 
   let runDown
-    (db: #DatabaseEnv)
-    (fs: #FileSystemEnv)
+    (db: #DatabaseService)
+    (fs: #FileSystemService)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -182,8 +182,8 @@ module MigrondiEnvImpl =
     db.RollbackMigrations pendingMigrations[0..amount]
 
   let runDryUp
-    (db: #DatabaseEnv)
-    (fs: #FileSystemEnv)
+    (db: #DatabaseService)
+    (fs: #FileSystemService)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -196,8 +196,8 @@ module MigrondiEnvImpl =
     pending[0..amount]
 
   let runDryDown
-    (db: #DatabaseEnv)
-    (fs: #FileSystemEnv)
+    (db: #DatabaseService)
+    (fs: #FileSystemService)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -210,8 +210,8 @@ module MigrondiEnvImpl =
     pending[0..amount]
 
   let migrationsList
-    (db: #DatabaseEnv)
-    (fs: #FileSystemEnv)
+    (db: #DatabaseService)
+    (fs: #FileSystemService)
     (config: MigrondiConfig)
     =
     let migrations = fs.ListMigrations config.migrations
@@ -233,8 +233,8 @@ module MigrondiEnvImpl =
     :> IReadOnlyList<MigrationStatus>
 
   let scriptStatus
-    (db: #DatabaseEnv)
-    (fs: #FileSystemEnv)
+    (db: #DatabaseService)
+    (fs: #FileSystemService)
     (migrationPath: string)
     =
     let migration = fs.ReadMigration migrationPath
@@ -248,30 +248,30 @@ type MigrondiServiceImpl =
 
   static member BuildDefaultEnv
     (
-      database: #DatabaseEnv,
-      fileSystem: #FileSystemEnv,
+      database: #DatabaseService,
+      fileSystem: #FileSystemService,
       config: MigrondiConfig
     ) =
     { new MigrondiService with
         member _.DryRunUp([<Optional>] ?amount) : IReadOnlyList<Migration> =
-          MigrondiEnvImpl.runDryDown database fileSystem config amount
+          MigrondiserviceImpl.runDryDown database fileSystem config amount
 
         member _.DryRunDown([<Optional>] ?amount) : IReadOnlyList<Migration> =
-          MigrondiEnvImpl.runDryDown database fileSystem config amount
+          MigrondiserviceImpl.runDryDown database fileSystem config amount
 
         member _.RunDown
           ([<Optional>] ?amount)
           : IReadOnlyList<MigrationRecord> =
-          MigrondiEnvImpl.runDown database fileSystem config amount
+          MigrondiserviceImpl.runDown database fileSystem config amount
 
         member _.RunUp([<Optional>] ?amount) : IReadOnlyList<MigrationRecord> =
-          MigrondiEnvImpl.runUp database fileSystem config amount
+          MigrondiserviceImpl.runUp database fileSystem config amount
 
         member _.MigrationsList() : IReadOnlyList<MigrationStatus> =
-          MigrondiEnvImpl.migrationsList database fileSystem config
+          MigrondiserviceImpl.migrationsList database fileSystem config
 
         member _.ScriptStatus(arg1: string) : MigrationStatus =
-          MigrondiEnvImpl.scriptStatus database fileSystem arg1
+          MigrondiserviceImpl.scriptStatus database fileSystem arg1
 
         member _.RunUpAsync
           (

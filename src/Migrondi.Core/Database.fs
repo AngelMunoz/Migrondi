@@ -20,7 +20,7 @@ open Migrondi.Core
 
 
 [<Interface>]
-type DatabaseEnv =
+type DatabaseService =
 
   /// <summary>
   /// Creates the required tables in the database.
@@ -528,7 +528,7 @@ module MigrationsAsyncImpl =
 type DatabaseImpl =
 
   static member Build(config: MigrondiConfig) =
-    { new DatabaseEnv with
+    { new DatabaseService with
 
         member _.SetupDatabase() =
           use connection =

@@ -27,7 +27,7 @@ open Units
 
 
 [<Interface>]
-type FileSystemEnv =
+type FileSystemService =
 
   /// <summary>
   /// Take the path to a configuration source, reads and transforms it into a configuration object
@@ -176,7 +176,7 @@ module PhysicalFileSystemImpl =
 
   let readConfiguration
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       root: Uri,
       readFrom: string<RelativeUserPath>
     ) =
@@ -192,13 +192,14 @@ module PhysicalFileSystemImpl =
           SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
         )
 
-    try 
+    try
       serializer.ConfigurationSerializer.Decode content
-    with | :? DeserializationFailed as ex -> reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
+    with :? DeserializationFailed as ex ->
+      reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
 
   let readConfigurationAsync
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       root: Uri,
       readFrom: string<RelativeUserPath>
     ) =
@@ -220,15 +221,16 @@ module PhysicalFileSystemImpl =
             )
       }
 
-      try 
+      try
         return serializer.ConfigurationSerializer.Decode contents
-      with | :? DeserializationFailed as ex ->
-        return reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
+      with :? DeserializationFailed as ex ->
+        return
+          reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
     }
 
   let writeConfiguration
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       config: MigrondiConfig,
       root: Uri,
       writeTo: string<RelativeUserPath>
@@ -245,7 +247,7 @@ module PhysicalFileSystemImpl =
 
   let writeConfigurationAsync
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       config: MigrondiConfig,
       root: Uri,
       writeTo: string<RelativeUserPath>
@@ -268,7 +270,7 @@ module PhysicalFileSystemImpl =
 
   let readMigration
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       root: Uri,
       readFrom: string<RelativeUserPath>
     ) =
@@ -284,13 +286,14 @@ module PhysicalFileSystemImpl =
           SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
         )
 
-    try 
+    try
       serializer.MigrationSerializer.DecodeText content
-    with | :? DeserializationFailed as ex -> reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
+    with :? DeserializationFailed as ex ->
+      reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
 
   let readMigrationAsync
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       root: Uri,
       readFrom: string<RelativeUserPath>
     ) =
@@ -311,14 +314,17 @@ module PhysicalFileSystemImpl =
               SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
             )
       }
-      try 
-        return serializer.MigrationSerializer.DecodeText contents 
-      with | :? DeserializationFailed as ex -> return reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
+
+      try
+        return serializer.MigrationSerializer.DecodeText contents
+      with :? DeserializationFailed as ex ->
+        return
+          reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
     }
 
   let writeMigration
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       migration: Migration,
       root: Uri,
       writeTo: string<RelativeUserPath>
@@ -335,7 +341,7 @@ module PhysicalFileSystemImpl =
 
   let writeMigrationAsync
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       migration: Migration,
       root: Uri,
       writeTo: string<RelativeUserPath>
@@ -358,7 +364,7 @@ module PhysicalFileSystemImpl =
 
   let listMigrations
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       root: Uri,
       readFrom: string<RelativeUserDirectoryPath>
     ) =
@@ -380,8 +386,9 @@ module PhysicalFileSystemImpl =
       return!
         files
         |> List.traverseResultA(fun (name, contents) ->
-          try serializer.MigrationSerializer.DecodeText(contents, name) |> Ok
-          with | :? DeserializationFailed as ex ->
+          try
+            serializer.MigrationSerializer.DecodeText(contents, name) |> Ok
+          with :? DeserializationFailed as ex ->
             MalformedSource(name, ex.Reason, ex.Source) |> Error
         )
     }
@@ -394,7 +401,7 @@ module PhysicalFileSystemImpl =
 
   let listMigrationsAsync
     (
-      serializer: #SerializerEnv,
+      serializer: #SerializerService,
       root: Uri,
       readFrom: string<RelativeUserDirectoryPath>
     ) =
@@ -425,8 +432,9 @@ module PhysicalFileSystemImpl =
           files
           |> Array.toList
           |> List.traverseResultA(fun (name, contents) ->
-            try serializer.MigrationSerializer.DecodeText(contents, name) |> Ok
-            with | :? DeserializationFailed as ex ->
+            try
+              serializer.MigrationSerializer.DecodeText(contents, name) |> Ok
+            with :? DeserializationFailed as ex ->
               MalformedSource(name, ex.Reason, ex.Source) |> Error
           )
       }
@@ -443,8 +451,8 @@ module PhysicalFileSystemImpl =
 [<Class>]
 type FileSystemImpl =
 
-  static member BuildDefaultEnv(serializer: #SerializerEnv, rootUri: Uri) =
-    { new FileSystemEnv with
+  static member BuildDefaultEnv(serializer: #SerializerService, rootUri: Uri) =
+    { new FileSystemService with
         member _.ListMigrations(readFrom) =
           PhysicalFileSystemImpl.listMigrations(
             serializer,
