@@ -93,7 +93,6 @@ module Commands =
     setHandler(ArgumentMapper.List appEnv >> Migrations.listMigrations)
   }
 
-
   let Status appEnv = command "status" {
     description
       "Checks whether the migration file has been applied or not to the database"
