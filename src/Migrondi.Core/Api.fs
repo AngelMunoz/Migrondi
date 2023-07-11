@@ -17,6 +17,14 @@ let inline rootUri (cwd: string option) =
 let inline fileSystem serializer cwd =
   FileSystemImpl.BuildDefaultEnv(serializer, rootUri cwd)
 
+[<Interface>]
+type MigrondiEnv =
+
+  abstract member Database: DatabaseService
+  abstract member FileSystem: FileSystemService
+  abstract member Serializer: SerializerService
+  abstract member Migrondi: MigrondiService
+
 /// <summary>
 /// Migrondi service
 /// </summary>
@@ -41,9 +49,9 @@ type Migrondi
   (
     [<Optional>] ?rootUri: string,
     [<Optional>] ?configPath: string,
-    [<Optional>] ?serializer: SerializerEnv,
-    [<Optional>] ?fs: FileSystemEnv,
-    [<Optional>] ?db: DatabaseEnv
+    [<Optional>] ?serializer: SerializerService,
+    [<Optional>] ?fs: FileSystemService,
+    [<Optional>] ?db: DatabaseService
   ) =
   let serializer = defaultArg serializer (SerializerImpl.BuildDefaultEnv())
   let fs = defaultArg fs (fileSystem serializer rootUri)
@@ -52,72 +60,15 @@ type Migrondi
 
   let migrondi = MigrondiServiceImpl.BuildDefaultEnv(db, fs, config)
 
-  interface MigrondiService with
-    member _.DryRunDown([<Optional>] ?amount) =
+  interface MigrondiEnv with
 
-      migrondi.DryRunDown(?amount = amount)
+    member _.Database: DatabaseService = db
 
-    member _.DryRunDownAsync
-      (
-        [<Optional>] ?amount,
-        [<Optional>] ?cancellationToken
-      ) =
-      migrondi.DryRunDownAsync(
-        ?amount = amount,
-        ?cancellationToken = cancellationToken
-      )
+    member _.Serializer: SerializerService = serializer
 
-    member _.DryRunUp([<Optional>] ?amount: int) =
+    member _.FileSystem: FileSystemService = fs
 
-      migrondi.DryRunUp(?amount = amount)
-
-    member _.DryRunUpAsync
-      (
-        [<Optional>] ?amount,
-        [<Optional>] ?cancellationToken
-      ) =
-      migrondi.DryRunUpAsync(
-        ?amount = amount,
-        ?cancellationToken = cancellationToken
-      )
-
-    member _.MigrationsList() = migrondi.MigrationsList()
-
-    member _.MigrationsListAsync([<Optional>] ?cancellationToken) =
-      migrondi.MigrationsListAsync()
-
-    member _.RunDown([<Optional>] ?amount: int) =
-
-      migrondi.RunDown(?amount = amount)
-
-    member _.RunDownAsync
-      (
-        [<Optional>] ?amount,
-        [<Optional>] ?cancellationToken
-      ) =
-      migrondi.RunDownAsync(
-        ?amount = amount,
-        ?cancellationToken = cancellationToken
-      )
-
-    member _.RunUp([<Optional>] ?amount: int) =
-
-      migrondi.RunUp(?amount = amount)
-
-    member _.RunUpAsync([<Optional>] ?amount, [<Optional>] ?cancellationToken) =
-
-      migrondi.RunUpAsync(
-        ?amount = amount,
-        ?cancellationToken = cancellationToken
-      )
-
-    member _.ScriptStatus(migrationPath: string) =
-
-      migrondi.ScriptStatus(migrationPath)
-
-    member _.ScriptStatusAsync(arg1: string, [<Optional>] ?cancellationToken) =
-
-      migrondi.ScriptStatusAsync(arg1, ?cancellationToken = cancellationToken)
+    member _.Migrondi: MigrondiService = migrondi
 
 /// <summary>
 /// An F# Flavored Migrondi API that provides a default <see cref="Migrondi.Core.Migrondi.MigrondiService">MigrondiService</see>
@@ -222,7 +173,7 @@ module Migrondi =
       )
 
   [<CompiledNameAttribute "DefaultMigrondi">]
-  let defaultMigrondi = Migrondi()
+  let defaultMigrondi: MigrondiService = (Migrondi() :> MigrondiEnv).Migrondi
 
   /// <summary>
   /// Runs a specific amount pending migrations against the database
