@@ -1,6 +1,6 @@
-﻿open System.CommandLine
-open System.CommandLine.Invocation
+﻿open System
 open System.CommandLine.Builder
+open System.IO
 open FSharp.SystemCommandLine
 
 open Serilog
@@ -14,13 +14,15 @@ open Migrondi.Middleware
 [<EntryPoint>]
 let main argv =
 
+  // setup services
   let logger =
     LoggerConfiguration()
       .MinimumLevel.Information()
       .WriteTo.Console()
       .CreateLogger()
 
-  let appEnv = AppEnv(logger, Migrondi())
+  let cwd = $"{Environment.CurrentDirectory}{Path.DirectorySeparatorChar}"
+  let appEnv = AppEnv.BuildDefault(cwd, logger)
 
 
   rootCommand argv {
