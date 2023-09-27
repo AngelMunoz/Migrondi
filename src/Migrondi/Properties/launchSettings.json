@@ -3,52 +3,52 @@
     "Migrondi Init": {
       "commandName": "Project",
       "commandLineArgs": "init",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
     "Migrondi New": {
       "commandName": "Project",
       "commandLineArgs": "new add-users_sample",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
     "Migrondi List": {
       "commandName": "Project",
       "commandLineArgs": "list",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
     "Migrondi Status": {
       "commandName": "Project",
       "commandLineArgs": "status add-users_sample_1695782605066.sql",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
     "Migrondi Up Dry": {
       "commandName": "Project",
       "commandLineArgs": "up -d",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
     "Migrondi 1 Up Dry": {
       "commandName": "Project",
       "commandLineArgs": "up 1 -d",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
     "Migrondi Down Dry": {
       "commandName": "Project",
       "commandLineArgs": "down -d",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
     "Migrondi 1 Down Dry": {
       "commandName": "Project",
       "commandLineArgs": "down 1 -d",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
     "Migrondi Down": {
       "commandName": "Project",
       "commandLineArgs": "down --dry-run false",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
     "Migrondi Down All": {
       "commandName": "Project",
       "commandLineArgs": "down -t 0 --dry-run false",
-      "workingDirectory": "$(SolutionDir)/samples"
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
     }
   }
 }
