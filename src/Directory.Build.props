@@ -1,0 +1,30 @@
+<Project>
+    <PropertyGroup>
+        <Copyright>Copyright 2020 Angel D. Munoz.</Copyright>
+        <Authors>Angel Munoz and contributors</Authors>
+        <Title>Migrondi</Title>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <RepositoryType>git</RepositoryType>
+        <ProjectUrl>https://github.com/AngelMunoz/Migrondi</ProjectUrl>
+        <RepositoryUrl>https://github.com/AngelMunoz/Migrondi.git</RepositoryUrl>
+        <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <WarnOn>3390;$(WarnOn)</WarnOn>
+        <Description>
+          This is a simple SQL migrations tool
+          Write your Migration SQL apply them or revert them from your database.
+        </Description>
+        <Summary>
+          This is a simple SQL migrations tool
+          Write your Migration SQL apply them or revert them from your database.
+        </Summary>
+    </PropertyGroup>
+    <ItemGroup>
+        <None Include="$(MSBuildThisFileDirectory)\..\LICENSE" Pack="true" PackagePath="\"/>
+        <None Include="$(MSBuildThisFileDirectory)\..\README.md" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
+    </ItemGroup>
+</Project>

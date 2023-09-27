@@ -2,16 +2,15 @@
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
     <Description>
-      This is the core library for the Migrondi CLI, you can use this 
+      This is the core library for the Migrondi CLI, you can use this
       library to run the same functionality of Migrondi as part of your source
       code or to write an abstraction for different kind  of tools.
     </Description>
     <Summary>
-      This is the core library for the Migrondi CLI, you can use this 
+      This is the core library for the Migrondi CLI, you can use this
       library to run the same functionality of Migrondi as part of your source
       code or to write an abstraction for different kind  of tools.
     </Summary>
-    <Version>$(MigrondiCoreVersion)</Version>
     <IsPackable>True</IsPackable>
   </PropertyGroup>
   <ItemGroup>
