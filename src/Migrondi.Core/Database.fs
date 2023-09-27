@@ -13,6 +13,7 @@ open MySqlConnector
 open Npgsql
 
 open RepoDb
+open RepoDb.Enumerations
 open Serilog
 
 open FsToolkit.ErrorHandling
@@ -303,6 +304,23 @@ module MigrationsImpl =
     tableName
     (migrations: Migration list)
     =
+
+    let rolledBack =
+      connection.Query<MigrationRecord>(
+        tableName = tableName,
+        where =
+          QueryField(
+            "name",
+            Operation.In,
+            migrations |> Seq.map(fun m -> m.name)
+          ),
+        orderBy = [
+          OrderField.Descending(fun (record: MigrationRecord) ->
+            record.timestamp
+          )
+        ]
+      )
+
     for migration in migrations do
       use transaction = connection.EnsureOpen().BeginTransaction()
 
@@ -333,13 +351,7 @@ module MigrationsImpl =
         transaction.Rollback()
         reriseCustom(MigrationRollbackFailed migration)
 
-    connection.QueryAll<MigrationRecord>(
-      tableName = tableName,
-      orderBy = [
-        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
-      ]
-    )
-    |> Seq.toList
+    rolledBack |> Seq.toList
 
 module MigrationsAsyncImpl =
 

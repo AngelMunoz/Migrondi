@@ -225,8 +225,12 @@ module MigrondiserviceImpl =
           pendingMigrations
       | None -> pendingMigrations
 
+    logger.Information(
+      "Reverting '{MigrationAmount}' migrations.",
+      pendingMigrations.Length
+    )
 
-    db.ApplyMigrations migrationsToRun
+    db.RollbackMigrations migrationsToRun
 
   let runDryUp
     (db: #DatabaseService)

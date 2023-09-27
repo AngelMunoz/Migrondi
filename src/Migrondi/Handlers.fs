@@ -123,11 +123,11 @@ module Migrations =
   let runDown (amount: int option, logger: ILogger, migrondi: MigrondiService) =
 
     try
-      let appliedMigrations = migrondi.RunUp(?amount = amount)
+      let reverted = migrondi.RunDown(?amount = amount)
 
-      for migration in appliedMigrations do
+      for migration in reverted do
         logger.Information(
-          "Applied migration '{MigrationName}' successfully.",
+          "Reverted migration '{MigrationName}' successfully.",
           migration.name
         )
 
