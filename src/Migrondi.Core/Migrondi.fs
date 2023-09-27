@@ -287,8 +287,7 @@ type MigrondiServiceImpl =
           MigrondiserviceImpl.migrationsList database fileSystem config
 
         member _.ScriptStatus(arg1: string) : MigrationStatus =
-          let path = $"{config.migrations}/{arg1}"
-          MigrondiserviceImpl.scriptStatus database fileSystem path
+          MigrondiserviceImpl.scriptStatus database fileSystem arg1
 
         member _.RunUpAsync
           (

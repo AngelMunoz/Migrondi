@@ -88,7 +88,7 @@ type FileSystemService =
   /// <summary>
   /// Takes a path to a migration, reads its contents and transforms it into a Migration object
   /// </summary>
-  /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
+  /// <param name="migrationName">A path Relative to the RootPath that targets to the migration</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
@@ -99,12 +99,12 @@ type FileSystemService =
   /// <exception cref="Migrondi.Core.FileSystem.MalformedSource">
   /// Thrown when the file is found but can't be deserialized from the source
   /// </exception>
-  abstract member ReadMigration: readFrom: string -> Migration
+  abstract member ReadMigration: migrationName: string -> Migration
 
   /// <summary>
   /// Takes a path to a migration, reads its contents and transforms it into a Migration object
   /// </summary>
-  /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
+  /// <param name="migrationName">A path Relative to the RootPath that targets to the migration</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
@@ -114,38 +114,38 @@ type FileSystemService =
   ///  Thrown when the file is not found
   /// </exception>
   abstract member ReadMigrationAsync:
-    readFrom: string * [<Optional>] ?cancellationToken: CancellationToken ->
+    migrationName: string * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration>
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
   /// </summary>
   /// <param name="migration">The migration object</param>
-  /// <param name="writeTo">The path to the migration file</param>
+  /// <param name="migrationName">The path to the migration file</param>
   /// <returns>
   /// A unit result object that means that the operation was successful
   /// </returns>
-  abstract member WriteMigration: migration: Migration * writeTo: string -> unit
+  abstract member WriteMigration: migration: Migration * migrationName: string -> unit
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
   /// </summary>
   /// <param name="migration">The migration object</param>
-  /// <param name="writeTo">The path to the migration file</param>
+  /// <param name="migrationName">The path to the migration file</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A unit result object that means that the operation was successful
   /// </returns>
   abstract member WriteMigrationAsync:
     migration: Migration *
-    writeTo: string *
+    migrationName: string *
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
   /// </summary>
-  /// <param name="readFrom">A path Relative to the RootPath that targets to the migration.</param>
+  /// <param name="migrationsLocation">A path Relative to the RootPath that targets to the migration.</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
@@ -154,19 +154,19 @@ type FileSystemService =
   /// A list of exceptions in case the sources were not readable or malformed
   /// This normally includes exceptions of the type <see cref="Migrondi.Core.FileSystem.MalformedSource">MalformedSource</see>
   /// </exception>
-  abstract member ListMigrations: readFrom: string -> Migration IReadOnlyList
+  abstract member ListMigrations: migrationsLocation: string -> Migration IReadOnlyList
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
   /// </summary>
-  /// <param name="readFrom">A path Relative to the RootPath that targets to the migration</param>
+  /// <param name="migrationsLocation">A path Relative to the RootPath that targets to the migration</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>
   /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member ListMigrationsAsync:
-    readFrom: string * [<Optional>] ?cancellationToken: CancellationToken ->
+    migrationsLocation: string * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration IReadOnlyList>
 
 module PhysicalFileSystemImpl =
@@ -177,10 +177,10 @@ module PhysicalFileSystemImpl =
   let readConfiguration
     (
       serializer: #SerializerService,
-      root: Uri,
+      projectRoot: Uri,
       readFrom: string<RelativeUserPath>
     ) =
-    let path = Uri(root, UMX.untag readFrom)
+    let path = Uri(projectRoot, UMX.untag readFrom)
 
     let content =
       try
@@ -200,12 +200,12 @@ module PhysicalFileSystemImpl =
   let readConfigurationAsync
     (
       serializer: #SerializerService,
-      root: Uri,
+      projectRoot: Uri,
       readFrom: string<RelativeUserPath>
     ) =
     async {
       let! token = Async.CancellationToken
-      let path = Uri(root, UMX.untag readFrom)
+      let path = Uri(projectRoot, UMX.untag readFrom)
 
       let! contents = async {
         try
@@ -232,10 +232,10 @@ module PhysicalFileSystemImpl =
     (
       serializer: #SerializerService,
       config: MigrondiConfig,
-      root: Uri,
+      projectRoot: Uri,
       writeTo: string<RelativeUserPath>
     ) =
-    let path = Uri(root, UMX.untag writeTo)
+    let path = Uri(projectRoot, UMX.untag writeTo)
     let file = FileInfo(path.LocalPath)
 
     file.Directory.Create()
@@ -249,12 +249,12 @@ module PhysicalFileSystemImpl =
     (
       serializer: #SerializerService,
       config: MigrondiConfig,
-      root: Uri,
+      projectRoot: Uri,
       writeTo: string<RelativeUserPath>
     ) =
     async {
       let! token = Async.CancellationToken
-      let path = Uri(root, UMX.untag writeTo)
+      let path = Uri(projectRoot, UMX.untag writeTo)
       let file = FileInfo(path.LocalPath)
 
       file.Directory.Create()
@@ -271,10 +271,10 @@ module PhysicalFileSystemImpl =
   let readMigration
     (
       serializer: #SerializerService,
-      root: Uri,
-      readFrom: string<RelativeUserPath>
+      migrationsDir: Uri,
+      migrationName: string<RelativeUserPath>
     ) =
-    let path = Uri(root, UMX.untag readFrom)
+    let path = Uri(migrationsDir, UMX.untag migrationName)
 
     let content =
       try
@@ -294,12 +294,12 @@ module PhysicalFileSystemImpl =
   let readMigrationAsync
     (
       serializer: #SerializerService,
-      root: Uri,
-      readFrom: string<RelativeUserPath>
+      migrationsDir: Uri,
+      migrationName: string<RelativeUserPath>
     ) =
     async {
       let! token = Async.CancellationToken
-      let path = Uri(root, UMX.untag readFrom)
+      let path = Uri(migrationsDir, UMX.untag migrationName)
 
       let! contents = async {
         try
@@ -326,10 +326,10 @@ module PhysicalFileSystemImpl =
     (
       serializer: #SerializerService,
       migration: Migration,
-      root: Uri,
-      writeTo: string<RelativeUserPath>
+      migrationsDir: Uri,
+      migrationName: string<RelativeUserPath>
     ) =
-    let path = Uri(root, UMX.untag writeTo)
+    let path = Uri(migrationsDir, UMX.untag migrationName)
     let file = FileInfo(path.LocalPath)
 
     file.Directory.Create()
@@ -343,12 +343,12 @@ module PhysicalFileSystemImpl =
     (
       serializer: #SerializerService,
       migration: Migration,
-      root: Uri,
-      writeTo: string<RelativeUserPath>
+      migrationsDir: Uri,
+      migrationName: string<RelativeUserPath>
     ) =
     async {
       let! token = Async.CancellationToken
-      let path = Uri(root, UMX.untag writeTo)
+      let path = Uri(migrationsDir, UMX.untag migrationName)
       let file = FileInfo(path.LocalPath)
 
       file.Directory.Create()
@@ -365,11 +365,11 @@ module PhysicalFileSystemImpl =
   let listMigrations
     (
       serializer: #SerializerService,
-      root: Uri,
-      readFrom: string<RelativeUserDirectoryPath>
+      projectRoot: Uri,
+      migrationsDir: string<RelativeUserDirectoryPath>
     ) =
     let operation = result {
-      let path = Uri(root, UMX.untag readFrom)
+      let path = Uri(projectRoot, UMX.untag migrationsDir)
 
       let directory = DirectoryInfo(path.LocalPath)
 
@@ -402,12 +402,12 @@ module PhysicalFileSystemImpl =
   let listMigrationsAsync
     (
       serializer: #SerializerService,
-      root: Uri,
-      readFrom: string<RelativeUserDirectoryPath>
+      projectRoot: Uri,
+      migrationsDir: string<RelativeUserDirectoryPath>
     ) =
     async {
       let! operation = asyncResult {
-        let path = Uri(root, UMX.untag readFrom)
+        let path = Uri(projectRoot, UMX.untag migrationsDir)
 
         let directory = DirectoryInfo(path.LocalPath)
 
@@ -502,7 +502,7 @@ type FileSystemImpl =
         member _.ReadMigration readFrom =
           PhysicalFileSystemImpl.readMigration(
             serializer,
-            projectRootUri,
+            migrationsWorkingDir,
             UMX.tag readFrom
           )
 
@@ -510,7 +510,7 @@ type FileSystemImpl =
           let computation =
             PhysicalFileSystemImpl.readMigrationAsync(
               serializer,
-              projectRootUri,
+              migrationsWorkingDir,
               UMX.tag readFrom
             )
 
