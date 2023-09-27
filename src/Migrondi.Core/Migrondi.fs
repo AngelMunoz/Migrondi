@@ -190,10 +190,18 @@ module MigrondiserviceImpl =
     let migrations = fs.ListMigrations config.migrations
     let appliedMigrations = db.ListMigrations()
 
-    let pending = obtainPendingUp migrations appliedMigrations
-    let amount = defaultArg amount pending.Length
+    let pending = obtainPendingUp migrations appliedMigrations |> List.ofArray
 
-    pending[0..amount]
+    match amount with
+    | Some amount ->
+      let migrations =
+        if amount > pending.Length then
+          pending
+        else
+          pending |> List.take amount
+
+      migrations :> IReadOnlyList<Migration>
+    | None -> pending
 
   let runDryDown
     (db: #DatabaseService)
@@ -204,10 +212,18 @@ module MigrondiserviceImpl =
     let appliedMigrations = db.ListMigrations()
     let migrations = fs.ListMigrations config.migrations
 
-    let pending = obtainPendingDown migrations appliedMigrations
-    let amount = defaultArg amount pending.Length
+    let pending = obtainPendingDown migrations appliedMigrations |> List.ofArray
 
-    pending[0..amount]
+    match amount with
+    | Some amount ->
+      let migrations =
+        if amount > pending.Length then
+          pending
+        else
+          pending |> List.take amount
+
+      migrations :> IReadOnlyList<Migration>
+    | None -> pending
 
   let migrationsList
     (db: #DatabaseService)
@@ -254,7 +270,7 @@ type MigrondiServiceImpl =
     ) =
     { new MigrondiService with
         member _.DryRunUp([<Optional>] ?amount) : IReadOnlyList<Migration> =
-          MigrondiserviceImpl.runDryDown database fileSystem config amount
+          MigrondiserviceImpl.runDryUp database fileSystem config amount
 
         member _.DryRunDown([<Optional>] ?amount) : IReadOnlyList<Migration> =
           MigrondiserviceImpl.runDryDown database fileSystem config amount
@@ -271,7 +287,8 @@ type MigrondiServiceImpl =
           MigrondiserviceImpl.migrationsList database fileSystem config
 
         member _.ScriptStatus(arg1: string) : MigrationStatus =
-          MigrondiserviceImpl.scriptStatus database fileSystem arg1
+          let path = $"{config.migrations}/{arg1}"
+          MigrondiserviceImpl.scriptStatus database fileSystem path
 
         member _.RunUpAsync
           (
