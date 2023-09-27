@@ -1,12 +1,13 @@
 ﻿open System
-open System.CommandLine.Builder
 open System.IO
+
+open System.CommandLine.Builder
 open FSharp.SystemCommandLine
 
 open Serilog
+open Serilog.Formatting.Compact
 
 open Migrondi.Core
-
 open Migrondi.Commands
 open Migrondi.Env
 open Migrondi.Middleware
@@ -14,15 +15,29 @@ open Migrondi.Middleware
 [<EntryPoint>]
 let main argv =
 
+  let debug = argv |> Array.contains "[mi-debug]"
+
+  let useJson = argv |> Array.contains "[mi-json]"
+
   // setup services
   let logger =
-    LoggerConfiguration()
-      .MinimumLevel.Information()
-      .WriteTo.Console()
-      .CreateLogger()
+    let config = LoggerConfiguration()
+
+    if debug then
+      config.MinimumLevel.Debug() |> ignore
+    else
+      config.MinimumLevel.Information() |> ignore
+
+    if useJson then
+      config.WriteTo.Console(new RenderedCompactJsonFormatter()) |> ignore
+    else
+      config.WriteTo.Console() |> ignore
+
+    config.CreateLogger()
+
 
   let cwd = $"{Environment.CurrentDirectory}{Path.DirectorySeparatorChar}"
-  let appEnv = AppEnv.BuildDefault(cwd, logger)
+  let appEnv = AppEnv.BuildDefault(cwd, logger, useJson)
 
 
   rootCommand argv {
@@ -30,8 +45,11 @@ let main argv =
       "A dead simple SQL migrations runner, apply or rollback migrations at your ease"
 
     usePipeline(fun pipeline ->
-      // run the setup database for
-      pipeline.AddMiddleware(Middleware.SetupDatabase appEnv) |> ignore
+      pipeline
+        .EnableDirectives(true)
+        // run the setup database for select commands
+        .AddMiddleware(Middleware.SetupDatabase appEnv)
+      |> ignore
     )
 
     setHandler id

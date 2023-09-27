@@ -13,12 +13,16 @@ open Serilog
 type AppEnv
   (
     logger: ILogger,
+    serializer: SerializerService,
     fs: FileSystemService,
     db: DatabaseService,
-    migrondi: MigrondiService
+    migrondi: MigrondiService,
+    jsonOutput: bool
   ) =
 
   member _.Logger: ILogger = logger
+
+  member _.JsonOutput: bool = jsonOutput
 
   member _.Database: DatabaseService = db
 
@@ -26,8 +30,10 @@ type AppEnv
 
   member _.Migrondi: MigrondiService = migrondi
 
+  member _.Serializer: SerializerService = serializer
 
-  static member BuildDefault(cwd: string, logger: ILogger) =
+
+  static member BuildDefault(cwd: string, logger: ILogger, jsonOutput) =
     let readLocalConfig
       (
         cwd: string,
@@ -74,4 +80,4 @@ type AppEnv
     let db = DatabaseImpl.Build(logger, config)
     let migrondi = MigrondiServiceImpl.BuildDefaultEnv(db, fs, logger, config)
 
-    AppEnv(logger, fs, db, migrondi)
+    AppEnv(logger, serializer, fs, db, migrondi, jsonOutput)

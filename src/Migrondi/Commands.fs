@@ -30,13 +30,13 @@ module ArgumentMapper =
     match isDry with
     | Some true -> Migrations.runDryDown(amount, appEnv.Logger, appEnv.Migrondi)
     | Some false
-    | None -> Migrations.runDown(amount, appEnv.Migrondi)
+    | None -> Migrations.runDown(amount, appEnv.Logger, appEnv.Migrondi)
 
   let inline New (appEnv: AppEnv) (name: string) =
     name, appEnv.Logger, appEnv.FileSystem
 
   let inline List (appEnv: AppEnv) (kind: MigrationType option) =
-    kind, appEnv.Migrondi
+    appEnv.JsonOutput, appEnv.Logger, appEnv.Serializer, kind, appEnv.Migrondi
 
   let inline Status (appEnv: AppEnv) (name: string) =
     name, appEnv.Logger, appEnv.Migrondi

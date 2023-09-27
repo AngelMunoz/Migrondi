@@ -6,7 +6,6 @@ open System.IO
 open System.Security
 open Serilog
 open Spectre.Console
-open Spectre.Console.Rendering
 
 open Migrondi.Core
 open Migrondi.Core.FileSystem
@@ -15,16 +14,20 @@ open Migrondi.Core.Migrondi
 [<RequireQualifiedAccess>]
 module Init =
   let handler (path: DirectoryInfo, fs: FileSystemService, logger: ILogger) =
-    logger.Information
-      $"Initializing a new migrondi project at: {path.FullName} ."
+    logger.Information(
+      "Initializing a new migrondi project at: {PathName}.",
+      path.FullName
+    )
 
     let configPath = Path.Combine(path.FullName, "./migrondi.json")
     let config = MigrondiConfig.Default
     fs.WriteConfiguration(config, configPath)
     let subpath = path.CreateSubdirectory(config.migrations)
 
-    logger.Information
-      $"migrondi.json and {subpath.Name} directory created successfully."
+    logger.Information(
+      "migrondi.json and {MigrationsDirectory} directory created successfully.",
+      subpath.Name
+    )
 
     0
 
@@ -33,7 +36,11 @@ module Init =
 module Migrations =
 
   let newMigration (name: string, logger: ILogger, fs: FileSystemService) =
-    logger.Information $"Creating a new migration with name: {name}."
+    logger.Information(
+      "Creating a new migration with name: {MigrationName}.",
+      name
+    )
+
     let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
     let name = $"{name}_{timestamp}.sql"
 
@@ -50,7 +57,11 @@ module Migrations =
         name
       )
 
-      logger.Information $"Migration {name} created successfully."
+      logger.Information(
+        "Migration {MigrationName} created successfully.",
+        name
+      )
+
       0
     with
     | :? IOException as e ->
@@ -74,11 +85,18 @@ module Migrations =
       let appliedMigrations = migrondi.RunUp(?amount = amount)
 
       for migration in appliedMigrations do
-        logger.Information $"Applied migration '{migration.name}' successfully."
+        logger.Information(
+          "Applied migration '{MigrationName}' successfully.",
+          migration.name
+        )
 
       0
     with MigrationApplicationFailed migration ->
-      logger.Error $"Failed to apply migration '{migration.name}'."
+      logger.Error(
+        "Failed to apply migration '{MigrationName}'.",
+        migration.name
+      )
+
       1
 
 
@@ -93,10 +111,11 @@ module Migrations =
     logger.Information "DRY RUN: The following migrations would be applied:"
 
     for migration in migrations do
-      logger.Information $"{migration.name}.sql"
-      logger.Information "------ START TRANSACTION ------"
-      logger.Information $"{migration.upContent}"
-      logger.Information "------- END TRANSACTION -------"
+      logger.Information(
+        "{MigrationName}.sql\n------ START TRANSACTION ------\n{MigrationContent}\n------- END TRANSACTION -------",
+        migration.name,
+        migration.upContent
+      )
 
     logger.Information $"DRY RUN: would applied '{migrations.Count}' migrations"
     0
@@ -107,11 +126,18 @@ module Migrations =
       let appliedMigrations = migrondi.RunUp(?amount = amount)
 
       for migration in appliedMigrations do
-        logger.Information $"Applied migration '{migration.name}' successfully."
+        logger.Information(
+          "Applied migration '{MigrationName}' successfully.",
+          migration.name
+        )
 
       0
     with MigrationApplicationFailed migration ->
-      logger.Error $"Failed to apply migration '{migration.name}'."
+      logger.Error(
+        "Failed to apply migration '{MigrationName}'.",
+        migration.name
+      )
+
       1
 
   let runDryDown
@@ -125,17 +151,27 @@ module Migrations =
     logger.Information "DRY RUN: The following migrations would be reverted:"
 
     for migration in migrations do
-      logger.Information $"{migration.name}.sql"
-      logger.Information "------ START TRANSACTION ------"
-      logger.Information $"{migration.upContent}"
-      logger.Information "------- END TRANSACTION -------"
+      logger.Information(
+        "{MigrationName}\n------ START TRANSACTION ------\n{MigrationContent}\n------- END TRANSACTION -------",
+        migration.name,
+        migration.upContent
+      )
 
-    logger.Information
-      $"DRY RUN: would reverted '{migrations.Count}' migrations"
+    logger.Information(
+      "DRY RUN: would reverted '{MigrationCount}' migrations",
+      migrations.Count
+    )
 
     0
 
-  let listMigrations (kind: MigrationType option, migrondi: MigrondiService) =
+  let listMigrations
+    (
+      useJson: bool,
+      logger: ILogger,
+      serializer: Serialization.SerializerService,
+      kind: MigrationType option,
+      migrondi: MigrondiService
+    ) =
 
     let printMigrationsTable (table: Table, migrations: Migration seq) =
 
@@ -194,9 +230,31 @@ module Migrations =
       table.ShowHeaders <- true
       AnsiConsole.Write table
 
-    let allMigrations = migrondi.MigrationsList()
+    let printJson (migrations: Migration seq, status: string) =
+      let encoded =
+        migrations
+        |> Seq.map(fun m -> serializer.MigrationSerializer.EncodeJson m)
 
-    let table = Table()
+      logger.Information(
+        "Listing {Status} migrations: {Migrations}",
+        status,
+        encoded
+      )
+
+    let printJsonBoth (migrations: MigrationStatus seq) =
+      let encoded =
+        migrations
+        |> Seq.map(fun status ->
+          match status with
+          | Applied m ->
+            ("Applied", serializer.MigrationSerializer.EncodeJson m)
+          | Pending m ->
+            ("Pending", serializer.MigrationSerializer.EncodeJson m)
+        )
+
+      logger.Information("Listing migrations: {Migrations}", encoded)
+
+    let allMigrations = migrondi.MigrationsList()
 
     match kind with
     | Some MigrationType.Up ->
@@ -208,9 +266,12 @@ module Migrations =
           | _ -> None
         )
 
-      table.Title <- TableTitle("Applied Migrations")
-
-      printMigrationsTable(table, applied)
+      if useJson then
+        printJson(applied, "Applied")
+      else
+        let table = Table()
+        table.Title <- TableTitle("Applied Migrations")
+        printMigrationsTable(table, applied)
     | Some MigrationType.Down ->
       let pending =
         allMigrations
@@ -220,11 +281,19 @@ module Migrations =
           | Pending a -> Some a
         )
 
-      table.Title <- TableTitle("Pending Migrations")
-      printMigrationsTable(table, pending)
+      if useJson then
+        printJson(pending, "Pending")
+      else
+        let table = Table()
+        table.Title <- TableTitle("Pending Migrations")
+        printMigrationsTable(table, pending)
     | None ->
-      table.Title <- TableTitle("All Migrations")
-      printBothMigrationsTable(table, allMigrations)
+      if useJson then
+        printJsonBoth(allMigrations)
+      else
+        let table = Table()
+        table.Title <- TableTitle("All Migrations")
+        printBothMigrationsTable(table, allMigrations)
 
     0
 
@@ -242,10 +311,14 @@ module Migrations =
 
     match migrondi.ScriptStatus(name) with
     | Applied migration ->
-      logger.Information
-        $"Migration {migration.name} was created on '{formatTimestamp(migration.timestamp)}' and is currently applied."
+      logger.Information(
+        "Migration {migration.name} was created on '{Timestamp}' and is currently applied.",
+        formatTimestamp(migration.timestamp)
+      )
     | Pending migration ->
-      logger.Information
-        $"Migration {migration.name} was created on '{formatTimestamp(migration.timestamp)}' and is not currently applied."
+      logger.Information(
+        "Migration {migration.name} was created on '{Timestamp}' and is not currently applied.",
+        formatTimestamp(migration.timestamp)
+      )
 
     0

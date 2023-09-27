@@ -4,11 +4,11 @@
     <TargetFramework>net7.0</TargetFramework>
     <Description>
       This is a simple SQL migrations tool
-      Write your Migration SQL apply them or revert them from your database. 
+      Write your Migration SQL apply them or revert them from your database.
     </Description>
     <Summary>
       This is a simple SQL migrations tool
-      Write your Migration SQL apply them or revert them from your database. 
+      Write your Migration SQL apply them or revert them from your database.
     </Summary>
     <Version>$(MigrondiCLIVersion)</Version>
     <IsPackable>true</IsPackable>
@@ -29,6 +29,7 @@
   <ItemGroup>
     <PackageReference Include="FSharp.SystemCommandLine" Version="0.17.0-beta4" />
     <PackageReference Include="Serilog" Version="3.0.1" />
+    <PackageReference Include="Serilog.Formatting.Compact" Version="1.1.0" />
     <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
     <PackageReference Include="Spectre.Console" Version="0.47.0" />
   </ItemGroup>
