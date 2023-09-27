@@ -9,6 +9,7 @@ open Migrondi.Core
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Database
 open System.Threading
+open Serilog
 
 
 [<Interface>]
@@ -156,30 +157,76 @@ module MigrondiserviceImpl =
   let runUp
     (db: #DatabaseService)
     (fs: #FileSystemService)
+    (logger: #ILogger)
     (config: MigrondiConfig)
     (amount: int option)
     =
     let migrations = fs.ListMigrations config.migrations
     let appliedMigrations = db.ListMigrations()
 
-    let pendingMigrations = obtainPendingUp migrations appliedMigrations
-    let amount = defaultArg amount pendingMigrations.Length
+    logger.Debug(
+      "Applied migrations: {Migrations}",
+      (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+    )
 
-    db.ApplyMigrations pendingMigrations[0..amount]
+    let pendingMigrations = obtainPendingUp migrations appliedMigrations
+
+    logger.Debug(
+      "Pending migrations: {Migrations}",
+      (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+    )
+
+    let migrationsToRun =
+      match amount with
+      | Some amount ->
+        if amount >= 0 && amount < pendingMigrations.Length then
+          pendingMigrations |> Array.take amount
+        else
+          logger.Warning
+            "The amount specified is out of bounds in relation with the pending migrations. Running all pending migrations."
+
+          pendingMigrations
+      | None -> pendingMigrations
+
+    logger.Information $"Running '%i{pendingMigrations.Length}' migrations."
+    db.ApplyMigrations migrationsToRun
 
   let runDown
     (db: #DatabaseService)
     (fs: #FileSystemService)
+    (logger: #ILogger)
     (config: MigrondiConfig)
     (amount: int option)
     =
     let appliedMigrations = db.ListMigrations()
     let migrations = fs.ListMigrations config.migrations
 
-    let pendingMigrations = obtainPendingDown migrations appliedMigrations
-    let amount = defaultArg amount pendingMigrations.Length
+    logger.Debug(
+      "Applied migrations: {Migrations}",
+      (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+    )
 
-    db.RollbackMigrations pendingMigrations[0..amount]
+    let pendingMigrations = obtainPendingDown migrations appliedMigrations
+
+    logger.Debug(
+      "Rolling back migrations: {Migrations}",
+      (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+    )
+
+    let migrationsToRun =
+      match amount with
+      | Some amount ->
+        if amount >= 0 && amount < pendingMigrations.Length then
+          pendingMigrations |> Array.take amount
+        else
+          logger.Warning
+            "The amount specified is out of bounds in relation with the pending migrations. Rolling back all pending migrations."
+
+          pendingMigrations
+      | None -> pendingMigrations
+
+
+    db.ApplyMigrations migrationsToRun
 
   let runDryUp
     (db: #DatabaseService)
@@ -195,10 +242,10 @@ module MigrondiserviceImpl =
     match amount with
     | Some amount ->
       let migrations =
-        if amount > pending.Length then
-          pending
-        else
+        if amount >= 0 && amount < pending.Length then
           pending |> List.take amount
+        else
+          pending
 
       migrations :> IReadOnlyList<Migration>
     | None -> pending
@@ -217,10 +264,10 @@ module MigrondiserviceImpl =
     match amount with
     | Some amount ->
       let migrations =
-        if amount > pending.Length then
-          pending
-        else
+        if amount >= 0 && amount < pending.Length then
           pending |> List.take amount
+        else
+          pending
 
       migrations :> IReadOnlyList<Migration>
     | None -> pending
@@ -266,6 +313,7 @@ type MigrondiServiceImpl =
     (
       database: #DatabaseService,
       fileSystem: #FileSystemService,
+      logger: #ILogger,
       config: MigrondiConfig
     ) =
     { new MigrondiService with
@@ -278,10 +326,10 @@ type MigrondiServiceImpl =
         member _.RunDown
           ([<Optional>] ?amount)
           : IReadOnlyList<MigrationRecord> =
-          MigrondiserviceImpl.runDown database fileSystem config amount
+          MigrondiserviceImpl.runDown database fileSystem logger config amount
 
         member _.RunUp([<Optional>] ?amount) : IReadOnlyList<MigrationRecord> =
-          MigrondiserviceImpl.runUp database fileSystem config amount
+          MigrondiserviceImpl.runUp database fileSystem logger config amount
 
         member _.MigrationsList() : IReadOnlyList<MigrationStatus> =
           MigrondiserviceImpl.migrationsList database fileSystem config

@@ -12,6 +12,8 @@ open System.Threading.Tasks
 open MySqlConnector
 open Npgsql
 
+open RepoDb
+open Serilog
 
 open FsToolkit.ErrorHandling
 
@@ -179,7 +181,6 @@ CREATE TABLE dbo.%s{tableName}(
 GO"""
 
 module MigrationsImpl =
-  open RepoDb
 
   let inline private (=>) (a: string) b = a, box b
 
@@ -252,6 +253,7 @@ module MigrationsImpl =
 
   let applyMigrations
     (connection: IDbConnection)
+    (logger: ILogger)
     tableName
     (migrations: Migration list)
     =
@@ -260,7 +262,11 @@ module MigrationsImpl =
       use transaction = connection.EnsureOpen().BeginTransaction()
 
       try
-
+        logger.Debug(
+          "Applying migration {Name} with content: {Content}",
+          migration.name,
+          content
+        )
         // execute the user's migration
         connection.ExecuteNonQuery($"{content};;", transaction = transaction)
         |> ignore
@@ -278,7 +284,8 @@ module MigrationsImpl =
         |> ignore
 
         transaction.Commit()
-      with _ ->
+      with ex ->
+        logger.Debug("Failed to apply migration due: {Message}", ex.Message)
         transaction.Rollback()
         reriseCustom(MigrationApplicationFailed migration)
 
@@ -292,6 +299,7 @@ module MigrationsImpl =
 
   let rollbackMigrations
     (connection: IDbConnection)
+    (logger: ILogger)
     tableName
     (migrations: Migration list)
     =
@@ -300,6 +308,12 @@ module MigrationsImpl =
 
       try
         let content = migration.downContent
+
+        logger.Debug(
+          "Rolling back migration {Name} with content: {Content}",
+          migration.name,
+          content
+        )
 
         // Rollback the migration
         connection.ExecuteNonQuery($"{content};;", transaction = transaction)
@@ -314,7 +328,8 @@ module MigrationsImpl =
         |> ignore
 
         transaction.Commit()
-      with _ ->
+      with ex ->
+        logger.Debug("Failed to rollback migration due: {Message}", ex.Message)
         transaction.Rollback()
         reriseCustom(MigrationRollbackFailed migration)
 
@@ -327,7 +342,6 @@ module MigrationsImpl =
     |> Seq.toList
 
 module MigrationsAsyncImpl =
-  open RepoDb
 
   let setupDatabaseAsync
     (connection: IDbConnection)
@@ -413,6 +427,7 @@ module MigrationsAsyncImpl =
 
   let applyMigrationsAsync
     (connection: IDbConnection)
+    (logger: ILogger)
     tableName
     (migrations: Migration list)
     =
@@ -424,6 +439,12 @@ module MigrationsAsyncImpl =
         let content = migration.upContent
 
         try
+          logger.Debug(
+            "Applying migration {Name} with content: {Content}",
+            migration.name,
+            content
+          )
+
           do!
             // execute the user's migration
             connection.ExecuteNonQueryAsync(
@@ -450,7 +471,8 @@ module MigrationsAsyncImpl =
             |> Async.Ignore
 
           transaction.Commit()
-        with _ ->
+        with ex ->
+          logger.Debug("Failed to apply migration due: {Message}", ex.Message)
           transaction.Rollback()
           raise(MigrationApplicationFailed migration)
 
@@ -471,6 +493,7 @@ module MigrationsAsyncImpl =
 
   let rollbackMigrationsAsync
     (connection: IDbConnection)
+    (logger: ILogger)
     tableName
     (migrations: Migration list)
     =
@@ -482,6 +505,13 @@ module MigrationsAsyncImpl =
         let content = migration.downContent
 
         try
+
+          logger.Debug(
+            "Rolling back migration {Name} with content: {Content}",
+            migration.name,
+            content
+          )
+
           do!
             // Rollback the migration
             connection.ExecuteNonQueryAsync(
@@ -506,6 +536,11 @@ module MigrationsAsyncImpl =
 
           transaction.Commit()
         with ex ->
+          logger.Debug(
+            "Failed to rollback migration due: {Message}",
+            ex.Message
+          )
+
           transaction.Rollback()
           raise(MigrationRollbackFailed migration)
 
@@ -527,7 +562,7 @@ module MigrationsAsyncImpl =
 [<Class>]
 type DatabaseImpl =
 
-  static member Build(config: MigrondiConfig) =
+  static member Build(logger: ILogger, config: MigrondiConfig) =
     { new DatabaseService with
 
         member _.SetupDatabase() =
@@ -548,7 +583,7 @@ type DatabaseImpl =
 
           migrations
           |> Seq.toList
-          |> MigrationsImpl.applyMigrations connection config.tableName
+          |> MigrationsImpl.applyMigrations connection logger config.tableName
           :> MigrationRecord IReadOnlyList
 
         member _.FindMigration(name: string) : MigrationRecord option =
@@ -569,7 +604,10 @@ type DatabaseImpl =
 
           migrations
           |> Seq.toList
-          |> MigrationsImpl.rollbackMigrations connection config.tableName
+          |> MigrationsImpl.rollbackMigrations
+            connection
+            logger
+            config.tableName
           :> MigrationRecord IReadOnlyList
 
         member _.FindLastAppliedAsync([<Optional>] ?cancellationToken) =
@@ -595,6 +633,7 @@ type DatabaseImpl =
             |> Seq.toList
             |> MigrationsAsyncImpl.applyMigrationsAsync
               connection
+              logger
               config.tableName
 
           Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
@@ -612,6 +651,7 @@ type DatabaseImpl =
             |> Seq.toList
             |> MigrationsAsyncImpl.rollbackMigrationsAsync
               connection
+              logger
               config.tableName
 
           Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
