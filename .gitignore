@@ -362,3 +362,6 @@ dist
 /.idea
 
 sample/migrondi.db
+.fsdocs/
+output/
+tmp/
