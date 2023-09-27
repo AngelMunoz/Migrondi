@@ -14,7 +14,7 @@ open Migrondi.Core.Migrondi
 
 [<RequireQualifiedAccess>]
 module Init =
-  let handler (path: DirectoryInfo, fs: #FileSystemService, logger: #ILogger) =
+  let handler (path: DirectoryInfo, fs: FileSystemService, logger: ILogger) =
     logger.Information
       $"Initializing a new migrondi project at: {path.FullName} ."
 
@@ -32,7 +32,7 @@ module Init =
 [<RequireQualifiedAccess>]
 module Migrations =
 
-  let newMigration (name: string, logger: #ILogger, fs: #FileSystemService) =
+  let newMigration (name: string, logger: ILogger, fs: FileSystemService) =
     logger.Information $"Creating a new migration with name: {name}."
     let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
     let name = $"{name}_{timestamp}.sql"
@@ -68,7 +68,19 @@ module Migrations =
 
       1
 
-  let runUp (amount: int option, logger: ILogger, migrondi: MigrondiService) = 0
+  let runUp (amount: int option, logger: ILogger, migrondi: MigrondiService) =
+
+    try
+      let appliedMigrations = migrondi.RunUp(?amount = amount)
+
+      for migration in appliedMigrations do
+        logger.Information $"Applied migration '{migration.name}' successfully."
+
+      0
+    with MigrationApplicationFailed migration ->
+      logger.Error $"Failed to apply migration '{migration.name}'."
+      1
+
 
   let runDryUp
     (
@@ -89,7 +101,18 @@ module Migrations =
     logger.Information $"DRY RUN: would applied '{migrations.Count}' migrations"
     0
 
-  let runDown (amount: int option, migrondi: MigrondiService) = 0
+  let runDown (amount: int option, logger: ILogger, migrondi: MigrondiService) =
+
+    try
+      let appliedMigrations = migrondi.RunUp(?amount = amount)
+
+      for migration in appliedMigrations do
+        logger.Information $"Applied migration '{migration.name}' successfully."
+
+      0
+    with MigrationApplicationFailed migration ->
+      logger.Error $"Failed to apply migration '{migration.name}'."
+      1
 
   let runDryDown
     (
