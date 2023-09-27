@@ -464,7 +464,7 @@ type FileSystemImpl =
         member _.ListMigrations(readFrom) =
           PhysicalFileSystemImpl.listMigrations(
             serializer,
-            migrationsWorkingDir,
+            projectRootUri,
             UMX.tag readFrom
           )
 
@@ -472,7 +472,7 @@ type FileSystemImpl =
           let computation =
             PhysicalFileSystemImpl.listMigrationsAsync(
               serializer,
-              migrationsWorkingDir,
+              projectRootUri,
               UMX.tag arg1
             )
 
@@ -502,7 +502,7 @@ type FileSystemImpl =
         member _.ReadMigration readFrom =
           PhysicalFileSystemImpl.readMigration(
             serializer,
-            migrationsWorkingDir,
+            projectRootUri,
             UMX.tag readFrom
           )
 
@@ -510,7 +510,7 @@ type FileSystemImpl =
           let computation =
             PhysicalFileSystemImpl.readMigrationAsync(
               serializer,
-              migrationsWorkingDir,
+              projectRootUri,
               UMX.tag readFrom
             )
 
