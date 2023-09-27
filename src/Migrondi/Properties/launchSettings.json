@@ -1,92 +1,89 @@
 {
   "profiles": {
-    "Migrondi": {
-      "commandName": "Project"
-    },
     "Migrondi init": {
       "commandName": "Project",
       "commandLineArgs": "init",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi new": {
       "commandName": "Project",
-      "commandLineArgs": "new -n Sample",
-      "workingDirectory": "..\\..\\"
+      "commandLineArgs": "new add-users_sample",
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi Down": {
       "commandName": "Project",
       "commandLineArgs": "down --dry-run false",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi Down Dry": {
       "commandName": "Project",
       "commandLineArgs": "down -d true",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi Down All": {
       "commandName": "Project",
       "commandLineArgs": "down -t 0 --dry-run false",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi Down All Dry": {
       "commandName": "Project",
       "commandLineArgs": "down -t -1 -d true",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi Up": {
       "commandName": "Project",
       "commandLineArgs": "up -t 1 --dry-run false",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi Up Dry": {
       "commandName": "Project",
       "commandLineArgs": "up -d true",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi Up All": {
       "commandName": "Project",
       "commandLineArgs": "up -t 0 --dry-run false",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi Up All Dry": {
       "commandName": "Project",
       "commandLineArgs": "up -t -1 -d true",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi List": {
       "commandName": "Project",
       "commandLineArgs": "list",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi init json": {
       "commandName": "Project",
       "commandLineArgs": "init --json",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Print Help": {
       "commandName": "Project",
       "commandLineArgs": "--help",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Help sub-command": {
       "commandName": "Project",
       "commandLineArgs": "new --help",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Status -n filename": {
       "commandName": "Project",
       "commandLineArgs": "status -n CreateTodos3_1628280578632.sql",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi List Json Both": {
       "commandName": "Project",
       "commandLineArgs": "--json list --kind both",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     },
     "Migrondi Down Json 1": {
       "commandName": "Project",
       "commandLineArgs": "--json down -t 1",
-      "workingDirectory": "..\\..\\"
+      "workingDirectory": "$(SolutionDir)/samples"
     }
   }
 }
