@@ -358,10 +358,7 @@ MigrationBackup/
 
 *.db
 
-migrations/
-migrondi.json
 dist
 /.idea
 
-/sample
-/samples
+sample/migrondi.db
