@@ -58,7 +58,7 @@ module MigrationData =
         downContent = $"DROP TABLE migration;"
         timestamp = timestamp
       },
-      Path.Combine(directoryName, $"AddTable{i}_{timestamp}.sql")
+      $"AddTable{i}_{timestamp}.sql"
   ]
 
 
@@ -77,7 +77,12 @@ type FileSystemTests() =
 
   let serializer = SerializerImpl.BuildDefaultEnv()
 
-  let fileSystem = FileSystemImpl.BuildDefaultEnv(serializer, baseUri)
+  let fileSystem =
+    FileSystemImpl.BuildDefaultEnv(
+      serializer,
+      baseUri,
+      Uri("fs-migrations/", UriKind.Relative)
+    )
 
   do printfn $"Using '{rootDir.FullName}' as Root Directory"
 
