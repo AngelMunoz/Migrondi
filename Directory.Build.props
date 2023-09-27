@@ -8,7 +8,6 @@
         <ProjectUrl>https://github.com/AngelMunoz/Migrondi</ProjectUrl>
         <RepositoryUrl>https://github.com/AngelMunoz/Migrondi.git</RepositoryUrl>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <WarnOn>3390;$(WarnOn)</WarnOn>
         <Description>
@@ -19,10 +18,19 @@
           This is a simple SQL migrations tool
           Write your Migration SQL apply them or revert them from your database.
         </Summary>
+
+        <!-- FsDocs Properties -->
+        <PackageLicenseUrl>https://github.com/AngelMunoz/Migrondi/blob/main/LICENSE/</PackageLicenseUrl>
+        <PackageProjectUrl>https://github.com/AngelMunoz/Migrondi/</PackageProjectUrl>
+        <RepositoryUrl>https://github.com/AngelMunoz/Migrondi/</RepositoryUrl>
+        <FsDocsLicenseLink>https://github.com/AngelMunoz/Migrondi/blob/main/LICENSE</FsDocsLicenseLink>
+        <FsDocsNavbarPosition>fixed-right</FsDocsNavbarPosition>
+        <FsDocsWarnOnMissingDocs>true</FsDocsWarnOnMissingDocs>
+        <FsDocsTheme>default</FsDocsTheme>
     </PropertyGroup>
     <ItemGroup>
-        <None Include="$(MSBuildThisFileDirectory)\..\LICENSE" Pack="true" PackagePath="\"/>
-        <None Include="$(MSBuildThisFileDirectory)\..\README.md" Pack="true" PackagePath="\"/>
+        <None Include="$(SolutionDir)\LICENSE" Pack="true" PackagePath="\"/>
+        <None Include="$(SolutionDir)\README.md" Pack="true" PackagePath="\"/>
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
