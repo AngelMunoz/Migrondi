@@ -25,63 +25,70 @@ Environment.GetCommandLineArgs()
 
 let output = "./dist"
 
-let runtimes =
-    [| "linux-x64"
-       "linux-arm64"
-       "win10-x64"
-       "osx-x64" |]
+let runtimes = [| "linux-x64"; "linux-arm64"; "win10-x64"; "osx-x64" |]
 
-Target.initEnvironment ()
+Target.initEnvironment()
 Target.create "Clean" (fun _ -> !! "dist" |> Shell.cleanDirs)
 
 Target.create
-    "PackNugets"
-    (fun _ ->
-        let result = Target.runSimple "Clean" []
+  "PackNugets"
+  (fun _ ->
+    let result = Target.runSimple "Clean" []
 
-        match result.Error with
-        | Some err -> eprintfn "%O" err
-        | None ->
-            DotNet.pack
-                (fun opts ->
-                    { opts with
-                          Configuration = DotNet.BuildConfiguration.Release
-                          OutputPath = Some $"{output}" })
-                "src/Migrondi"
+    match result.Error with
+    | Some err -> eprintfn "%O" err
+    | None ->
+      DotNet.pack
+        (fun opts -> {
+          opts with
+              Configuration = DotNet.BuildConfiguration.Release
+              OutputPath = Some $"{output}"
+        })
+        "src/Migrondi"
 
-            DotNet.pack
-                (fun opts ->
-                    { opts with
-                          Configuration = DotNet.BuildConfiguration.Release
-                          OutputPath = Some $"{output}" })
-                "src/Migrondi.Lib")
-
-Target.create
-    "BuildBinaries"
-    (fun _ ->
-        let args = MSBuild.CliArguments.Create()
-
-        let getOpts (runtime: string) (opts: DotNet.PublishOptions) =
-            { opts with
-                  SelfContained = Some true
-                  Runtime = Some runtime
-                  Configuration = DotNet.BuildConfiguration.Release
-                  OutputPath = Some $"{output}/{runtime}"
-                  MSBuildParams =
-                      { args with
-                            Properties = [ "PublishSingleFile", "true" ] } }
-
-        let getPublishCmd getOpts runtime =
-            DotNet.publish (getOpts runtime) "src/Migrondi/Migrondi.fsproj"
-
-        Array.iter (getPublishCmd getOpts) runtimes)
+      DotNet.pack
+        (fun opts -> {
+          opts with
+              Configuration = DotNet.BuildConfiguration.Release
+              OutputPath = Some $"{output}"
+        })
+        "src/Migrondi.Lib"
+  )
 
 Target.create
-    "Zip"
-    (fun _ ->
-        runtimes
-        |> Array.Parallel.iter
-            (fun runtime -> ZipFile.CreateFromDirectory($"{output}/{runtime}", $"{output}/{runtime}.zip")))
+  "BuildBinaries"
+  (fun _ ->
+    let args = MSBuild.CliArguments.Create()
+
+    let getOpts (runtime: string) (opts: DotNet.PublishOptions) = {
+      opts with
+          SelfContained = Some true
+          Runtime = Some runtime
+          Configuration = DotNet.BuildConfiguration.Release
+          OutputPath = Some $"{output}/{runtime}"
+          MSBuildParams = {
+            args with
+                Properties = [ "PublishSingleFile", "true" ]
+          }
+    }
+
+    let getPublishCmd getOpts runtime =
+      DotNet.publish (getOpts runtime) "src/Migrondi/Migrondi.fsproj"
+
+    Array.iter (getPublishCmd getOpts) runtimes
+  )
+
+Target.create
+  "Zip"
+  (fun _ ->
+    runtimes
+    |> Array.Parallel.iter(fun runtime ->
+      ZipFile.CreateFromDirectory(
+        $"{output}/{runtime}",
+        $"{output}/{runtime}.zip"
+      )
+    )
+  )
 
 Target.create "Default" (fun _ -> Target.runSimple "Zip" [] |> ignore)
 
