@@ -13,13 +13,18 @@ open Migrondi.Core
 open Migrondi.Core.Database
 
 open Migrondi.Tests.Database
+open Serilog
 
 [<TestClass>]
 type DatabaseAsyncTests() =
 
   let dbName = Guid.NewGuid()
   let config = DatabaseData.getConfig dbName
-  let databaseEnv = DatabaseImpl.Build(DatabaseData.getConfig dbName)
+
+  let logger =
+    LoggerConfiguration().MinimumLevel.Debug().WriteTo.Console().CreateLogger()
+
+  let databaseEnv = DatabaseImpl.Build(logger, DatabaseData.getConfig dbName)
 
   [<TestInitialize>]
   member _.TestInitialize() =

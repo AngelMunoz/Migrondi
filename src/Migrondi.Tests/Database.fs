@@ -10,7 +10,7 @@ open FsToolkit.ErrorHandling
 
 open Migrondi.Core
 open Migrondi.Core.Database
-
+open Serilog
 
 module DatabaseData =
   open System.Data
@@ -88,7 +88,11 @@ module DatabaseData =
 type DatabaseTests() =
   let dbName = Guid.NewGuid()
   let config = DatabaseData.getConfig dbName
-  let databaseEnv = DatabaseImpl.Build(DatabaseData.getConfig dbName)
+
+  let logger =
+    LoggerConfiguration().MinimumLevel.Debug().WriteTo.Console().CreateLogger()
+
+  let databaseEnv = DatabaseImpl.Build(logger, DatabaseData.getConfig dbName)
 
   [<TestInitialize>]
   member _.TestInitialize() =
@@ -329,7 +333,7 @@ type DatabaseTests() =
       Assert.Fail($"Failed to find the last applied migration: %s{err}")
 
   [<TestMethod>]
-  member _.``RollBackMigrations Should roll back migrations and return the migrations left in the database``
+  member _.``RollBackMigrations Should roll back migrations and return the migrations that were reverted from the database``
     ()
     =
     let operation = result {
@@ -386,9 +390,8 @@ type DatabaseTests() =
     match operation with
     | Ok(migrations, lastApplied) ->
       Assert.AreEqual(2, migrations.Count)
-      Assert.AreEqual("test_2", migrations[0].name)
-      Assert.AreEqual("test_1", migrations[1].name)
-      Assert.AreEqual("test_2", lastApplied.name)
+      Assert.AreEqual("test_4", migrations[0].name)
+      Assert.AreEqual("test_3", migrations[1].name)
     | Error err ->
       Assert.Fail($"Failed to find the last applied migration: %s{err}")
 
