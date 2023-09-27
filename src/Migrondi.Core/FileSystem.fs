@@ -125,7 +125,8 @@ type FileSystemService =
   /// <returns>
   /// A unit result object that means that the operation was successful
   /// </returns>
-  abstract member WriteMigration: migration: Migration * migrationName: string -> unit
+  abstract member WriteMigration:
+    migration: Migration * migrationName: string -> unit
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
@@ -154,7 +155,8 @@ type FileSystemService =
   /// A list of exceptions in case the sources were not readable or malformed
   /// This normally includes exceptions of the type <see cref="Migrondi.Core.FileSystem.MalformedSource">MalformedSource</see>
   /// </exception>
-  abstract member ListMigrations: migrationsLocation: string -> Migration IReadOnlyList
+  abstract member ListMigrations:
+    migrationsLocation: string -> Migration IReadOnlyList
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
@@ -166,7 +168,8 @@ type FileSystemService =
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member ListMigrationsAsync:
-    migrationsLocation: string * [<Optional>] ?cancellationToken: CancellationToken ->
+    migrationsLocation: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration IReadOnlyList>
 
 module PhysicalFileSystemImpl =
