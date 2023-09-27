@@ -12,6 +12,8 @@
       code or to write an abstraction for different kind  of tools.
     </Summary>
     <IsPackable>True</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <InternalsVisibleTo>Migrondi.Tests</InternalsVisibleTo>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Library.fs" />
