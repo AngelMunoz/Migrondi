@@ -25,7 +25,7 @@ type MigrondiConfig = {
 } with
 
   static member Default: MigrondiConfig = {
-    connection = "./migrondi.db"
+    connection = "Data Source=./migrondi.db"
     migrations = "./migrations"
     tableName = "__migrondi_migrations"
     driver = MigrondiDriver.Sqlite
