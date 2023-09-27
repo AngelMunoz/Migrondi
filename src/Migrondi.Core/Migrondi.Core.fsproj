@@ -20,7 +20,6 @@
     <Compile Include="FileSystem.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="Migrondi.fs" />
-    <Compile Include="Api.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
