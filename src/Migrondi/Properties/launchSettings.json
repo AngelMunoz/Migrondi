@@ -40,14 +40,24 @@
       "commandLineArgs": "down 1 -d",
       "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
-    "Migrondi Down": {
+    "Migrondi Up": {
       "commandName": "Project",
-      "commandLineArgs": "down --dry-run false",
+      "commandLineArgs": "up",
       "workingDirectory": "$(SolutionDir)/samples/sqlite"
     },
-    "Migrondi Down All": {
+    "Migrondi Up 1": {
       "commandName": "Project",
-      "commandLineArgs": "down -t 0 --dry-run false",
+      "commandLineArgs": "up 1",
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
+    },
+    "Migrondi Down": {
+      "commandName": "Project",
+      "commandLineArgs": "down",
+      "workingDirectory": "$(SolutionDir)/samples/sqlite"
+    },
+    "Migrondi Down 1": {
+      "commandName": "Project",
+      "commandLineArgs": "down down 1",
       "workingDirectory": "$(SolutionDir)/samples/sqlite"
     }
   }
