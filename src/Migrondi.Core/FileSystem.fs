@@ -451,12 +451,20 @@ module PhysicalFileSystemImpl =
 [<Class>]
 type FileSystemImpl =
 
-  static member BuildDefaultEnv(serializer: #SerializerService, rootUri: Uri) =
+  static member BuildDefaultEnv
+    (
+      serializer: #SerializerService,
+      projectRootUri: Uri,
+      migrationsRootUri: Uri
+    ) =
+
+    let migrationsWorkingDir = Uri(projectRootUri, migrationsRootUri)
+
     { new FileSystemService with
         member _.ListMigrations(readFrom) =
           PhysicalFileSystemImpl.listMigrations(
             serializer,
-            rootUri,
+            migrationsWorkingDir,
             UMX.tag readFrom
           )
 
@@ -464,7 +472,7 @@ type FileSystemImpl =
           let computation =
             PhysicalFileSystemImpl.listMigrationsAsync(
               serializer,
-              rootUri,
+              migrationsWorkingDir,
               UMX.tag arg1
             )
 
@@ -473,7 +481,7 @@ type FileSystemImpl =
         member _.ReadConfiguration(readFrom) =
           PhysicalFileSystemImpl.readConfiguration(
             serializer,
-            rootUri,
+            projectRootUri,
             UMX.tag readFrom
           )
 
@@ -485,7 +493,7 @@ type FileSystemImpl =
           let computation =
             PhysicalFileSystemImpl.readConfigurationAsync(
               serializer,
-              rootUri,
+              projectRootUri,
               UMX.tag readFrom
             )
 
@@ -494,7 +502,7 @@ type FileSystemImpl =
         member _.ReadMigration readFrom =
           PhysicalFileSystemImpl.readMigration(
             serializer,
-            rootUri,
+            migrationsWorkingDir,
             UMX.tag readFrom
           )
 
@@ -502,7 +510,7 @@ type FileSystemImpl =
           let computation =
             PhysicalFileSystemImpl.readMigrationAsync(
               serializer,
-              rootUri,
+              migrationsWorkingDir,
               UMX.tag readFrom
             )
 
@@ -512,7 +520,7 @@ type FileSystemImpl =
           PhysicalFileSystemImpl.writeConfiguration(
             serializer,
             config,
-            rootUri,
+            projectRootUri,
             UMX.tag writeTo
           )
 
@@ -522,21 +530,21 @@ type FileSystemImpl =
             writeTo,
             [<Optional>] ?cancellationToken
           ) =
-          let comptation =
+          let computation =
             PhysicalFileSystemImpl.writeConfigurationAsync(
               serializer,
               config,
-              rootUri,
+              projectRootUri,
               UMX.tag writeTo
             )
 
-          Async.StartAsTask(comptation, ?cancellationToken = cancellationToken)
+          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
 
         member _.WriteMigration(arg1: Migration, arg2) : unit =
           PhysicalFileSystemImpl.writeMigration(
             serializer,
             arg1,
-            rootUri,
+            migrationsWorkingDir,
             UMX.tag arg2
           )
 
@@ -550,7 +558,7 @@ type FileSystemImpl =
             PhysicalFileSystemImpl.writeMigrationAsync(
               serializer,
               arg1,
-              rootUri,
+              migrationsWorkingDir,
               UMX.tag arg2
             )
 
