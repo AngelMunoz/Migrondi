@@ -71,7 +71,7 @@ type AppEnv
         Uri(migrationsDir, UriKind.Relative)
       )
 
-    let db = DatabaseImpl.Build(config)
-    let migrondi = MigrondiServiceImpl.BuildDefaultEnv(db, fs, config)
+    let db = DatabaseImpl.Build(logger, config)
+    let migrondi = MigrondiServiceImpl.BuildDefaultEnv(db, fs, logger, config)
 
     AppEnv(logger, fs, db, migrondi)
