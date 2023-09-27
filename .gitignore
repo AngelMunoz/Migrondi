@@ -362,3 +362,6 @@ migrations/
 migrondi.json
 dist
 /.idea
+
+/sample
+/samples
