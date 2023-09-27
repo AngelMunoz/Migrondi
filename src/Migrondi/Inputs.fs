@@ -47,15 +47,17 @@ module ListArgs =
       let parseArgument (result: ArgumentResult) =
         match result.Tokens |> Seq.tryHead with
         | Some token when token.Value.ToLowerInvariant() = "up" ->
-          MigrationType.Up
+          Some MigrationType.Up
         | Some token when token.Value.ToLowerInvariant() = "down" ->
-          MigrationType.Down
-        | _ -> MigrationType.Up
+          Some MigrationType.Down
+        | _ -> None
 
-      Option<MigrationType>(
+      Option<MigrationType option>(
         [| "-k"; "--kind" |],
         parseArgument = parseArgument,
         Description = ""
       )
+        .FromAmong([| "up"; "down" |])
+
 
     op |> Input.OfOption

@@ -30,5 +30,6 @@
     <PackageReference Include="FSharp.SystemCommandLine" Version="0.17.0-beta4" />
     <PackageReference Include="Serilog" Version="3.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="4.1.0" />
+    <PackageReference Include="Spectre.Console" Version="0.47.0" />
   </ItemGroup>
 </Project>
