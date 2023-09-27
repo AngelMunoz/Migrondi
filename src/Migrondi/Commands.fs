@@ -2,17 +2,14 @@ namespace Migrondi.Commands
 
 open System
 open System.IO
-
-open System.CommandLine.Invocation
-
 open FSharp.SystemCommandLine
+open Migrondi.Core
 open Migrondi.Env
+open Migrondi.Handlers
 
 
 [<RequireQualifiedAccess>]
 module ArgumentMapper =
-  open Migrondi.Handlers
-  open Migrondi.Core
 
 
   let Init (appEnv: AppEnv) (dir: DirectoryInfo option) =
@@ -21,26 +18,26 @@ module ArgumentMapper =
       | Some directory -> directory
       | None -> Directory.GetCurrentDirectory() |> DirectoryInfo
 
-    path, appEnv.MigrondiEnv.FileSystem, appEnv.Logger
+    path, appEnv.FileSystem, appEnv.Logger
 
   let Up (appEnv: AppEnv) (amount: int option, isDry: bool option) =
     match isDry with
-    | Some true -> Migrations.runDryUp(amount, appEnv.MigrondiEnv.Migrondi)
+    | Some true -> Migrations.runDryUp(amount, appEnv.Migrondi)
     | Some false
-    | None -> Migrations.runUp(amount, appEnv.MigrondiEnv.Migrondi)
+    | None -> Migrations.runUp(amount, appEnv.Migrondi)
 
   let Down (appEnv: AppEnv) (amount: int option, isDry: bool option) =
     match isDry with
-    | Some true -> Migrations.runDryDown(amount, appEnv.MigrondiEnv.Migrondi)
+    | Some true -> Migrations.runDryDown(amount, appEnv.Migrondi)
     | Some false
-    | None -> Migrations.runDown(amount, appEnv.MigrondiEnv.Migrondi)
+    | None -> Migrations.runDown(amount, appEnv.Migrondi)
 
-  let New (appEnv: AppEnv) (name: string) = name, appEnv.MigrondiEnv.Migrondi
+  let New (appEnv: AppEnv) (name: string) =
+    name, appEnv.Logger, appEnv.FileSystem
 
-  let List (appEnv: AppEnv) (kind: MigrationType) =
-    kind, appEnv.MigrondiEnv.Migrondi
+  let List (appEnv: AppEnv) (kind: MigrationType) = kind, appEnv.Migrondi
 
-  let Status (appEnv: AppEnv) (name: string) = name, appEnv.MigrondiEnv.Migrondi
+  let Status (appEnv: AppEnv) (name: string) = name, appEnv.Migrondi
 
 [<RequireQualifiedAccess>]
 module Commands =
