@@ -148,7 +148,7 @@ module private MigrondiserviceImpl =
   val scriptStatus: db: #DatabaseService -> fs: #FileSystemService -> migrationPath: string -> MigrationStatus
 
 [<Class>]
-type MigrondiServiceImpl =
+type MigrondiServiceFactory =
   /// <summary>
   /// Generates a new Migrondi service, this can be further customized by passing in a custom database service
   /// a custom file system service and a custom logger.
@@ -161,6 +161,6 @@ type MigrondiServiceImpl =
   /// <param name="logger">A Serilog compatible ILogger this is used for the lifetime of the service.</param>
   /// <param name="config">A configuration object to be able to find the connection string for the database.</param>
   /// <returns>A new Migrondi service</returns>
-  static member BuildDefaultEnv:
+  static member GetInstance:
     database: #DatabaseService * fileSystem: #FileSystemService * logger: #ILogger * config: MigrondiConfig ->
       MigrondiService

@@ -452,9 +452,9 @@ module PhysicalFileSystemImpl =
     }
 
 [<Class>]
-type FileSystemImpl =
+type FileSystemServiceFactory =
 
-  static member BuildDefaultEnv
+  static member GetInstance
     (
       serializer: #SerializerService,
       projectRootUri: Uri,

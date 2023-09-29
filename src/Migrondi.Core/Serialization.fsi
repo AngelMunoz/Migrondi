@@ -173,7 +173,7 @@ module private SerializerImpl =
   val migrationSerializer: unit -> MigrationSerializer
 
 [<Class>]
-type SerializerImpl =
+type SerializerServiceFactory =
 
   /// <summary>
   /// Generates the container for the serializer services, you can provide custom implementations for the serializers.
@@ -182,7 +182,7 @@ type SerializerImpl =
   /// <param name="migrationRecordSerializer">A custom migration record serializer</param>
   /// <param name="migrationSerializer">A custom migration serializer</param>
   /// <returns>A serializer service</returns>
-  static member BuildDefaultEnv:
+  static member GetInstance:
     ?configurationSerializer: ConfigurationSerializer *
     ?migrationRecordSerializer: MigrationRecordSerializer *
     ?migrationSerializer: MigrationSerializer ->

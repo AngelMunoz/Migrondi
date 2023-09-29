@@ -10,7 +10,9 @@ open FsToolkit.ErrorHandling
 
 open Migrondi.Core
 open Migrondi.Core.Database
+
 open Serilog
+open Serilog.Extensions.Logging
 
 module DatabaseData =
   open System.Data
@@ -89,10 +91,14 @@ type DatabaseTests() =
   let dbName = Guid.NewGuid()
   let config = DatabaseData.getConfig dbName
 
-  let logger =
+  let baseLogger =
     LoggerConfiguration().MinimumLevel.Debug().WriteTo.Console().CreateLogger()
 
-  let databaseEnv = DatabaseImpl.Build(logger, DatabaseData.getConfig dbName)
+  let loggerFactory = new SerilogLoggerFactory(baseLogger)
+  let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
+
+  let databaseEnv =
+    DatabaseServiceFactory.GetInstance(logger, DatabaseData.getConfig dbName)
 
   [<TestInitialize>]
   member _.TestInitialize() =

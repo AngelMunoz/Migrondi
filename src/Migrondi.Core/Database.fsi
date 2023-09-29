@@ -193,7 +193,7 @@ module private MigrationsAsyncImpl =
       Async<IReadOnlyList<MigrationRecord>>
 
 [<Class>]
-type DatabaseImpl =
+type DatabaseServiceFactory =
   /// <summary>
   /// Generates a new database service, this can be further customized by passing in a custom logger
   /// instance and a custom configuration.
@@ -203,4 +203,4 @@ type DatabaseImpl =
   /// <returns>
   /// A new database service instance
   /// </returns>
-  static member Build: logger: ILogger * config: MigrondiConfig -> DatabaseService
+  static member GetInstance: logger: ILogger * config: MigrondiConfig -> DatabaseService

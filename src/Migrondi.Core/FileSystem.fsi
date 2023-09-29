@@ -204,7 +204,7 @@ module private PhysicalFileSystemImpl =
       Async<IReadOnlyList<Migration>>
 
 [<Class>]
-type FileSystemImpl =
+type FileSystemFactory =
   /// <summary>
   /// Generates a new file system service, this can be further customized by passing in a custom serializer
   /// an absolute Uri to the project root and a relative Uri to the migrations root.
@@ -213,5 +213,5 @@ type FileSystemImpl =
   /// <param name="projectRootUri">An absolute Uri to the project root.</param>
   /// <param name="migrationsRootUri">A relative Uri to the migrations root.</param>
   /// <returns>A new file system service</returns>
-  static member BuildDefaultEnv:
+  static member GetInstance:
     serializer: #SerializerService * projectRootUri: Uri * migrationsRootUri: Uri -> FileSystemService

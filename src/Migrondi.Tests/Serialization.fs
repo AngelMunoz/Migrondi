@@ -89,7 +89,7 @@ module MigrationRecordData =
 
 [<TestClass>]
 type SerializationTests() =
-  let serializer = SerializerImpl.BuildDefaultEnv()
+  let serializer = SerializerServiceFactory.GetInstance()
 
   [<TestMethod>]
   member _.``Can Encode Configuration``() =

@@ -62,7 +62,7 @@ type AppEnv
       | None -> MigrondiConfig.Default
 
 
-    let serializer = SerializerImpl.BuildDefaultEnv()
+    let serializer = SerializerServiceFactory.GetInstance()
 
     let config = readLocalConfig(cwd, logger, serializer)
 
@@ -73,13 +73,14 @@ type AppEnv
         $"{config.migrations}{Path.DirectorySeparatorChar}"
 
     let fs =
-      FileSystemImpl.BuildDefaultEnv(
+      FileSystemServiceFactory.GetInstance(
         serializer,
         Uri(cwd, UriKind.Absolute),
         Uri(migrationsDir, UriKind.Relative)
       )
 
-    let db = DatabaseImpl.Build(logger, config)
-    let migrondi = MigrondiServiceImpl.BuildDefaultEnv(db, fs, logger, config)
+    let db = DatabaseServiceFactory.GetInstance(logger, config)
+
+    let migrondi = MigrondiServiceFactory.GetInstance(db, fs, logger, config)
 
     AppEnv(logger, serializer, fs, db, migrondi, jsonOutput)

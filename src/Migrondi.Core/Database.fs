@@ -347,7 +347,11 @@ module MigrationsImpl =
 
         transaction.Commit()
       with ex ->
-        logger.LogDebug("Failed to rollback migration due: {Message}", ex.Message)
+        logger.LogDebug(
+          "Failed to rollback migration due: {Message}",
+          ex.Message
+        )
+
         transaction.Rollback()
         reriseCustom(MigrationRollbackFailed migration)
 
@@ -484,7 +488,11 @@ module MigrationsAsyncImpl =
 
           transaction.Commit()
         with ex ->
-          logger.LogDebug("Failed to apply migration due: {Message}", ex.Message)
+          logger.LogDebug(
+            "Failed to apply migration due: {Message}",
+            ex.Message
+          )
+
           transaction.Rollback()
           raise(MigrationApplicationFailed migration)
 
@@ -572,9 +580,9 @@ module MigrationsAsyncImpl =
     }
 
 [<Class>]
-type DatabaseImpl =
+type DatabaseServiceFactory =
 
-  static member Build(logger: ILogger, config: MigrondiConfig) =
+  static member GetInstance(logger: ILogger, config: MigrondiConfig) =
     { new DatabaseService with
 
         member _.SetupDatabase() =

@@ -13,7 +13,10 @@ open Migrondi.Core
 open Migrondi.Core.Database
 
 open Migrondi.Tests.Database
+
 open Serilog
+open Serilog.Extensions.Logging
+
 
 [<TestClass>]
 type DatabaseAsyncTests() =
@@ -21,10 +24,16 @@ type DatabaseAsyncTests() =
   let dbName = Guid.NewGuid()
   let config = DatabaseData.getConfig dbName
 
-  let logger =
+  let baseLogger =
     LoggerConfiguration().MinimumLevel.Debug().WriteTo.Console().CreateLogger()
 
-  let databaseEnv = DatabaseImpl.Build(logger, DatabaseData.getConfig dbName)
+  let loggerFactory = new SerilogLoggerFactory(baseLogger)
+  let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database.Async")
+
+  let databaseEnv =
+    DatabaseServiceFactory.GetInstance(logger, DatabaseData.getConfig dbName)
+
+
 
   [<TestInitialize>]
   member _.TestInitialize() =
@@ -36,7 +45,8 @@ type DatabaseAsyncTests() =
 
   [<TestCleanup>]
   member _.TestCleanup() =
-    System.IO.File.Delete($"./{dbName.ToString()}.db")
+    loggerFactory.Dispose()
+    IO.File.Delete($"./{dbName.ToString()}.db")
 
 
   [<TestMethod>]

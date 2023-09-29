@@ -112,7 +112,7 @@ type MigrondiService =
     string * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationStatus>
 
-module MigrondiserviceImpl =
+module private MigrondiserviceImpl =
   open FsToolkit.ErrorHandling
 
   let obtainPendingUp
@@ -311,9 +311,9 @@ module MigrondiserviceImpl =
     | None -> Pending migration
 
 [<Class>]
-type MigrondiServiceImpl =
+type MigrondiServiceFactory =
 
-  static member BuildDefaultEnv
+  static member GetInstance
     (
       database: #DatabaseService,
       fileSystem: #FileSystemService,

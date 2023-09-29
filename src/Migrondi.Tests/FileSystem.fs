@@ -75,10 +75,10 @@ type FileSystemTests() =
 
   let rootDir = DirectoryInfo(baseUri.LocalPath)
 
-  let serializer = SerializerImpl.BuildDefaultEnv()
+  let serializer = SerializerServiceFactory.GetInstance()
 
   let fileSystem =
-    FileSystemImpl.BuildDefaultEnv(
+    FileSystemServiceFactory.GetInstance(
       serializer,
       baseUri,
       Uri("fs-migrations/", UriKind.Relative)

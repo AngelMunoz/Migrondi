@@ -118,7 +118,7 @@ type MigrationRecordSerializer =
 
 [<RequireQualifiedAccess;
   CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module MigrondiDriver =
+module private MigrondiDriver =
   let Encode: Encoder<MigrondiDriver> =
     fun (driver: MigrondiDriver) ->
       let name =
@@ -146,7 +146,7 @@ module MigrondiDriver =
 
 [<RequireQualifiedAccess;
   CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module MigrondiConfig =
+module private MigrondiConfig =
 
   let Encode: Encoder<MigrondiConfig> =
     fun (config: MigrondiConfig) ->
@@ -171,7 +171,7 @@ module MigrondiConfig =
 [<RequireQualifiedAccess;
   CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 
-module Migration =
+module private Migration =
   let migrationDelimiter (key: string, value: string option) =
     let start =
       match value with
@@ -423,7 +423,7 @@ module Migration =
 
 [<RequireQualifiedAccess;
   CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module MigrationRecord =
+module private MigrationRecord =
 
   let Encode: Encoder<MigrationRecord> =
     fun (record: MigrationRecord) ->
@@ -447,7 +447,7 @@ type SerializerService =
   abstract member MigrationSerializer: MigrationSerializer
   abstract member MigrationRecordSerializer: MigrationRecordSerializer
 
-module SerializerImpl =
+module private SerializerImpl =
   let configSerializer () =
     { new ConfigurationSerializer with
         member _.Decode(content: string) =
@@ -497,9 +497,9 @@ module SerializerImpl =
     }
 
 [<Class>]
-type SerializerImpl =
+type SerializerServiceFactory =
 
-  static member BuildDefaultEnv
+  static member GetInstance
     (
       ?configurationSerializer: ConfigurationSerializer,
       ?migrationRecordSerializer: MigrationRecordSerializer,
