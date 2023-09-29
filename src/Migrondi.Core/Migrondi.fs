@@ -9,7 +9,7 @@ open Migrondi.Core
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Database
 open System.Threading
-open Serilog
+open Microsoft.Extensions.Logging
 
 
 [<Interface>]
@@ -164,14 +164,14 @@ module MigrondiserviceImpl =
     let migrations = fs.ListMigrations config.migrations
     let appliedMigrations = db.ListMigrations()
 
-    logger.Debug(
+    logger.LogDebug(
       "Applied migrations: {Migrations}",
       (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
     )
 
     let pendingMigrations = obtainPendingUp migrations appliedMigrations
 
-    logger.Debug(
+    logger.LogDebug(
       "Pending migrations: {Migrations}",
       (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
     )
@@ -182,13 +182,13 @@ module MigrondiserviceImpl =
         if amount >= 0 && amount < pendingMigrations.Length then
           pendingMigrations |> Array.take amount
         else
-          logger.Warning
+          logger.LogWarning
             "The amount specified is out of bounds in relation with the pending migrations. Running all pending migrations."
 
           pendingMigrations
       | None -> pendingMigrations
 
-    logger.Information $"Running '%i{pendingMigrations.Length}' migrations."
+    logger.LogInformation $"Running '%i{pendingMigrations.Length}' migrations."
     db.ApplyMigrations migrationsToRun
 
   let runDown
@@ -201,14 +201,14 @@ module MigrondiserviceImpl =
     let appliedMigrations = db.ListMigrations()
     let migrations = fs.ListMigrations config.migrations
 
-    logger.Debug(
+    logger.LogDebug(
       "Applied migrations: {Migrations}",
       (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
     )
 
     let pendingMigrations = obtainPendingDown migrations appliedMigrations
 
-    logger.Debug(
+    logger.LogDebug(
       "Rolling back migrations: {Migrations}",
       (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
     )
@@ -219,13 +219,13 @@ module MigrondiserviceImpl =
         if amount >= 0 && amount < pendingMigrations.Length then
           pendingMigrations |> Array.take amount
         else
-          logger.Warning
+          logger.LogWarning
             "The amount specified is out of bounds in relation with the pending migrations. Rolling back all pending migrations."
 
           pendingMigrations
       | None -> pendingMigrations
 
-    logger.Information(
+    logger.LogInformation(
       "Reverting '{MigrationAmount}' migrations.",
       pendingMigrations.Length
     )

@@ -4,7 +4,7 @@ open System
 open System.IO
 
 open System.Security
-open Serilog
+open Microsoft.Extensions.Logging
 open Spectre.Console
 
 open Migrondi.Core
@@ -14,7 +14,7 @@ open Migrondi.Core.Migrondi
 [<RequireQualifiedAccess>]
 module Init =
   let handler (path: DirectoryInfo, fs: FileSystemService, logger: ILogger) =
-    logger.Information(
+    logger.LogInformation(
       "Initializing a new migrondi project at: {PathName}.",
       path.FullName
     )
@@ -24,7 +24,7 @@ module Init =
     fs.WriteConfiguration(config, configPath)
     let subpath = path.CreateSubdirectory(config.migrations)
 
-    logger.Information(
+    logger.LogInformation(
       "migrondi.json and {MigrationsDirectory} directory created successfully.",
       subpath.Name
     )
@@ -36,7 +36,7 @@ module Init =
 module Migrations =
 
   let newMigration (name: string, logger: ILogger, fs: FileSystemService) =
-    logger.Information(
+    logger.LogInformation(
       "Creating a new migration with name: {MigrationName}.",
       name
     )
@@ -57,7 +57,7 @@ module Migrations =
         name
       )
 
-      logger.Information(
+      logger.LogInformation(
         "Migration {MigrationName} created successfully.",
         name
       )
@@ -65,14 +65,14 @@ module Migrations =
       0
     with
     | :? IOException as e ->
-      logger.Error(
+      logger.LogError(
         "There was a problem when writing the migration file: '{Message}'",
         e.Message
       )
 
       1
     | :? SecurityException as e ->
-      logger.Error(
+      logger.LogError(
         "The user does not have permissions on this directory/file, please check the permissions and try again.\n{Message}",
         e.Message
       )
@@ -85,14 +85,14 @@ module Migrations =
       let appliedMigrations = migrondi.RunUp(?amount = amount)
 
       for migration in appliedMigrations do
-        logger.Information(
+        logger.LogInformation(
           "Applied migration '{MigrationName}' successfully.",
           migration.name
         )
 
       0
     with MigrationApplicationFailed migration ->
-      logger.Error(
+      logger.LogError(
         "Failed to apply migration '{MigrationName}'.",
         migration.name
       )
@@ -108,16 +108,16 @@ module Migrations =
     ) =
     let migrations = migrondi.DryRunUp(?amount = amount)
 
-    logger.Information "DRY RUN: The following migrations would be applied:"
+    logger.LogInformation "DRY RUN: The following migrations would be applied:"
 
     for migration in migrations do
-      logger.Information(
+      logger.LogInformation(
         "{MigrationName}.sql\n------ START TRANSACTION ------\n{MigrationContent}\n------- END TRANSACTION -------",
         migration.name,
         migration.upContent
       )
 
-    logger.Information $"DRY RUN: would applied '{migrations.Count}' migrations"
+    logger.LogInformation $"DRY RUN: would applied '{migrations.Count}' migrations"
     0
 
   let runDown (amount: int option, logger: ILogger, migrondi: MigrondiService) =
@@ -126,14 +126,14 @@ module Migrations =
       let reverted = migrondi.RunDown(?amount = amount)
 
       for migration in reverted do
-        logger.Information(
+        logger.LogInformation(
           "Reverted migration '{MigrationName}' successfully.",
           migration.name
         )
 
       0
     with MigrationApplicationFailed migration ->
-      logger.Error(
+      logger.LogError(
         "Failed to apply migration '{MigrationName}'.",
         migration.name
       )
@@ -148,16 +148,16 @@ module Migrations =
     ) =
     let migrations = migrondi.DryRunDown(?amount = amount)
 
-    logger.Information "DRY RUN: The following migrations would be reverted:"
+    logger.LogInformation "DRY RUN: The following migrations would be reverted:"
 
     for migration in migrations do
-      logger.Information(
+      logger.LogInformation(
         "{MigrationName}\n------ START TRANSACTION ------\n{MigrationContent}\n------- END TRANSACTION -------",
         migration.name,
         migration.upContent
       )
 
-    logger.Information(
+    logger.LogInformation(
       "DRY RUN: would reverted '{MigrationCount}' migrations",
       migrations.Count
     )
@@ -235,7 +235,7 @@ module Migrations =
         migrations
         |> Seq.map(fun m -> serializer.MigrationSerializer.EncodeJson m)
 
-      logger.Information(
+      logger.LogInformation(
         "Listing {Status} migrations: {Migrations}",
         status,
         encoded
@@ -252,7 +252,7 @@ module Migrations =
             ("Pending", serializer.MigrationSerializer.EncodeJson m)
         )
 
-      logger.Information("Listing migrations: {Migrations}", encoded)
+      logger.LogInformation("Listing migrations: {Migrations}", encoded)
 
     let allMigrations = migrondi.MigrationsList()
 
@@ -311,12 +311,12 @@ module Migrations =
 
     match migrondi.ScriptStatus(name) with
     | Applied migration ->
-      logger.Information(
+      logger.LogInformation(
         "Migration {migration.name} was created on '{Timestamp}' and is currently applied.",
         formatTimestamp(migration.timestamp)
       )
     | Pending migration ->
-      logger.Information(
+      logger.LogInformation(
         "Migration {migration.name} was created on '{Timestamp}' and is not currently applied.",
         formatTimestamp(migration.timestamp)
       )

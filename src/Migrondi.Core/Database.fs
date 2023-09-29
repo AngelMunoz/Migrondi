@@ -14,7 +14,7 @@ open Npgsql
 
 open RepoDb
 open RepoDb.Enumerations
-open Serilog
+open Microsoft.Extensions.Logging
 
 open FsToolkit.ErrorHandling
 
@@ -263,7 +263,7 @@ module MigrationsImpl =
       use transaction = connection.EnsureOpen().BeginTransaction()
 
       try
-        logger.Debug(
+        logger.LogDebug(
           "Applying migration {Name} with content: {Content}",
           migration.name,
           content
@@ -286,7 +286,7 @@ module MigrationsImpl =
 
         transaction.Commit()
       with ex ->
-        logger.Debug("Failed to apply migration due: {Message}", ex.Message)
+        logger.LogDebug("Failed to apply migration due: {Message}", ex.Message)
         transaction.Rollback()
         reriseCustom(MigrationApplicationFailed migration)
 
@@ -327,7 +327,7 @@ module MigrationsImpl =
       try
         let content = migration.downContent
 
-        logger.Debug(
+        logger.LogDebug(
           "Rolling back migration {Name} with content: {Content}",
           migration.name,
           content
@@ -347,7 +347,7 @@ module MigrationsImpl =
 
         transaction.Commit()
       with ex ->
-        logger.Debug("Failed to rollback migration due: {Message}", ex.Message)
+        logger.LogDebug("Failed to rollback migration due: {Message}", ex.Message)
         transaction.Rollback()
         reriseCustom(MigrationRollbackFailed migration)
 
@@ -451,7 +451,7 @@ module MigrationsAsyncImpl =
         let content = migration.upContent
 
         try
-          logger.Debug(
+          logger.LogDebug(
             "Applying migration {Name} with content: {Content}",
             migration.name,
             content
@@ -484,7 +484,7 @@ module MigrationsAsyncImpl =
 
           transaction.Commit()
         with ex ->
-          logger.Debug("Failed to apply migration due: {Message}", ex.Message)
+          logger.LogDebug("Failed to apply migration due: {Message}", ex.Message)
           transaction.Rollback()
           raise(MigrationApplicationFailed migration)
 
@@ -518,7 +518,7 @@ module MigrationsAsyncImpl =
 
         try
 
-          logger.Debug(
+          logger.LogDebug(
             "Rolling back migration {Name} with content: {Content}",
             migration.name,
             content
@@ -548,7 +548,7 @@ module MigrationsAsyncImpl =
 
           transaction.Commit()
         with ex ->
-          logger.Debug(
+          logger.LogDebug(
             "Failed to rollback migration due: {Message}",
             ex.Message
           )

@@ -4,10 +4,7 @@ open System.CommandLine
 open System.CommandLine.Parsing
 open System.IO
 
-
 open FSharp.SystemCommandLine
-
-
 
 open Migrondi.Core
 

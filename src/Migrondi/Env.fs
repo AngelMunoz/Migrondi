@@ -2,12 +2,14 @@ namespace Migrondi.Env
 
 open System
 open System.IO
+
 open Migrondi.Core
 open Migrondi.Core.Database
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Migrondi
 open Migrondi.Core.Serialization
-open Serilog
+
+open Microsoft.Extensions.Logging
 
 
 type AppEnv
@@ -51,7 +53,7 @@ type AppEnv
         try
           serializer.ConfigurationSerializer.Decode(content)
         with DeserializationFailed(_, reason) ->
-          logger.Fatal(
+          logger.LogCritical(
             "Invalid local configuration file '{Message}', aborting.",
             reason
           )

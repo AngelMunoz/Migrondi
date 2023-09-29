@@ -1,12 +1,13 @@
 namespace Migrondi.Middleware
 
 open System
+open System.Collections.Generic
 open System.Threading.Tasks
 
 open System.CommandLine
 open System.CommandLine.Invocation
 
-open System.Collections.Generic
+open Microsoft.Extensions.Logging
 
 open FsToolkit.ErrorHandling
 
@@ -77,7 +78,7 @@ module Database =
         db.SetupDatabase()
         return ()
       with :? Migrondi.Core.SetupDatabaseFailed as ex ->
-        appEnv.Logger.Error("Database was not setup", ex)
+        appEnv.Logger.LogError("Database was not setup", ex)
         return! Error(Exit 1)
     }
     |> function

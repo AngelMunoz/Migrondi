@@ -1,4 +1,4 @@
-﻿open System
+open System
 open System.IO
 
 open System.CommandLine.Builder
@@ -6,6 +6,7 @@ open FSharp.SystemCommandLine
 
 open Serilog
 open Serilog.Formatting.Compact
+open Serilog.Extensions.Logging
 
 open Migrondi.Core
 open Migrondi.Commands
@@ -21,7 +22,7 @@ let main argv =
 
   // setup services
   let logger =
-    let config = LoggerConfiguration()
+    let config = LoggerConfiguration().Enrich.FromLogContext()
 
     if debug then
       config.MinimumLevel.Debug() |> ignore
@@ -35,6 +36,9 @@ let main argv =
 
     config.CreateLogger()
 
+  let loggerFactory = new SerilogLoggerFactory(logger)
+
+  let logger = loggerFactory.CreateLogger("Migrondi")
 
   let cwd = $"{Environment.CurrentDirectory}{Path.DirectorySeparatorChar}"
   let appEnv = AppEnv.BuildDefault(cwd, logger, useJson)
