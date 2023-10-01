@@ -20,17 +20,14 @@
         </Summary>
 
         <!-- FsDocs Properties -->
-        <PackageLicenseUrl>https://github.com/AngelMunoz/Migrondi/blob/main/LICENSE/</PackageLicenseUrl>
-        <PackageProjectUrl>https://github.com/AngelMunoz/Migrondi/</PackageProjectUrl>
-        <RepositoryUrl>https://github.com/AngelMunoz/Migrondi/</RepositoryUrl>
         <FsDocsLicenseLink>https://github.com/AngelMunoz/Migrondi/blob/main/LICENSE</FsDocsLicenseLink>
         <FsDocsNavbarPosition>fixed-right</FsDocsNavbarPosition>
         <FsDocsWarnOnMissingDocs>true</FsDocsWarnOnMissingDocs>
         <FsDocsTheme>default</FsDocsTheme>
     </PropertyGroup>
     <ItemGroup>
-        <None Include="$(SolutionDir)\LICENSE" Pack="true" PackagePath="\"/>
-        <None Include="$(SolutionDir)\README.md" Pack="true" PackagePath="\"/>
+        <None Include="$(MSBuildThisFileDirectory)\LICENSE" Pack="true" PackagePath="\"/>
+        <None Include="$(MSBuildThisFileDirectory)\README.md" Pack="true" PackagePath="\"/>
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
