@@ -2,6 +2,12 @@ namespace Migrondi.Core
 
 open FsToolkit.ErrorHandling
 
+[<AutoOpen>]
+module Core =
+
+  [<Literal>]
+  val MigrationNameSchema: string = "(.+)_([0-9]+).(sql|SQL)"
+
 /// DU that represents the currently supported drivers
 [<RequireQualifiedAccess>]
 type MigrondiDriver =

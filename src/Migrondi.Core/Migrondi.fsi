@@ -4,12 +4,12 @@ open System.Collections.Generic
 open System.Threading.Tasks
 open System.Runtime.InteropServices
 
+open Microsoft.Extensions.Logging
 
 open Migrondi.Core
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Database
 open System.Threading
-open Serilog
 
 /// <summary>
 /// This is the main service that coordinates all of the other parts of this library.
@@ -103,49 +103,6 @@ type MigrondiService =
   abstract member ScriptStatusAsync:
     string * [<Optional>] ?cancellationToken: CancellationToken -> Task<MigrationStatus>
 
-module private MigrondiserviceImpl =
-  open FsToolkit.ErrorHandling
-
-  val obtainPendingUp:
-    migrations: IReadOnlyList<Migration> -> appliedMigrations: IReadOnlyList<MigrationRecord> -> Migration array
-
-  val obtainPendingDown:
-    migrations: IReadOnlyList<Migration> -> appliedMigrations: IReadOnlyList<MigrationRecord> -> Migration array
-
-  val runUp:
-    db: #DatabaseService ->
-    fs: #FileSystemService ->
-    logger: #ILogger ->
-    config: MigrondiConfig ->
-    amount: int option ->
-      IReadOnlyList<MigrationRecord>
-
-  val runDown:
-    db: #DatabaseService ->
-    fs: #FileSystemService ->
-    logger: #ILogger ->
-    config: MigrondiConfig ->
-    amount: int option ->
-      IReadOnlyList<MigrationRecord>
-
-  val runDryUp:
-    db: #DatabaseService ->
-    fs: #FileSystemService ->
-    config: MigrondiConfig ->
-    amount: int option ->
-      IReadOnlyList<Migration>
-
-  val runDryDown:
-    db: #DatabaseService ->
-    fs: #FileSystemService ->
-    config: MigrondiConfig ->
-    amount: int option ->
-      IReadOnlyList<Migration>
-
-  val migrationsList:
-    db: #DatabaseService -> fs: #FileSystemService -> config: MigrondiConfig -> IReadOnlyList<MigrationStatus>
-
-  val scriptStatus: db: #DatabaseService -> fs: #FileSystemService -> migrationPath: string -> MigrationStatus
 
 [<Class>]
 type MigrondiServiceFactory =

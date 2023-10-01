@@ -1,6 +1,11 @@
 ﻿namespace Migrondi.Core
 
 open FsToolkit.ErrorHandling
+[<AutoOpen>]
+module Core =
+
+  [<Literal>]
+  let MigrationNameSchema = "(.+)_([0-9]+).(sql|SQL)"
 
 /// DU that represents the currently supported drivers
 [<RequireQualifiedAccess>]

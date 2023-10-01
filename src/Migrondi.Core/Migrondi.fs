@@ -155,9 +155,9 @@ module private MigrondiserviceImpl =
 
 
   let runUp
-    (db: #DatabaseService)
-    (fs: #FileSystemService)
-    (logger: #ILogger)
+    (db: DatabaseService)
+    (fs: FileSystemService)
+    (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -192,9 +192,9 @@ module private MigrondiserviceImpl =
     db.ApplyMigrations migrationsToRun
 
   let runDown
-    (db: #DatabaseService)
-    (fs: #FileSystemService)
-    (logger: #ILogger)
+    (db: DatabaseService)
+    (fs: FileSystemService)
+    (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -233,8 +233,8 @@ module private MigrondiserviceImpl =
     db.RollbackMigrations migrationsToRun
 
   let runDryUp
-    (db: #DatabaseService)
-    (fs: #FileSystemService)
+    (db: DatabaseService)
+    (fs: FileSystemService)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -255,8 +255,8 @@ module private MigrondiserviceImpl =
     | None -> pending
 
   let runDryDown
-    (db: #DatabaseService)
-    (fs: #FileSystemService)
+    (db: DatabaseService)
+    (fs: FileSystemService)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -277,8 +277,8 @@ module private MigrondiserviceImpl =
     | None -> pending
 
   let migrationsList
-    (db: #DatabaseService)
-    (fs: #FileSystemService)
+    (db: DatabaseService)
+    (fs: FileSystemService)
     (config: MigrondiConfig)
     =
     let migrations = fs.ListMigrations config.migrations
@@ -300,8 +300,8 @@ module private MigrondiserviceImpl =
     :> IReadOnlyList<MigrationStatus>
 
   let scriptStatus
-    (db: #DatabaseService)
-    (fs: #FileSystemService)
+    (db: DatabaseService)
+    (fs: FileSystemService)
     (migrationPath: string)
     =
     let migration = fs.ReadMigration migrationPath

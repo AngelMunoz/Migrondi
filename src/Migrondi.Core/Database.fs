@@ -582,7 +582,7 @@ module MigrationsAsyncImpl =
 [<Class>]
 type DatabaseServiceFactory =
 
-  static member GetInstance(logger: ILogger, config: MigrondiConfig) =
+  static member GetInstance(logger: #ILogger, config: MigrondiConfig) =
     { new DatabaseService with
 
         member _.SetupDatabase() =

@@ -100,6 +100,7 @@ type MigrationSerializer =
 /// <summary>
 /// This service is responsible for serializing and deserializing the migration records.
 /// The default implementation uses JSON as the serialization format.
+/// </summary>
 [<Interface>]
 type MigrationRecordSerializer =
 
@@ -129,32 +130,6 @@ type MigrationRecordSerializer =
   /// </exception>
   abstract member Decode: content: string -> MigrationRecord
 
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module private MigrondiDriver =
-  val Encode: driver: MigrondiDriver -> JsonValue
-  val Decode: Decoder<MigrondiDriver>
-
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module private MigrondiConfig =
-  val Encode: config: MigrondiConfig -> JsonValue
-  val Decode: Decoder<MigrondiConfig>
-
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-
-module private Migration =
-  val migrationDelimiter: key: string * value: string option -> string
-  val EncodeJson: migration: Migration -> JsonValue
-  val EncodeText: migration: Migration -> string
-  val DecodeTextV0: content: string -> name: string option -> Result<Migration, string>
-  val DecodeTextV1: content: string -> Result<Migration, string>
-  val DecodeText: content: string * name: string option -> Result<Migration, string>
-  val DecodeJson: Decoder<Migration>
-
-[<RequireQualifiedAccess; CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
-module private MigrationRecord =
-  val Encode: record: MigrationRecord -> JsonValue
-  val Decode: Decoder<MigrationRecord>
-
 /// <summary>
 /// This is a container service for the actual serializers of the application, given that
 /// the formats don't change that often they're enclosed in this service to avoid having to
@@ -166,11 +141,6 @@ type SerializerService =
   abstract member ConfigurationSerializer: ConfigurationSerializer
   abstract member MigrationSerializer: MigrationSerializer
   abstract member MigrationRecordSerializer: MigrationRecordSerializer
-
-module private SerializerImpl =
-  val configSerializer: unit -> ConfigurationSerializer
-  val migrationRecordSerializer: unit -> MigrationRecordSerializer
-  val migrationSerializer: unit -> MigrationSerializer
 
 [<Class>]
 type SerializerServiceFactory =

@@ -2,28 +2,14 @@ namespace Migrondi.Core.FileSystem
 
 open System
 open System.Collections.Generic
-open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
 open System.Runtime.InteropServices
 
-open FSharp.UMX
-
-open FsToolkit.ErrorHandling
+open Microsoft.Extensions.Logging
 
 open Migrondi.Core
 open Migrondi.Core.Serialization
-
-module internal Units =
-
-  [<Measure>]
-  type RelativeUserPath
-
-  [<Measure>]
-  type RelativeUserDirectoryPath
-
-
-open Units
 
 /// <summary>
 /// This is an abstraction to the file system, it allows for custom implementations to either use
@@ -163,48 +149,9 @@ type FileSystemService =
   abstract member ListMigrationsAsync:
     migrationsLocation: string * [<Optional>] ?cancellationToken: CancellationToken -> Task<Migration IReadOnlyList>
 
-module private PhysicalFileSystemImpl =
-  open System.IO
-  val nameSchema: Regex
-
-  val readConfiguration:
-    serializer: #SerializerService * projectRoot: Uri * readFrom: string<RelativeUserPath> -> MigrondiConfig
-
-  val readConfigurationAsync:
-    serializer: #SerializerService * projectRoot: Uri * readFrom: string<RelativeUserPath> -> Async<MigrondiConfig>
-
-  val writeConfiguration:
-    serializer: #SerializerService * config: MigrondiConfig * projectRoot: Uri * writeTo: string<RelativeUserPath> ->
-      unit
-
-  val writeConfigurationAsync:
-    serializer: #SerializerService * config: MigrondiConfig * projectRoot: Uri * writeTo: string<RelativeUserPath> ->
-      Async<unit>
-
-  val readMigration:
-    serializer: #SerializerService * migrationsDir: Uri * migrationName: string<RelativeUserPath> -> Migration
-
-  val readMigrationAsync:
-    serializer: #SerializerService * migrationsDir: Uri * migrationName: string<RelativeUserPath> -> Async<Migration>
-
-  val writeMigration:
-    serializer: #SerializerService * migration: Migration * migrationsDir: Uri * migrationName: string<RelativeUserPath> ->
-      unit
-
-  val writeMigrationAsync:
-    serializer: #SerializerService * migration: Migration * migrationsDir: Uri * migrationName: string<RelativeUserPath> ->
-      Async<unit>
-
-  val listMigrations:
-    serializer: #SerializerService * projectRoot: Uri * migrationsDir: string<RelativeUserDirectoryPath> ->
-      Migration list
-
-  val listMigrationsAsync:
-    serializer: #SerializerService * projectRoot: Uri * migrationsDir: string<RelativeUserDirectoryPath> ->
-      Async<IReadOnlyList<Migration>>
 
 [<Class>]
-type FileSystemFactory =
+type FileSystemServiceFactory =
   /// <summary>
   /// Generates a new file system service, this can be further customized by passing in a custom serializer
   /// an absolute Uri to the project root and a relative Uri to the migrations root.
@@ -214,4 +161,4 @@ type FileSystemFactory =
   /// <param name="migrationsRootUri">A relative Uri to the migrations root.</param>
   /// <returns>A new file system service</returns>
   static member GetInstance:
-    serializer: #SerializerService * projectRootUri: Uri * migrationsRootUri: Uri -> FileSystemService
+    serializer: #SerializerService * #ILogger * projectRootUri: Uri * migrationsRootUri: Uri -> FileSystemService

@@ -2,10 +2,13 @@ namespace Migrondi.Core.FileSystem
 
 open System
 open System.Collections.Generic
+open System.IO
 open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
 open System.Runtime.InteropServices
+
+open Microsoft.Extensions.Logging
 
 open FSharp.UMX
 
@@ -173,17 +176,19 @@ type FileSystemService =
       Task<Migration IReadOnlyList>
 
 module PhysicalFileSystemImpl =
-  open System.IO
 
-  let nameSchema = Regex("(.+)_([0-9]+).(sql|SQL)")
+  let nameSchema = Regex(MigrationNameSchema)
 
   let readConfiguration
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       projectRoot: Uri,
       readFrom: string<RelativeUserPath>
     ) =
     let path = Uri(projectRoot, UMX.untag readFrom)
+
+    logger.LogDebug("Reading configuration from {Path}", path.LocalPath)
 
     let content =
       try
@@ -202,14 +207,15 @@ module PhysicalFileSystemImpl =
 
   let readConfigurationAsync
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       projectRoot: Uri,
       readFrom: string<RelativeUserPath>
     ) =
     async {
       let! token = Async.CancellationToken
       let path = Uri(projectRoot, UMX.untag readFrom)
-
+      logger.LogDebug("Reading configuration from {Path}", path.LocalPath)
       let! contents = async {
         try
           return!
@@ -233,13 +239,16 @@ module PhysicalFileSystemImpl =
 
   let writeConfiguration
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       config: MigrondiConfig,
       projectRoot: Uri,
       writeTo: string<RelativeUserPath>
     ) =
     let path = Uri(projectRoot, UMX.untag writeTo)
     let file = FileInfo(path.LocalPath)
+
+    logger.LogDebug("Writing configuration to {Path}, constructed fom {WriteTo}", path.LocalPath, writeTo)
 
     file.Directory.Create()
 
@@ -250,7 +259,8 @@ module PhysicalFileSystemImpl =
 
   let writeConfigurationAsync
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       config: MigrondiConfig,
       projectRoot: Uri,
       writeTo: string<RelativeUserPath>
@@ -259,7 +269,7 @@ module PhysicalFileSystemImpl =
       let! token = Async.CancellationToken
       let path = Uri(projectRoot, UMX.untag writeTo)
       let file = FileInfo(path.LocalPath)
-
+      logger.LogDebug("Writing configuration to {Path}, constructed fom {WriteTo}", path.LocalPath, writeTo)
       file.Directory.Create()
 
       do!
@@ -273,11 +283,14 @@ module PhysicalFileSystemImpl =
 
   let readMigration
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
     ) =
     let path = Uri(migrationsDir, UMX.untag migrationName)
+
+    logger.LogDebug("Reading migration from {Path} with name: {MigrationName}", path.LocalPath, migrationName)
 
     let content =
       try
@@ -296,13 +309,16 @@ module PhysicalFileSystemImpl =
 
   let readMigrationAsync
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
     ) =
     async {
       let! token = Async.CancellationToken
       let path = Uri(migrationsDir, UMX.untag migrationName)
+
+      logger.LogDebug("Reading migration from {Path} with name: {MigrationName}", path.LocalPath, migrationName)
 
       let! contents = async {
         try
@@ -327,14 +343,17 @@ module PhysicalFileSystemImpl =
 
   let writeMigration
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       migration: Migration,
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
     ) =
     let path = Uri(migrationsDir, UMX.untag migrationName)
-    let file = FileInfo(path.LocalPath)
 
+    logger.LogDebug("Writing migration to {Path} with directory: {MigrationsDirectory} and name: {MigrationName}", path.LocalPath, migrationsDir.LocalPath, migrationName)
+
+    let file = FileInfo(path.LocalPath)
     file.Directory.Create()
 
     File.WriteAllText(
@@ -344,7 +363,8 @@ module PhysicalFileSystemImpl =
 
   let writeMigrationAsync
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       migration: Migration,
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
@@ -352,8 +372,10 @@ module PhysicalFileSystemImpl =
     async {
       let! token = Async.CancellationToken
       let path = Uri(migrationsDir, UMX.untag migrationName)
-      let file = FileInfo(path.LocalPath)
 
+      logger.LogDebug("Writing migration to {Path} with directory: {MigrationsDirectory} and name: {MigrationName}", path.LocalPath, migrationsDir.LocalPath, migrationName)
+
+      let file = FileInfo(path.LocalPath)
       file.Directory.Create()
 
       do!
@@ -367,12 +389,15 @@ module PhysicalFileSystemImpl =
 
   let listMigrations
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       projectRoot: Uri,
       migrationsDir: string<RelativeUserDirectoryPath>
     ) =
     let operation = result {
       let path = Uri(projectRoot, UMX.untag migrationsDir)
+
+      logger.LogDebug("Listing migrations from {Path} with directory: {MigrationsDir}", path.LocalPath, migrationsDir)
 
       let directory = DirectoryInfo(path.LocalPath)
 
@@ -404,13 +429,16 @@ module PhysicalFileSystemImpl =
 
   let listMigrationsAsync
     (
-      serializer: #SerializerService,
+      serializer: SerializerService,
+      logger: ILogger,
       projectRoot: Uri,
       migrationsDir: string<RelativeUserDirectoryPath>
     ) =
     async {
       let! operation = asyncResult {
         let path = Uri(projectRoot, UMX.untag migrationsDir)
+
+        logger.LogDebug("Listing migrations from {Path} with directory: {MigrationsDir}", path.LocalPath, migrationsDir)
 
         let directory = DirectoryInfo(path.LocalPath)
 
@@ -457,6 +485,7 @@ type FileSystemServiceFactory =
   static member GetInstance
     (
       serializer: #SerializerService,
+      logger: #ILogger,
       projectRootUri: Uri,
       migrationsRootUri: Uri
     ) =
@@ -467,6 +496,7 @@ type FileSystemServiceFactory =
         member _.ListMigrations(readFrom) =
           PhysicalFileSystemImpl.listMigrations(
             serializer,
+            logger,
             projectRootUri,
             UMX.tag readFrom
           )
@@ -475,6 +505,7 @@ type FileSystemServiceFactory =
           let computation =
             PhysicalFileSystemImpl.listMigrationsAsync(
               serializer,
+              logger,
               projectRootUri,
               UMX.tag arg1
             )
@@ -484,6 +515,7 @@ type FileSystemServiceFactory =
         member _.ReadConfiguration(readFrom) =
           PhysicalFileSystemImpl.readConfiguration(
             serializer,
+            logger,
             projectRootUri,
             UMX.tag readFrom
           )
@@ -496,6 +528,7 @@ type FileSystemServiceFactory =
           let computation =
             PhysicalFileSystemImpl.readConfigurationAsync(
               serializer,
+              logger,
               projectRootUri,
               UMX.tag readFrom
             )
@@ -505,6 +538,7 @@ type FileSystemServiceFactory =
         member _.ReadMigration readFrom =
           PhysicalFileSystemImpl.readMigration(
             serializer,
+            logger,
             migrationsWorkingDir,
             UMX.tag readFrom
           )
@@ -513,6 +547,7 @@ type FileSystemServiceFactory =
           let computation =
             PhysicalFileSystemImpl.readMigrationAsync(
               serializer,
+              logger,
               migrationsWorkingDir,
               UMX.tag readFrom
             )
@@ -522,6 +557,7 @@ type FileSystemServiceFactory =
         member _.WriteConfiguration(config: MigrondiConfig, writeTo) : unit =
           PhysicalFileSystemImpl.writeConfiguration(
             serializer,
+            logger,
             config,
             projectRootUri,
             UMX.tag writeTo
@@ -536,6 +572,7 @@ type FileSystemServiceFactory =
           let computation =
             PhysicalFileSystemImpl.writeConfigurationAsync(
               serializer,
+              logger,
               config,
               projectRootUri,
               UMX.tag writeTo
@@ -546,6 +583,7 @@ type FileSystemServiceFactory =
         member _.WriteMigration(arg1: Migration, arg2) : unit =
           PhysicalFileSystemImpl.writeMigration(
             serializer,
+            logger,
             arg1,
             migrationsWorkingDir,
             UMX.tag arg2
@@ -560,6 +598,7 @@ type FileSystemServiceFactory =
           let computation =
             PhysicalFileSystemImpl.writeMigrationAsync(
               serializer,
+              logger,
               arg1,
               migrationsWorkingDir,
               UMX.tag arg2

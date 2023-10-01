@@ -16,17 +16,21 @@
     <InternalsVisibleTo>Migrondi.Tests</InternalsVisibleTo>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
+    <Compile Include="Serialization.fsi" />
     <Compile Include="Serialization.fs" />
+    <Compile Include="FileSystem.fsi" />
     <Compile Include="FileSystem.fs" />
+    <Compile Include="Database.fsi" />
     <Compile Include="Database.fs" />
+    <Compile Include="Migrondi.fsi" />
     <Compile Include="Migrondi.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="4.6.0" />
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" Version="4.6.0" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="6.0.0" />
     <PackageReference Include="Thoth.Json.Net" Version="11.0.0" />
     <!-- RepoDB Packages to handle SQL Servers -->
     <PackageReference Include="RepoDb" Version="1.13.1" />

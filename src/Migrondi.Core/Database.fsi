@@ -1,22 +1,11 @@
 namespace Migrondi.Core.Database
 
-open System
 open System.Collections.Generic
-open System.Data
-open Microsoft.Data.SqlClient
-open Microsoft.Data.Sqlite
 open System.Runtime.InteropServices
 open System.Threading
 open System.Threading.Tasks
 
-open MySqlConnector
-open Npgsql
-
-open RepoDb
-open RepoDb.Enumerations
-open Serilog
-
-open FsToolkit.ErrorHandling
+open Microsoft.Extensions.Logging
 
 open Migrondi.Core
 
@@ -146,52 +135,6 @@ type DatabaseService =
     migrations: Migration seq * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationRecord IReadOnlyList>
 
-[<RequireQualifiedAccess>]
-module private Queries =
-  val createTable: driver: MigrondiDriver -> tableName: string -> string
-
-module private MigrationsImpl =
-  val getConnection: connectionString: string * driver: MigrondiDriver -> IDbConnection
-  val initializeDriver: driver: MigrondiDriver -> unit
-  val setupDatabase: connection: IDbConnection -> driver: MigrondiDriver -> tableName: string -> unit
-  val findMigration: connection: IDbConnection -> tableName: string -> name: 'a -> MigrationRecord option
-  val findLastApplied: connection: IDbConnection -> tableName: string -> MigrationRecord option
-  val listMigrations: connection: IDbConnection -> tableName: string -> MigrationRecord list
-
-  val applyMigrations:
-    connection: IDbConnection ->
-    logger: ILogger ->
-    tableName: string ->
-    migrations: Migration list ->
-      MigrationRecord list
-
-  val rollbackMigrations:
-    connection: IDbConnection ->
-    logger: ILogger ->
-    tableName: string ->
-    migrations: Migration list ->
-      MigrationRecord list
-
-module private MigrationsAsyncImpl =
-  val setupDatabaseAsync: connection: IDbConnection -> driver: MigrondiDriver -> tableName: string -> Async<unit>
-  val findMigrationAsync: connection: IDbConnection -> tableName: string -> name: 'a -> Async<MigrationRecord option>
-  val findLastAppliedAsync: connection: IDbConnection -> tableName: string -> Async<MigrationRecord option>
-  val listMigrationsAsync: connection: IDbConnection -> tableName: string -> Async<IReadOnlyList<MigrationRecord>>
-
-  val applyMigrationsAsync:
-    connection: IDbConnection ->
-    logger: ILogger ->
-    tableName: string ->
-    migrations: Migration list ->
-      Async<IReadOnlyList<MigrationRecord>>
-
-  val rollbackMigrationsAsync:
-    connection: IDbConnection ->
-    logger: ILogger ->
-    tableName: string ->
-    migrations: Migration list ->
-      Async<IReadOnlyList<MigrationRecord>>
-
 [<Class>]
 type DatabaseServiceFactory =
   /// <summary>
@@ -203,4 +146,4 @@ type DatabaseServiceFactory =
   /// <returns>
   /// A new database service instance
   /// </returns>
-  static member GetInstance: logger: ILogger * config: MigrondiConfig -> DatabaseService
+  static member GetInstance: logger: #ILogger * config: MigrondiConfig -> DatabaseService

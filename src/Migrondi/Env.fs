@@ -75,6 +75,7 @@ type AppEnv
     let fs =
       FileSystemServiceFactory.GetInstance(
         serializer,
+        logger,
         Uri(cwd, UriKind.Absolute),
         Uri(migrationsDir, UriKind.Relative)
       )
