@@ -1,6 +1,6 @@
 #r "nuget: Microsoft.Extensions.Logging"
 #r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Migrondi.Core, 1.0.0-beta-002"
+#r "nuget: Migrondi.Core, 1.0.0-beta-003"
 
 open System
 open System.IO
@@ -42,6 +42,7 @@ let fileSystemService =
 
   FileSystemServiceFactory.GetInstance(
     serializer,
+    logger,
     Uri(__SOURCE_DIRECTORY__ + $"{Path.DirectorySeparatorChar}", UriKind.Absolute),
     Uri(migrationsDir, UriKind.Relative)
   )
@@ -75,4 +76,4 @@ fileSystemService.WriteMigration(
 
 let applied = migrondi.DryRunUp()
 
-printfn "List of the migrations that would have been ran: %A" applied
+logger.LogInformation($"List of the migrations that would have been ran: %A{applied}")
