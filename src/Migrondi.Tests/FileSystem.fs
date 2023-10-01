@@ -1,6 +1,5 @@
 module Migrondi.Tests.FileSystem
 
-
 open System
 open System.IO
 open System.Threading.Tasks
@@ -8,10 +7,11 @@ open Microsoft.VisualStudio.TestTools.UnitTesting
 
 open FSharp.UMX
 
+open Microsoft.Extensions.Logging
+
 open Migrondi.Core
 open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
-open Migrondi.Core.FileSystem.Units
 
 open FsToolkit.ErrorHandling
 
@@ -77,9 +77,15 @@ type FileSystemTests() =
 
   let serializer = SerializerServiceFactory.GetInstance()
 
+  let loggerFactory =
+    LoggerFactory.Create(fun builder -> builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore)
+
+  let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
+
   let fileSystem =
     FileSystemServiceFactory.GetInstance(
       serializer,
+      logger,
       baseUri,
       Uri("fs-migrations/", UriKind.Relative)
     )

@@ -150,6 +150,7 @@ type DatabaseService =
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationRecord IReadOnlyList>
 
+
 [<RequireQualifiedAccess>]
 module Queries =
   let createTable driver tableName =
@@ -181,7 +182,7 @@ CREATE TABLE dbo.%s{tableName}(
 );
 GO"""
 
-module MigrationsImpl =
+module internal MigrationsImpl =
 
   let inline private (=>) (a: string) b = a, box b
 

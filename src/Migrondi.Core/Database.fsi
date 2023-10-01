@@ -1,6 +1,7 @@
 namespace Migrondi.Core.Database
 
 open System.Collections.Generic
+open System.Data
 open System.Runtime.InteropServices
 open System.Threading
 open System.Threading.Tasks
@@ -134,6 +135,10 @@ type DatabaseService =
   abstract member RollbackMigrationsAsync:
     migrations: Migration seq * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationRecord IReadOnlyList>
+
+module internal MigrationsImpl =
+
+  val getConnection: connectionString: string * driver: MigrondiDriver -> IDbConnection
 
 [<Class>]
 type DatabaseServiceFactory =

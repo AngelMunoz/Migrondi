@@ -8,11 +8,11 @@ open RepoDb
 
 open FsToolkit.ErrorHandling
 
+open Microsoft.Extensions.Logging
+
 open Migrondi.Core
 open Migrondi.Core.Database
 
-open Serilog
-open Serilog.Extensions.Logging
 
 module DatabaseData =
   open System.Data
@@ -91,10 +91,9 @@ type DatabaseTests() =
   let dbName = Guid.NewGuid()
   let config = DatabaseData.getConfig dbName
 
-  let baseLogger =
-    LoggerConfiguration().MinimumLevel.Debug().WriteTo.Console().CreateLogger()
+  let loggerFactory =
+    LoggerFactory.Create(fun builder -> builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore)
 
-  let loggerFactory = new SerilogLoggerFactory(baseLogger)
   let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
 
   let databaseEnv =

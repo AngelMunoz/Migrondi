@@ -5,6 +5,8 @@ open System.Threading.Tasks
 
 open Microsoft.VisualStudio.TestTools.UnitTesting
 
+open Microsoft.Extensions.Logging
+
 open RepoDb
 
 open FsToolkit.ErrorHandling
@@ -14,9 +16,6 @@ open Migrondi.Core.Database
 
 open Migrondi.Tests.Database
 
-open Serilog
-open Serilog.Extensions.Logging
-
 
 [<TestClass>]
 type DatabaseAsyncTests() =
@@ -24,11 +23,10 @@ type DatabaseAsyncTests() =
   let dbName = Guid.NewGuid()
   let config = DatabaseData.getConfig dbName
 
-  let baseLogger =
-    LoggerConfiguration().MinimumLevel.Debug().WriteTo.Console().CreateLogger()
+  let loggerFactory =
+    LoggerFactory.Create(fun builder -> builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore)
 
-  let loggerFactory = new SerilogLoggerFactory(baseLogger)
-  let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database.Async")
+  let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
 
   let databaseEnv =
     DatabaseServiceFactory.GetInstance(logger, DatabaseData.getConfig dbName)

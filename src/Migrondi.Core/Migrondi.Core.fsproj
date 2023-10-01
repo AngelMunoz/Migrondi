@@ -13,8 +13,10 @@
     </Summary>
     <IsPackable>True</IsPackable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <InternalsVisibleTo>Migrondi.Tests</InternalsVisibleTo>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Migrondi.Tests" />
+  </ItemGroup>
   <ItemGroup>
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
