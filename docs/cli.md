@@ -1,5 +1,7 @@
 ---
 title: Command Line Interface
+category: Overview
+categoryIndex: 0
 ---
 
 Migrondi takes the directory where it was invoked as the root of the project, it also expects to find a `migrondi.json` file right there.

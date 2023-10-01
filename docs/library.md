@@ -1,5 +1,7 @@
 ---
 title: Use as a library (F#/VB/C#)
+category: Overview
+categoryIndex: 2
 ---
 
 From v1 and onwards Migrondi was built to be used as a library. This means that you can use Migrondi to run your own migrations from F# or C# code. and perhaps even extend Migrondi functionality. with your own.
@@ -15,93 +17,44 @@ After that most of the core is under it's own namespage e.g.
 - `Migrondi.Core.Database`
 - `Migrondi.Core.Migrondi`
 
-If you plan to use a local file system and not many customization then you can use the default implementations that come with the library.
+The ideal is to build up a `MigrondiService` instance which will work as the main interface for your code to handle the library.
 
-### F# Examples
+The service is nothing too crazy it provides basic functionality to run migrations and related operations.
 
-```fsharp
-open System
-open Migrondi.Core
-open Migrondi.Core.Database
-open Migrondi.Core.FileSystem
-open Migrondi.Core.Migrondi
-open Migrondi.Core.Serialization
+- RunUp
+- RunDown
+- DryRunUp
+- DryRunDown
+- MigrationsList
+- ScriptStatus
 
-open Microsoft.Extensions.Logging
-open Microsoft.Extensions.Logging.Console
+The same service provides also an async version of the same methods
 
-module Config =
-    // Sample function to get a MigrondiConfig instance from disk
-    let getConfig (serializer: SerializerService) =
-        let content = File.ReadAllText "./migrondi.json"
-        serializer
-          .ConfigurationSerializer
-          .Decode(content)
+- RunUpAsync
+- RunDownAsync
+- DryRunUpAsync
+- DryRunDownAsync
+- MigrationsListAsync
+- ScriptStatusAsync
 
-    let getLogger loggerName =
-      loggerFactory =
-        LoggerFactory.Create(builder ->
-            builder.AddSimpleConsole() |> ignore
-        )
+While you could do this entirely on your own, there are some helper methods that you can use to get started, but for that you will need a couple of services as well.
 
-    loggerFactory.CreateLogger loggerName
+- `MigrondiServiceFactory.GetInstance`
 
-  let ensureWellFormed (migrationsDir: string) =
-    // when you're using URIs "./path" is not the same as "./path/"
-    // the first one is a file and the second one is a directory
-    // so ensure you always end your paths with a directory separator
+That is a factory method that will create a new instance of the `MigrondiService` class.
+It requires a couple of services as well as a configuration object.
 
-    if Path.EndsInDirectorySeparator(migrationsDir) then
-      migrationsDir
-    else
-      $"{migrationsDir}{Path.DirectorySeparatorChar}"
+- `DatabaseService` - This service is in charge of handling the database connection and executing the SQL scripts.
+- `FileSystemService` - This service is in charge of handling the file system and the migrations files.
+- `ILogger` - a `Microsoft.Extensions.Logging.ILogger` compatible instance logger.
+- `MigrondiConfig` - a configuration object that contains the configuration for the library.
 
-// Get a serializer instance this works for both configuration and SQL files
-let serializer = SerializerFactory.GetInstance()
+What the `MigrondiService` does is to coordinate between both the database and whatever file system you're using to store the migration scripts.
 
-let config = Config.getConfig(serializer)
-let logger = Config.getLogger("sample-app")
+We can talk more deeply about the existing services and how to use them in the next sections.
 
-// once we have a serializer, a logger, and a configuration object we can start working with the rest of the library
-
-let fileSystemService =
-  let migrationsDir = Config.ensureWellFormed config.MigrationsDir
-  FileSystemServiceFactory.GetInstance(
-    serializer,
-    Uri(Environment.CurrentDirectory, UriKind.Absolute),
-    Uri(migrationsDir, UriKind.Relative)
-  )
-
-let databaseService = DatabaseServiceFactory.GetInstance(logger, config)
-
-let migrondi =
-  MigrondiServiceFactory.GetInstance(
-    databaseService,
-    fileSystemService,
-    logger,
-    config
-  )
-
-
-// Let's create a new Migration
-
-let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-let name = $"{name}_{timestamp}.sql"
-
-fileSystemService.WriteMigration(
-  {
-    name = name
-    timestamp = timestamp
-    upContent =
-      "create table if not exists test (id int not null primary key);"
-    downContent =
-      "drop table if exists test;"
-  },
-  name
-)
-
-let applied = migrondi.RunUp()
-
-printfn "All of the following migrations were applied: %A" applied
-
-```
+- [Core Types](./types.md)
+- [Serialization](./services/serialization.md)
+- [FileSystemService](./services/filesystem.md)
+- [DatabaseService](./services/database.md)
+- [MigrondiService](./services/migrondi.md)

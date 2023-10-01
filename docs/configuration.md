@@ -1,5 +1,7 @@
 ---
 title: Configuration
+category: Overview
+categoryIndex: 1
 ---
 
 ### Migrondi.json
