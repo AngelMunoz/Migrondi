@@ -38,7 +38,11 @@ module ArgumentMapper =
     name, appEnv.Logger, appEnv.FileSystem
 
   let inline List (appEnv: AppEnv) (kind: MigrationType option) =
-    appEnv.JsonOutput, appEnv.Logger, appEnv.Serializer, kind, appEnv.Migrondi
+    appEnv.JsonOutput,
+    appEnv.Logger,
+    appEnv.MigrationSerializer,
+    kind,
+    appEnv.Migrondi
 
   let inline Status (appEnv: AppEnv) (name: string) =
     name, appEnv.Logger, appEnv.Migrondi

@@ -8,6 +8,7 @@ open Microsoft.Extensions.Logging
 open Spectre.Console
 
 open Migrondi.Core
+open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Migrondi
 
@@ -117,7 +118,9 @@ module Migrations =
         migration.upContent
       )
 
-    logger.LogInformation $"DRY RUN: would applied '{migrations.Count}' migrations"
+    logger.LogInformation
+      $"DRY RUN: would applied '{migrations.Count}' migrations"
+
     0
 
   let runDown (amount: int option, logger: ILogger, migrondi: MigrondiService) =
@@ -168,7 +171,7 @@ module Migrations =
     (
       useJson: bool,
       logger: ILogger,
-      serializer: Serialization.SerializerService,
+      serializer: MigrationSerializer,
       kind: MigrationType option,
       migrondi: MigrondiService
     ) =
@@ -231,9 +234,7 @@ module Migrations =
       AnsiConsole.Write table
 
     let printJson (migrations: Migration seq, status: string) =
-      let encoded =
-        migrations
-        |> Seq.map(fun m -> serializer.MigrationSerializer.EncodeJson m)
+      let encoded = migrations |> Seq.map(fun m -> serializer.EncodeJson m)
 
       logger.LogInformation(
         "Listing {Status} migrations: {Migrations}",
@@ -246,10 +247,8 @@ module Migrations =
         migrations
         |> Seq.map(fun status ->
           match status with
-          | Applied m ->
-            ("Applied", serializer.MigrationSerializer.EncodeJson m)
-          | Pending m ->
-            ("Pending", serializer.MigrationSerializer.EncodeJson m)
+          | Applied m -> ("Applied", serializer.EncodeJson m)
+          | Pending m -> ("Pending", serializer.EncodeJson m)
         )
 
       logger.LogInformation("Listing migrations: {Migrations}", encoded)
