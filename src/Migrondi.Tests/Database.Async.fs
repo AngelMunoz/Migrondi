@@ -41,6 +41,7 @@ type DatabaseAsyncTests() =
     printfn $"Connecting To: {config.connection}"
     printfn $"Using Driver: {config.driver}"
     printfn $"Using Table Name: {config.tableName}"
+    databaseEnv.SetupDatabase()
 
 
   [<TestCleanup>]
@@ -53,7 +54,6 @@ type DatabaseAsyncTests() =
   member _.``Database Should be Setup Correctly async``() =
     task {
       let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
 
         use connection =
           MigrationsImpl.getConnection(config.connection, config.driver)
@@ -77,7 +77,6 @@ type DatabaseAsyncTests() =
   member _.``Find Migration should find a migration by name``() =
     task {
       let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
 
         let insertStuff () =
           use connection =
@@ -120,7 +119,6 @@ type DatabaseAsyncTests() =
   member _.``FindLastApplied should not find anything if table is empty``() =
     task {
       let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
         let! migration = databaseEnv.FindLastAppliedAsync()
 
         do!
@@ -150,7 +148,6 @@ type DatabaseAsyncTests() =
     =
     task {
       let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
 
         let insertStuff () =
           use connection =
@@ -182,7 +179,6 @@ type DatabaseAsyncTests() =
   member _.``ListMigrations should not show anything if the table is empty``() =
     task {
       let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
 
         let! migrations = databaseEnv.ListMigrationsAsync()
 
@@ -208,7 +204,6 @@ type DatabaseAsyncTests() =
   member _.``ListMigrations should show existing migrations``() =
     task {
       let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
 
         let insertStuff () =
           use connection =
@@ -250,7 +245,6 @@ type DatabaseAsyncTests() =
     =
     task {
       let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
 
         let sampleMigrations = DatabaseData.createTestMigrations 3
 
@@ -313,7 +307,6 @@ type DatabaseAsyncTests() =
     =
     task {
       let! operation = asyncResult {
-        do! databaseEnv.SetupDatabaseAsync()
 
         let sampleMigrations = DatabaseData.createTestMigrations 3
 
@@ -384,7 +377,6 @@ type DatabaseAsyncTests() =
     =
     task {
 
-      do! databaseEnv.SetupDatabaseAsync()
 
       let sampleMigrations = DatabaseData.createTestMigrations 4
 
@@ -441,7 +433,6 @@ type DatabaseAsyncTests() =
     =
     task {
 
-      do! databaseEnv.SetupDatabaseAsync()
 
       let sampleMigrations = DatabaseData.createTestMigrations 4
 

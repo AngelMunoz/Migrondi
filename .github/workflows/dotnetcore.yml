@@ -17,4 +17,4 @@ jobs:
           dotnet-version: "8.0.x"
           include-prerelease: true
       - run: dotnet build src/Migrondi --configuration Release
-      - run: dotnet test src/Migrondi.Tests --verbosity normal
+      - run: dotnet test src/Migrondi.Tests
