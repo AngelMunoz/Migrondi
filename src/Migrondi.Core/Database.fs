@@ -20,6 +20,9 @@ open FsToolkit.ErrorHandling
 
 open Migrondi.Core
 
+open IcedTasks
+
+
 
 
 [<Interface>]
@@ -183,8 +186,6 @@ CREATE TABLE dbo.%s{tableName}(
 GO"""
 
 module internal MigrationsImpl =
-
-  let inline private (=>) (a: string) b = a, box b
 
   let getConnection (connectionString: string, driver: MigrondiDriver) =
     match driver with
@@ -365,18 +366,16 @@ module MigrationsAsyncImpl =
     (driver: MigrondiDriver)
     (tableName: string)
     =
-    async {
-      let! token = Async.CancellationToken
+    cancellableTask {
       MigrationsImpl.initializeDriver driver
+      let! token = CancellableTask.getCancellationToken()
 
       try
-        do!
+        let! _ =
           connection.ExecuteNonQueryAsync(
             Queries.createTable driver tableName,
             cancellationToken = token
           )
-          |> Async.AwaitTask
-          |> Async.Ignore
 
         return ()
       with ex ->
@@ -391,8 +390,8 @@ module MigrationsAsyncImpl =
           reriseCustom(SetupDatabaseFailed)
     }
 
-  let findMigrationAsync (connection: IDbConnection) tableName name = async {
-    let! token = Async.CancellationToken
+  let findMigrationAsync (connection: IDbConnection) tableName name = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
     let queryParams = QueryGroup([ QueryField("name", name) ])
 
     let! result =
@@ -401,13 +400,12 @@ module MigrationsAsyncImpl =
         where = queryParams,
         cancellationToken = token
       )
-      |> Async.AwaitTask
 
     return result |> Seq.tryHead
   }
 
-  let findLastAppliedAsync (connection: IDbConnection) tableName = async {
-    let! token = Async.CancellationToken
+  let findLastAppliedAsync (connection: IDbConnection) tableName = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
 
     let! result =
       connection.QueryAllAsync<MigrationRecord>(
@@ -419,13 +417,12 @@ module MigrationsAsyncImpl =
         ],
         cancellationToken = token
       )
-      |> Async.AwaitTask
 
     return result |> Seq.tryHead
   }
 
-  let listMigrationsAsync (connection: IDbConnection) (tableName: string) = async {
-    let! token = Async.CancellationToken
+  let listMigrationsAsync (connection: IDbConnection) (tableName: string) = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
 
     let! result =
       connection.QueryAllAsync<MigrationRecord>(
@@ -437,9 +434,8 @@ module MigrationsAsyncImpl =
         ],
         cancellationToken = token
       )
-      |> Async.AwaitTask
 
-    return result |> Seq.toList :> IReadOnlyList<MigrationRecord>
+    return result |> Seq.toList
   }
 
   let applyMigrationsAsync
@@ -448,8 +444,8 @@ module MigrationsAsyncImpl =
     tableName
     (migrations: Migration list)
     =
-    async {
-      let! token = Async.CancellationToken
+    cancellableTask {
+      let! token = CancellableTask.getCancellationToken()
 
       for migration in migrations do
         use transaction = connection.EnsureOpen().BeginTransaction()
@@ -462,17 +458,15 @@ module MigrationsAsyncImpl =
             content
           )
 
-          do!
+          let! _ =
             // execute the user's migration
             connection.ExecuteNonQueryAsync(
               $"{content};;",
               transaction = transaction,
               cancellationToken = token
             )
-            |> Async.AwaitTask
-            |> Async.Ignore
 
-          do!
+          let! _ =
             // Insert the tracking record after the user's migration was executed
             connection.InsertAsync(
               tableName = tableName,
@@ -484,8 +478,6 @@ module MigrationsAsyncImpl =
               transaction = transaction,
               cancellationToken = token
             )
-            |> Async.AwaitTask
-            |> Async.Ignore
 
           transaction.Commit()
         with ex ->
@@ -507,9 +499,8 @@ module MigrationsAsyncImpl =
           ],
           cancellationToken = token
         )
-        |> Async.AwaitTask
 
-      return result |> Seq.toList :> IReadOnlyList<MigrationRecord>
+      return result |> Seq.toList
     }
 
   let rollbackMigrationsAsync
@@ -518,8 +509,8 @@ module MigrationsAsyncImpl =
     tableName
     (migrations: Migration list)
     =
-    async {
-      let! token = Async.CancellationToken
+    cancellableTask {
+      let! token = CancellableTask.getCancellationToken()
 
       for migration in migrations do
         use transaction = connection.EnsureOpen().BeginTransaction()
@@ -533,17 +524,15 @@ module MigrationsAsyncImpl =
             content
           )
 
-          do!
+          let! _ =
             // Rollback the migration
             connection.ExecuteNonQueryAsync(
               $"{content};;",
               transaction = transaction,
               cancellationToken = token
             )
-            |> Async.AwaitTask
-            |> Async.Ignore
 
-          do!
+          let! _ =
             // Remove the existing MigrationRecord that represented this migration
             connection.DeleteAsync(
               tableName = tableName,
@@ -552,8 +541,6 @@ module MigrationsAsyncImpl =
               transaction = transaction,
               cancellationToken = token
             )
-            |> Async.AwaitTask
-            |> Async.Ignore
 
           transaction.Commit()
         with ex ->
@@ -575,9 +562,8 @@ module MigrationsAsyncImpl =
           ],
           cancellationToken = token
         )
-        |> Async.AwaitTask
 
-      return result |> Seq.toList :> IReadOnlyList<MigrationRecord>
+      return result |> Seq.toList
     }
 
 [<Class>]
@@ -635,10 +621,12 @@ type DatabaseServiceFactory =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          let computation =
-            MigrationsAsyncImpl.findLastAppliedAsync connection config.tableName
+          let token = defaultArg cancellationToken CancellationToken.None
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+          MigrationsAsyncImpl.findLastAppliedAsync
+            connection
+            config.tableName
+            token
 
 
         member _.ApplyMigrationsAsync
@@ -646,72 +634,90 @@ type DatabaseServiceFactory =
             migrations: Migration seq,
             [<Optional>] ?cancellationToken
           ) =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
+          task {
+            let token = defaultArg cancellationToken CancellationToken.None
 
-          let computation =
-            migrations
-            |> Seq.toList
-            |> MigrationsAsyncImpl.applyMigrationsAsync
-              connection
-              logger
-              config.tableName
+            use connection =
+              MigrationsImpl.getConnection(config.connection, config.driver)
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+            let computation =
+              migrations
+              |> Seq.toList
+              |> MigrationsAsyncImpl.applyMigrationsAsync
+                connection
+                logger
+                config.tableName
+
+            let! result = computation token
+            return result :> IReadOnlyList<MigrationRecord>
+          }
 
         member _.RollbackMigrationsAsync
           (
             migrations: Migration seq,
             [<Optional>] ?cancellationToken
           ) =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
+          task {
+            let token = defaultArg cancellationToken CancellationToken.None
 
-          let computation =
-            migrations
-            |> Seq.toList
-            |> MigrationsAsyncImpl.rollbackMigrationsAsync
-              connection
-              logger
-              config.tableName
+            use connection =
+              MigrationsImpl.getConnection(config.connection, config.driver)
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+            let computation =
+              migrations
+              |> Seq.toList
+              |> MigrationsAsyncImpl.rollbackMigrationsAsync
+                connection
+                logger
+                config.tableName
+
+            let! result = computation token
+            return result :> IReadOnlyList<MigrationRecord>
+          }
 
         member _.SetupDatabaseAsync([<Optional>] ?cancellationToken) =
+          let token = defaultArg cancellationToken CancellationToken.None
+
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          let computation =
-            MigrationsAsyncImpl.setupDatabaseAsync
-              connection
-              config.driver
-              config.tableName
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+          MigrationsAsyncImpl.setupDatabaseAsync
+            connection
+            config.driver
+            config.tableName
+            token
+
 
         member _.FindMigrationAsync
           (
             name: string,
             [<Optional>] ?cancellationToken
           ) =
+          let token = defaultArg cancellationToken CancellationToken.None
+
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          let computation =
-            MigrationsAsyncImpl.findMigrationAsync
+          MigrationsAsyncImpl.findMigrationAsync
+            connection
+            config.tableName
+            name
+            token
+
+        member _.ListMigrationsAsync([<Optional>] ?cancellationToken) = task {
+          let token = defaultArg cancellationToken CancellationToken.None
+
+          use connection =
+            MigrationsImpl.getConnection(config.connection, config.driver)
+
+          let! result =
+            MigrationsAsyncImpl.listMigrationsAsync
               connection
               config.tableName
-              name
+              token
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
-
-        member _.ListMigrationsAsync([<Optional>] ?cancellationToken) =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
-
-          let computation =
-            MigrationsAsyncImpl.listMigrationsAsync connection config.tableName
-
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+          return result :> IReadOnlyList<MigrationRecord>
+        }
 
     }
