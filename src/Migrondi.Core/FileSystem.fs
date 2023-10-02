@@ -17,6 +17,8 @@ open FsToolkit.ErrorHandling
 open Migrondi.Core
 open Migrondi.Core.Serialization
 
+open IcedTasks
+
 module Units =
 
   [<Measure>]
@@ -175,6 +177,8 @@ type FileSystemService =
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration IReadOnlyList>
 
+
+
 module PhysicalFileSystemImpl =
 
   let nameSchema = Regex(MigrationNameSchema)
@@ -212,24 +216,26 @@ module PhysicalFileSystemImpl =
       projectRoot: Uri,
       readFrom: string<RelativeUserPath>
     ) =
-    async {
-      let! token = Async.CancellationToken
+    cancellableTask {
       let path = Uri(projectRoot, UMX.untag readFrom)
       logger.LogDebug("Reading configuration from {Path}", path.LocalPath)
 
-      let! contents = async {
-        try
-          return!
-            File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
-            |> Async.AwaitTask
-        with
-        | :? DirectoryNotFoundException
-        | :? IOException ->
-          return
-            reriseCustom(
-              SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
-            )
-      }
+      let! contents =
+        fun token -> task {
+          try
+            return!
+              File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
+          with
+          | :? DirectoryNotFoundException
+          | :? IOException ->
+            return
+              reriseCustom(
+                SourceNotFound(
+                  path.LocalPath |> Path.GetFileName,
+                  path.LocalPath
+                )
+              )
+        }
 
       try
         return serializer.Decode contents
@@ -267,8 +273,8 @@ module PhysicalFileSystemImpl =
       projectRoot: Uri,
       writeTo: string<RelativeUserPath>
     ) =
-    async {
-      let! token = Async.CancellationToken
+    cancellableTask {
+      let! token = CancellableTask.getCancellationToken()
       let path = Uri(projectRoot, UMX.untag writeTo)
       let file = FileInfo(path.LocalPath)
 
@@ -286,7 +292,6 @@ module PhysicalFileSystemImpl =
           serializer.Encode config,
           cancellationToken = token
         )
-        |> Async.AwaitTask
     }
 
   let readMigration
@@ -326,8 +331,7 @@ module PhysicalFileSystemImpl =
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
     ) =
-    async {
-      let! token = Async.CancellationToken
+    cancellableTask {
       let path = Uri(migrationsDir, UMX.untag migrationName)
 
       logger.LogDebug(
@@ -336,19 +340,22 @@ module PhysicalFileSystemImpl =
         migrationName
       )
 
-      let! contents = async {
-        try
-          return!
-            File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
-            |> Async.AwaitTask
-        with
-        | :? DirectoryNotFoundException
-        | :? IOException ->
-          return
-            reriseCustom(
-              SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
-            )
-      }
+      let! contents =
+        fun token -> task {
+          try
+            return!
+              File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
+          with
+          | :? DirectoryNotFoundException
+          | :? IOException ->
+            return
+              reriseCustom(
+                SourceNotFound(
+                  path.LocalPath |> Path.GetFileName,
+                  path.LocalPath
+                )
+              )
+        }
 
       try
         return serializer.DecodeText contents
@@ -387,8 +394,8 @@ module PhysicalFileSystemImpl =
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
     ) =
-    async {
-      let! token = Async.CancellationToken
+    cancellableTask {
+      let! token = CancellableTask.getCancellationToken()
       let path = Uri(migrationsDir, UMX.untag migrationName)
 
       logger.LogDebug(
@@ -407,7 +414,6 @@ module PhysicalFileSystemImpl =
           serializer.EncodeText migration,
           cancellationToken = token
         )
-        |> Async.AwaitTask
     }
 
   let listMigrations
@@ -461,8 +467,8 @@ module PhysicalFileSystemImpl =
       projectRoot: Uri,
       migrationsDir: string<RelativeUserDirectoryPath>
     ) =
-    async {
-      let! operation = asyncResult {
+    cancellableTask {
+      let! operation = taskResult {
         let path = Uri(projectRoot, UMX.untag migrationsDir)
 
         logger.LogDebug(
@@ -543,15 +549,11 @@ type FileSystemServiceFactory =
           )
 
         member _.ListMigrationsAsync(arg1, [<Optional>] ?cancellationToken) =
-          let computation =
-            PhysicalFileSystemImpl.listMigrationsAsync(
-              migrationSerializer,
-              logger,
-              projectRootUri,
-              UMX.tag arg1
-            )
+          let token = defaultArg cancellationToken CancellationToken.None
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+          PhysicalFileSystemImpl.listMigrationsAsync
+            (migrationSerializer, logger, projectRootUri, UMX.tag arg1)
+            token
 
         member _.ReadConfiguration(readFrom) =
           PhysicalFileSystemImpl.readConfiguration(
@@ -566,15 +568,11 @@ type FileSystemServiceFactory =
             readFrom,
             [<Optional>] ?cancellationToken
           ) =
-          let computation =
-            PhysicalFileSystemImpl.readConfigurationAsync(
-              configSerializer,
-              logger,
-              projectRootUri,
-              UMX.tag readFrom
-            )
+          let token = defaultArg cancellationToken CancellationToken.None
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+          PhysicalFileSystemImpl.readConfigurationAsync
+            (configSerializer, logger, projectRootUri, UMX.tag readFrom)
+            token
 
         member _.ReadMigration readFrom =
           PhysicalFileSystemImpl.readMigration(
@@ -585,15 +583,11 @@ type FileSystemServiceFactory =
           )
 
         member _.ReadMigrationAsync(readFrom, [<Optional>] ?cancellationToken) =
-          let computation =
-            PhysicalFileSystemImpl.readMigrationAsync(
-              migrationSerializer,
-              logger,
-              migrationsWorkingDir,
-              UMX.tag readFrom
-            )
+          let token = defaultArg cancellationToken CancellationToken.None
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+          PhysicalFileSystemImpl.readMigrationAsync
+            (migrationSerializer, logger, migrationsWorkingDir, UMX.tag readFrom)
+            token
 
         member _.WriteConfiguration(config: MigrondiConfig, writeTo) : unit =
           PhysicalFileSystemImpl.writeConfiguration(
@@ -610,16 +604,11 @@ type FileSystemServiceFactory =
             writeTo,
             [<Optional>] ?cancellationToken
           ) =
-          let computation =
-            PhysicalFileSystemImpl.writeConfigurationAsync(
-              configSerializer,
-              logger,
-              config,
-              projectRootUri,
-              UMX.tag writeTo
-            )
+          let token = defaultArg cancellationToken CancellationToken.None
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+          PhysicalFileSystemImpl.writeConfigurationAsync
+            (configSerializer, logger, config, projectRootUri, UMX.tag writeTo)
+            token
 
         member _.WriteMigration(arg1: Migration, arg2) : unit =
           PhysicalFileSystemImpl.writeMigration(
@@ -636,14 +625,13 @@ type FileSystemServiceFactory =
             arg2,
             [<Optional>] ?cancellationToken
           ) =
-          let computation =
-            PhysicalFileSystemImpl.writeMigrationAsync(
-              migrationSerializer,
-              logger,
-              arg1,
-              migrationsWorkingDir,
-              UMX.tag arg2
-            )
+          let token = defaultArg cancellationToken CancellationToken.None
 
-          Async.StartAsTask(computation, ?cancellationToken = cancellationToken)
+          PhysicalFileSystemImpl.writeMigrationAsync
+            (migrationSerializer,
+             logger,
+             arg1,
+             migrationsWorkingDir,
+             UMX.tag arg2)
+            token
     }
