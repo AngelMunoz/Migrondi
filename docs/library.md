@@ -6,6 +6,44 @@ categoryIndex: 2
 
 From v1 and onwards Migrondi was built to be used as a library. This means that you can use Migrondi to run your own migrations from F# or C# code. and perhaps even extend Migrondi functionality. with your own.
 
+## Terminology
+
+I try to be consistent with the terminology used in the library, in case you find something out of place please let me know.
+
+- FileSystem: the file system is where migrations are stored locally, it does not necessarily mean the local file system, it could be a remote file system as well in case of custom implementations.
+
+  - Source or sources - source in the context of the file system represents a location that contains text, usually these would be called files, but since the file system is not necessarily local, I prefer to call them sources.
+
+- Database: The database is the one specified with the connection string in the configuration object, and is the target of all of the migrondi operations.
+
+  - Source or sources: When we're performing reading operations, source in the context of the database represents a migration already applied to the database. If we're performing writing operations, then the source is a `Migration` object that is going to be applied to the database not a file from the file system.
+
+- Up: Up is often referred as the operation to apply a migration to the database, this is the operation that will be performed when running `migrondi up` from the command line.
+
+- Down: Down is often referred as the operation to revert a migration from the database, this is the operation that will be performed when running `migrondi down` from the command line.
+
+- Pending:
+  - When we'retalking about an `UP` operation, pending means that the migration has not been applied to the database.
+  - When we're talking about a `DOWN` operation, pending means that the migration has been applied to the database.
+
+## URI Handling
+
+Given that Migrondi.Core is designed to be used as a library, it's important to remark that internally all of the paths are expected to be URIs as that allows to work with both the local filesystem and URLs in case that's required by a remote file system of some kind implemented by you.
+
+With that in mind I'd like yo remind you that
+
+- `Uri("/path/to/file", UriKind.Absolute)` is not the same as `Uri("/path/to/file/", UriKind.Absolute)`.
+
+The first one is a file, the second one is a directory. and the same happens for relative URIs
+
+- `Uri("path/to/file", UriKind.Relative)` is not the same as `Uri("path/to/file/", UriKind.Relative)`.
+
+This is important for the built-in file system service factory that requires both the `projectRootUri` and the `migrationsRootUri` to be directories.
+
+### Public API Guidelines
+
+The public API is designed to be as simple as possible, and to be used as a library, so it's important to remark that the public API should not contain any Language Specific Type (e.g. in the case of F# it should not contain `FSharpList<'T>` or `FSharpOption<'T>`) in any of it's signatures. while this might make it clunky to work with in F# it makes it easier to use in C# and VB.
+
 ## Usage
 
 First, get it from NuGet
@@ -53,7 +91,6 @@ What the `MigrondiService` does is to coordinate between both the database and w
 
 We can talk more deeply about the existing services and how to use them in the next sections.
 
-- [Core Types](./types.md)
 - [Serialization](./services/serialization.md)
 - [FileSystemService](./services/filesystem.md)
 - [DatabaseService](./services/database.md)
