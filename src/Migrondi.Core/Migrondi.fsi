@@ -86,10 +86,12 @@ type MigrondiService =
   abstract member ScriptStatus: migrationPath: string -> MigrationStatus
 
   abstract member RunUpAsync:
-    [<Optional>] ?amount: int * [<Optional>] ?cancellationToken: CancellationToken -> Task<Migration IReadOnlyList>
+    [<Optional>] ?amount: int * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<IReadOnlyList<MigrationRecord>>
 
   abstract member RunDownAsync:
-    [<Optional>] ?amount: int * [<Optional>] ?cancellationToken: CancellationToken -> Task<Migration IReadOnlyList>
+    [<Optional>] ?amount: int * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<IReadOnlyList<MigrationRecord>>
 
   abstract member DryRunUpAsync:
     [<Optional>] ?amount: int * [<Optional>] ?cancellationToken: CancellationToken -> Task<Migration IReadOnlyList>
