@@ -1,6 +1,6 @@
 ---
 title: Serialization Services
 category: Core
-indexCategory: 2
+categoryindex: 3
 index: 1
 ---

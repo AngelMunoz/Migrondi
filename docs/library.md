@@ -1,7 +1,7 @@
 ---
 title: Use as a library (F#/VB/C#)
 category: Overview
-categoryIndex: 2
+categoryindex: 2
 ---
 
 From v1 and onwards Migrondi was built to be used as a library. This means that you can use Migrondi to run your own migrations from F# or C# code. and perhaps even extend Migrondi functionality. with your own.
