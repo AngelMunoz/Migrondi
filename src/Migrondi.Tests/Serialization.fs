@@ -89,13 +89,13 @@ module MigrationRecordData =
 
 [<TestClass>]
 type SerializationTests() =
-  let serializer = SerializerServiceFactory.GetInstance()
+
+  let configSerializer = SerializationFactory.GetConfigurationSerializer()
+  let migrationSerializer = SerializationFactory.GetMigrationSerializer()
 
   [<TestMethod>]
   member _.``Can Encode Configuration``() =
-    let encoded =
-      serializer.ConfigurationSerializer.Encode
-        ConfigurationData.configJsonObject
+    let encoded = configSerializer.Encode ConfigurationData.configJsonObject
 
     Assert.AreEqual(
       ConfigurationData.configJsonSample,
@@ -105,10 +105,7 @@ type SerializationTests() =
 
   [<TestMethod>]
   member _.``Can Decode Configuration``() =
-    let decoded =
-      serializer.ConfigurationSerializer.Decode(
-        ConfigurationData.configJsonSample
-      )
+    let decoded = configSerializer.Decode(ConfigurationData.configJsonSample)
 
     Assert.AreEqual(
       ConfigurationData.configJsonObject,
@@ -118,8 +115,7 @@ type SerializationTests() =
 
   [<TestMethod>]
   member _.``Can Encode Json Migration``() =
-    let encoded =
-      serializer.MigrationSerializer.EncodeJson(MigrationData.migrationObject)
+    let encoded = migrationSerializer.EncodeJson(MigrationData.migrationObject)
 
     Assert.AreEqual(
       MigrationData.jsonMigrationSample,
@@ -129,8 +125,7 @@ type SerializationTests() =
 
   [<TestMethod>]
   member _.``Can Encode Text Migration v1``() =
-    let actual =
-      serializer.MigrationSerializer.EncodeText(MigrationData.migrationObject)
+    let actual = migrationSerializer.EncodeText(MigrationData.migrationObject)
 
     let expected = MigrationData.textMigrationSampleV1
     Assert.AreEqual(expected, actual)
@@ -138,7 +133,7 @@ type SerializationTests() =
   [<TestMethod>]
   member _.``Can Decode Text Migration v0``() =
     let decoded =
-      serializer.MigrationSerializer.DecodeText(
+      migrationSerializer.DecodeText(
         MigrationData.textMigrationSampleV0,
         MigrationData.migrationObject.name
       )
@@ -152,9 +147,7 @@ type SerializationTests() =
   [<TestMethod>]
   member _.``Can Decode Text Migration v1``() =
     let decoded =
-      serializer.MigrationSerializer.DecodeText(
-        MigrationData.textMigrationSampleV1
-      )
+      migrationSerializer.DecodeText(MigrationData.textMigrationSampleV1)
 
     Assert.AreEqual(
       MigrationData.migrationObject,
@@ -165,7 +158,7 @@ type SerializationTests() =
   [<TestMethod>]
   member _.``Can Decode Json MigrationRecord``() =
     let decoded =
-      serializer.MigrationRecordSerializer.Decode(
+      migrationSerializer.DecodeMigrationRecord(
         MigrationRecordData.migrationRecordJsonSample
       )
 
@@ -178,7 +171,7 @@ type SerializationTests() =
   [<TestMethod>]
   member _.``Can Encode Json MigrationRecord``() =
     let encoded =
-      serializer.MigrationRecordSerializer.Encode(
+      migrationSerializer.EncodeMigrationRecord(
         MigrationRecordData.migrationRecordObject
       )
 

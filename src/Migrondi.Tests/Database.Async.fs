@@ -24,7 +24,9 @@ type DatabaseAsyncTests() =
   let config = DatabaseData.getConfig dbName
 
   let loggerFactory =
-    LoggerFactory.Create(fun builder -> builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore)
+    LoggerFactory.Create(fun builder ->
+      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
+    )
 
   let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
 

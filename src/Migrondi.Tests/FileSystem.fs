@@ -75,19 +75,24 @@ type FileSystemTests() =
 
   let rootDir = DirectoryInfo(baseUri.LocalPath)
 
-  let serializer = SerializerServiceFactory.GetInstance()
-
   let loggerFactory =
-    LoggerFactory.Create(fun builder -> builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore)
+    LoggerFactory.Create(fun builder ->
+      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
+    )
 
   let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
 
+  let configSerializer = SerializationFactory.GetConfigurationSerializer()
+
+  let migrationSerializer = SerializationFactory.GetMigrationSerializer()
+
   let fileSystem =
     FileSystemServiceFactory.GetInstance(
-      serializer,
-      logger,
       baseUri,
-      Uri("fs-migrations/", UriKind.Relative)
+      Uri("fs-migrations/", UriKind.Relative),
+      logger,
+      configSerializer,
+      migrationSerializer
     )
 
   do printfn $"Using '{rootDir.FullName}' as Root Directory"
@@ -102,9 +107,7 @@ type FileSystemTests() =
   [<TestMethod>]
   member _.``Can write a migrondi.json file``() =
 
-    let expected =
-      serializer.ConfigurationSerializer.Encode
-        MigrondiConfigData.configSampleObject
+    let expected = configSerializer.Encode MigrondiConfigData.configSampleObject
 
     fileSystem.WriteConfiguration(
       MigrondiConfigData.configSampleObject,
@@ -127,7 +130,7 @@ type FileSystemTests() =
       )
 
       File.ReadAllText(MigrondiConfigData.fsMigrondiConfigPath rootDir.FullName)
-      |> serializer.ConfigurationSerializer.Decode
+      |> configSerializer.Decode
 
     let fileResult =
       fileSystem.ReadConfiguration(
@@ -140,8 +143,7 @@ type FileSystemTests() =
   member _.``Can write a migrondi.json file async``() =
     task {
       let expected =
-        serializer.ConfigurationSerializer.Encode
-          MigrondiConfigData.configSampleObject
+        configSerializer.Encode MigrondiConfigData.configSampleObject
 
       do!
         fileSystem.WriteConfigurationAsync(
@@ -172,7 +174,7 @@ type FileSystemTests() =
             MigrondiConfigData.fsMigrondiConfigPath rootDir.FullName
           )
 
-        return result |> serializer.ConfigurationSerializer.Decode
+        return result |> configSerializer.Decode
       }
 
       let! fileResult =
@@ -195,7 +197,7 @@ type FileSystemTests() =
     let encoded =
       migrations
       |> List.map(fun (migration, name) ->
-        let encoded = serializer.MigrationSerializer.EncodeText migration
+        let encoded = migrationSerializer.EncodeText migration
         let name = Path.GetFileName(name)
         name, encoded
       )
@@ -240,7 +242,7 @@ type FileSystemTests() =
       let encoded =
         migrations
         |> List.map(fun (migration, name) ->
-          let encoded = serializer.MigrationSerializer.EncodeText migration
+          let encoded = migrationSerializer.EncodeText migration
           let name = Path.GetFileName(name)
           name, encoded
         )
