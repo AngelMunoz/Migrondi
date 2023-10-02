@@ -1,9 +1,10 @@
 ﻿namespace Migrondi.Core
 
 open FsToolkit.ErrorHandling
+open System.Runtime.CompilerServices
+
 [<AutoOpen>]
 module Core =
-
   [<Literal>]
   let MigrationNameSchema = "(.+)_([0-9]+).(sql|SQL)"
 
@@ -138,10 +139,17 @@ exception MalformedSource of
   Reason: string
 
 
-type MalformedSource with
+[<Extension; Class>]
+type ExceptionExtensions =
 
-  member this.Value = this.SourceName, this.Content, this.Reason
+  [<Extension>]
+  static member inline Value(this: MalformedSource) =
+    this.SourceName, this.Content, this.Reason
 
-type DeserializationFailed with
+  [<Extension>]
+  static member inline Value(this: DeserializationFailed) =
+    this.Content, this.Reason
 
-  member this.Value = this.Content, this.Reason
+// ensure extensions are visible to VB
+[<assembly: Extension>]
+do ()

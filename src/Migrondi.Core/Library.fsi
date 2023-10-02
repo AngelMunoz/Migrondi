@@ -1,10 +1,13 @@
 namespace Migrondi.Core
 
 open FsToolkit.ErrorHandling
+open System.Runtime.CompilerServices
 
 [<AutoOpen>]
 module Core =
-
+  /// This is only supported filename format at the moment, your implementations
+  /// have to have this REGEX in mind when creating migration in custom implementations
+  /// of the  <see cref="Migrondi.Core.FileSystem.FileSystemService">FileSystem</see> type
   [<Literal>]
   val MigrationNameSchema: string = "(.+)_([0-9]+).(sql|SQL)"
 
@@ -100,6 +103,9 @@ type MigrationType =
 
   member AsString: string
 
+/// <summary>
+/// Used by the Migrondi Service to represent the status of a migration.
+/// </summary>
 type MigrationStatus =
   | Applied of Migration
   | Pending of Migration
@@ -111,17 +117,56 @@ module Exceptions =
   open System.Runtime.ExceptionServices
   val inline reriseCustom: exn: exn -> 'ReturnValue
 
+/// <summary>
+/// Represents an error that happened while we were trying to create the database
+/// and add the miogrations table within.
+/// </summary>
+/// <remarks>
+/// This is not thrown if the migration's table has already been created.
+/// </remarks>
 exception SetupDatabaseFailed
+
+/// <summary>
+/// Represents an error that happened while we were trying to apply a migration.
+/// </summary>
+/// <remarks>
+/// Before throwing this exception the transaction that encloses the migration
+/// will be rolled back.
+/// </remarks>
 exception MigrationApplicationFailed of Migration: Migration
+
+/// <summary>
+/// Represents an error that happened while we were trying to revert a migration.
+/// </summary>
+/// <remarks>
+/// Before throwing this exception the transaction that encloses the migration
+/// will be rolled back.
+/// </remarks>
 exception MigrationRollbackFailed of Migration: Migration
+
+/// <summary>
+/// This exception is thrown when the FileSystem is unable to read a migration source,
+/// configuration file or any other source that requires interaction with the file system.
+/// </summary>
 exception SourceNotFound of path: string * name: string
+
+/// <summary>
+/// This exception is thrown when the FileSystem is unable to deserialize a migration source,
+/// configuration file or any other source that requires deserialization.
+/// </summary>
 exception DeserializationFailed of Content: string * Reason: string
+
+/// <summary>
+/// This exception is thrown when the content cannot be deserialized from source.
+/// This tipically happens if required fields are removed from the source.
+/// </summary>
 exception MalformedSource of SourceName: string * Content: string * Reason: string
 
-type MalformedSource with
 
-  member Value: string * string * string
+[<Extension; Class>]
+type ExceptionExtensions =
+  [<Extension>]
+  static member inline Value: MalformedSource -> string * string * string
 
-type DeserializationFailed with
-
-  member Value: string * string
+  [<Extension>]
+  static member inline Value: DeserializationFailed -> string * string
