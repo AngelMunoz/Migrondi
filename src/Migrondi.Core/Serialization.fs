@@ -11,110 +11,6 @@ open FsToolkit.ErrorHandling
 
 open Migrondi.Core
 
-[<Interface>]
-type ConfigurationSerializer =
-
-  /// <summary>
-  /// Takes a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object and returns a string
-  /// </summary>
-  /// <param name="content">The <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object to serialize</param>
-  /// <returns>A string</returns>
-  abstract member Encode: content: MigrondiConfig -> string
-
-  /// <summary>
-  /// Takes a string and returns a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object
-  /// </summary>
-  /// <param name="content">The string to deserialize</param>
-  /// <exception cref="Migrondi.Core.DeserializationFailed">
-  /// Thrown when the serialization fails
-  /// </exception>
-  abstract member Decode: content: string -> MigrondiConfig
-
-[<Interface>]
-type MigrationSerializer =
-
-  /// <summary>
-  /// Takes a <see cref="Migrondi.Core.Migration">Migration</see> object and returns a string
-  /// </summary>
-  /// <param name="content">The <see cref="Migrondi.Core.Migration">Migration</see> object to serialize</param>
-  /// <returns>A string</returns>
-  /// <remarks>
-  /// The string is the content of the migration file
-  /// </remarks>
-  abstract member EncodeJson: content: Migration -> string
-
-  /// <summary>
-  /// Takes a <see cref="Migrondi.Core.Migration">Migration</see> object and returns a string
-  /// </summary>
-  /// <param name="content">The <see cref="Migrondi.Core.Migration">Migration</see> object to serialize</param>
-  /// <returns>A string</returns>
-  /// <remarks>
-  /// The string is the content of the migration file
-  /// </remarks>
-  abstract member EncodeText: content: Migration -> string
-
-  /// <summary>
-  /// Takes a string and returns a <see cref="Migrondi.Core.Migration">Migration</see> object
-  /// </summary>
-  /// <param name="content">The string to deserialize</param>
-  /// <returns>
-  /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
-  /// or a <see cref="Migrondi.Core.Serialization.SerializationError">SerializationError</see>
-  /// </returns>
-  /// <remarks>
-  /// The string is the content of the migration file
-  /// </remarks>
-  /// <exception cref="Migrondi.Core.DeserializationFailed">
-  /// Thrown when the serialization fails
-  /// </exception>
-  abstract member DecodeJson: content: string -> Migration
-
-  /// <summary>
-  /// Takes a string and returns a <see cref="Migrondi.Core.Migration">Migration</see> object
-  /// </summary>
-  /// <param name="content">The string to deserialize</param>
-  /// <param name="migrationName">Optional migration name in case we're decoding v0 migrations format</param>
-  /// <returns>
-  /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
-  /// or a <see cref="Migrondi.Core.Serialization.SerializationError">SerializationError</see>
-  /// </returns>
-  /// <remarks>
-  /// The string is the content of the migration file
-  /// </remarks>
-  /// <exception cref="Migrondi.Core.DeserializationFailed">
-  /// Thrown when the serialization fails
-  /// </exception>
-  abstract member DecodeText:
-    content: string * [<Optional>] ?migrationName: string -> Migration
-
-[<Interface>]
-type MigrationRecordSerializer =
-
-  /// <summary>
-  /// Takes a <see cref="Migrondi.Core.MigrationRecord">MigrationRecord</see> object and returns a string
-  /// </summary>
-  /// <param name="content">The <see cref="Migrondi.Core.MigrationRecord">MigrationRecord</see> object to serialize</param>
-  /// <returns>A string</returns>
-  /// <remarks>
-  /// The string is the content of the migration file
-  /// </remarks>
-  abstract member Encode: content: MigrationRecord -> string
-
-  /// <summary>
-  /// Takes a string and returns a <see cref="Migrondi.Core.MigrationRecord">MigrationRecord</see> object
-  /// </summary>
-  /// <param name="content">The string to deserialize</param>
-  /// <returns>
-  /// A Result that may contain a <see cref="Migrondi.Core.MigrationRecord">MigrationRecord</see> object
-  /// or a <see cref="Migrondi.Core.Serialization.SerializationError">SerializationError</see>
-  /// </returns>
-  /// <remarks>
-  /// The string is the content of the migration file
-  /// </remarks>
-  /// <exception cref="Migrondi.Core.DeserializationFailed">
-  /// Thrown when the serialization fails
-  /// </exception>
-  abstract member Decode: content: string -> MigrationRecord
 
 [<RequireQualifiedAccess;
   CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -441,42 +337,32 @@ module private MigrationRecord =
     })
 
 [<Interface>]
-type SerializerService =
+type ConfigurationSerializer =
 
-  abstract member ConfigurationSerializer: ConfigurationSerializer
-  abstract member MigrationSerializer: MigrationSerializer
-  abstract member MigrationRecordSerializer: MigrationRecordSerializer
+  abstract member Encode: content: MigrondiConfig -> string
+  abstract member Decode: content: string -> MigrondiConfig
 
-module private SerializerImpl =
-  let configSerializer () =
-    { new ConfigurationSerializer with
-        member _.Decode(content: string) =
-          Decode.fromString MigrondiConfig.Decode content
-          |> function
-            | Ok value -> value
-            | Error err -> DeserializationFailed(content, err) |> raise
 
-        member _.Encode(content: MigrondiConfig) : string =
-          let content = MigrondiConfig.Encode content
-          Encode.toString 2 content
-    }
+[<Interface>]
+type MigrationSerializer =
 
-  let migrationRecordSerializer () =
-    { new MigrationRecordSerializer with
-        member _.Decode(content: string) =
-          Decode.fromString MigrationRecord.Decode content
-          |> function
-            | Ok value -> value
-            | Error err -> DeserializationFailed(content, err) |> raise
+  abstract member EncodeJson: content: Migration -> string
+  abstract member EncodeText: content: Migration -> string
+  abstract member DecodeJson: content: string -> Migration
 
-        member _.Encode(content: MigrationRecord) : string =
-          let content = MigrationRecord.Encode content
-          Encode.toString 0 content
-    }
+  abstract member DecodeText:
+    content: string * [<Optional>] ?migrationName: string -> Migration
 
-  let migrationSerializer () =
+  abstract member EncodeMigrationRecord: content: MigrationRecord -> string
+  abstract member DecodeMigrationRecord: content: string -> MigrationRecord
+
+[<Class>]
+type SerializationFactory =
+
+  static member GetMigrationSerializer() =
+
     { new MigrationSerializer with
-        member _.DecodeJson(content: string) =
+        member _.DecodeJson(content: string) : Migration =
           Decode.fromString Migration.DecodeJson content
           |> function
             | Ok value -> value
@@ -489,40 +375,37 @@ module private SerializerImpl =
         member _.EncodeText(content: Migration) : string =
           Migration.EncodeText content
 
-        member _.DecodeText(content: string, ?name: string) =
-          Migration.DecodeText(content, name)
+        member _.DecodeText
+          (
+            content: string,
+            migrationName: string option
+          ) : Migration =
+          Migration.DecodeText(content, migrationName)
           |> function
             | Ok value -> value
             | Error err -> DeserializationFailed(content, err) |> raise
+
+        member _.DecodeMigrationRecord(content: string) : MigrationRecord =
+          Decode.fromString MigrationRecord.Decode content
+          |> function
+            | Ok value -> value
+            | Error err -> DeserializationFailed(content, err) |> raise
+
+        member _.EncodeMigrationRecord(content: MigrationRecord) : string =
+          let content = MigrationRecord.Encode content
+          Encode.toString 0 content
     }
 
-[<Class>]
-type SerializerServiceFactory =
+  static member GetConfigurationSerializer() =
 
-  static member GetInstance
-    (
-      ?configurationSerializer: ConfigurationSerializer,
-      ?migrationRecordSerializer: MigrationRecordSerializer,
-      ?migrationSerializer: MigrationSerializer
-    ) =
-    let configurationSerializer =
-      configurationSerializer
-      |> Option.defaultWith SerializerImpl.configSerializer
+    { new ConfigurationSerializer with
+        member _.Decode(content: string) : MigrondiConfig =
+          Decode.fromString MigrondiConfig.Decode content
+          |> function
+            | Ok value -> value
+            | Error err -> DeserializationFailed(content, err) |> raise
 
-    let migrationRecordSerializer =
-      migrationRecordSerializer
-      |> Option.defaultWith SerializerImpl.migrationRecordSerializer
-
-    let migrationSerializer =
-      migrationSerializer
-      |> Option.defaultWith SerializerImpl.migrationSerializer
-
-    { new SerializerService with
-        member _.ConfigurationSerializer: ConfigurationSerializer =
-          configurationSerializer
-
-        member _.MigrationRecordSerializer: MigrationRecordSerializer =
-          migrationRecordSerializer
-
-        member _.MigrationSerializer: MigrationSerializer = migrationSerializer
+        member _.Encode(content: MigrondiConfig) : string =
+          let content = MigrondiConfig.Encode content
+          Encode.toString 2 content
     }

@@ -181,7 +181,7 @@ module PhysicalFileSystemImpl =
 
   let readConfiguration
     (
-      serializer: SerializerService,
+      serializer: ConfigurationSerializer,
       logger: ILogger,
       projectRoot: Uri,
       readFrom: string<RelativeUserPath>
@@ -201,13 +201,13 @@ module PhysicalFileSystemImpl =
         )
 
     try
-      serializer.ConfigurationSerializer.Decode content
+      serializer.Decode content
     with :? DeserializationFailed as ex ->
       reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
 
   let readConfigurationAsync
     (
-      serializer: SerializerService,
+      serializer: ConfigurationSerializer,
       logger: ILogger,
       projectRoot: Uri,
       readFrom: string<RelativeUserPath>
@@ -216,6 +216,7 @@ module PhysicalFileSystemImpl =
       let! token = Async.CancellationToken
       let path = Uri(projectRoot, UMX.untag readFrom)
       logger.LogDebug("Reading configuration from {Path}", path.LocalPath)
+
       let! contents = async {
         try
           return!
@@ -231,7 +232,7 @@ module PhysicalFileSystemImpl =
       }
 
       try
-        return serializer.ConfigurationSerializer.Decode contents
+        return serializer.Decode contents
       with :? DeserializationFailed as ex ->
         return
           reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
@@ -239,7 +240,7 @@ module PhysicalFileSystemImpl =
 
   let writeConfiguration
     (
-      serializer: SerializerService,
+      serializer: ConfigurationSerializer,
       logger: ILogger,
       config: MigrondiConfig,
       projectRoot: Uri,
@@ -248,18 +249,19 @@ module PhysicalFileSystemImpl =
     let path = Uri(projectRoot, UMX.untag writeTo)
     let file = FileInfo(path.LocalPath)
 
-    logger.LogDebug("Writing configuration to {Path}, constructed fom {WriteTo}", path.LocalPath, writeTo)
+    logger.LogDebug(
+      "Writing configuration to {Path}, constructed fom {WriteTo}",
+      path.LocalPath,
+      writeTo
+    )
 
     file.Directory.Create()
 
-    File.WriteAllText(
-      path.LocalPath,
-      serializer.ConfigurationSerializer.Encode config
-    )
+    File.WriteAllText(path.LocalPath, serializer.Encode config)
 
   let writeConfigurationAsync
     (
-      serializer: SerializerService,
+      serializer: ConfigurationSerializer,
       logger: ILogger,
       config: MigrondiConfig,
       projectRoot: Uri,
@@ -269,13 +271,19 @@ module PhysicalFileSystemImpl =
       let! token = Async.CancellationToken
       let path = Uri(projectRoot, UMX.untag writeTo)
       let file = FileInfo(path.LocalPath)
-      logger.LogDebug("Writing configuration to {Path}, constructed fom {WriteTo}", path.LocalPath, writeTo)
+
+      logger.LogDebug(
+        "Writing configuration to {Path}, constructed fom {WriteTo}",
+        path.LocalPath,
+        writeTo
+      )
+
       file.Directory.Create()
 
       do!
         File.WriteAllTextAsync(
           path.LocalPath,
-          serializer.ConfigurationSerializer.Encode config,
+          serializer.Encode config,
           cancellationToken = token
         )
         |> Async.AwaitTask
@@ -283,14 +291,18 @@ module PhysicalFileSystemImpl =
 
   let readMigration
     (
-      serializer: SerializerService,
+      serializer: MigrationSerializer,
       logger: ILogger,
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
     ) =
     let path = Uri(migrationsDir, UMX.untag migrationName)
 
-    logger.LogDebug("Reading migration from {Path} with name: {MigrationName}", path.LocalPath, migrationName)
+    logger.LogDebug(
+      "Reading migration from {Path} with name: {MigrationName}",
+      path.LocalPath,
+      migrationName
+    )
 
     let content =
       try
@@ -303,13 +315,13 @@ module PhysicalFileSystemImpl =
         )
 
     try
-      serializer.MigrationSerializer.DecodeText content
+      serializer.DecodeText content
     with :? DeserializationFailed as ex ->
       reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
 
   let readMigrationAsync
     (
-      serializer: SerializerService,
+      serializer: MigrationSerializer,
       logger: ILogger,
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
@@ -318,7 +330,11 @@ module PhysicalFileSystemImpl =
       let! token = Async.CancellationToken
       let path = Uri(migrationsDir, UMX.untag migrationName)
 
-      logger.LogDebug("Reading migration from {Path} with name: {MigrationName}", path.LocalPath, migrationName)
+      logger.LogDebug(
+        "Reading migration from {Path} with name: {MigrationName}",
+        path.LocalPath,
+        migrationName
+      )
 
       let! contents = async {
         try
@@ -335,7 +351,7 @@ module PhysicalFileSystemImpl =
       }
 
       try
-        return serializer.MigrationSerializer.DecodeText contents
+        return serializer.DecodeText contents
       with :? DeserializationFailed as ex ->
         return
           reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
@@ -343,7 +359,7 @@ module PhysicalFileSystemImpl =
 
   let writeMigration
     (
-      serializer: SerializerService,
+      serializer: MigrationSerializer,
       logger: ILogger,
       migration: Migration,
       migrationsDir: Uri,
@@ -351,19 +367,21 @@ module PhysicalFileSystemImpl =
     ) =
     let path = Uri(migrationsDir, UMX.untag migrationName)
 
-    logger.LogDebug("Writing migration to {Path} with directory: {MigrationsDirectory} and name: {MigrationName}", path.LocalPath, migrationsDir.LocalPath, migrationName)
+    logger.LogDebug(
+      "Writing migration to {Path} with directory: {MigrationsDirectory} and name: {MigrationName}",
+      path.LocalPath,
+      migrationsDir.LocalPath,
+      migrationName
+    )
 
     let file = FileInfo(path.LocalPath)
     file.Directory.Create()
 
-    File.WriteAllText(
-      path.LocalPath,
-      serializer.MigrationSerializer.EncodeText migration
-    )
+    File.WriteAllText(path.LocalPath, serializer.EncodeText migration)
 
   let writeMigrationAsync
     (
-      serializer: SerializerService,
+      serializer: MigrationSerializer,
       logger: ILogger,
       migration: Migration,
       migrationsDir: Uri,
@@ -373,7 +391,12 @@ module PhysicalFileSystemImpl =
       let! token = Async.CancellationToken
       let path = Uri(migrationsDir, UMX.untag migrationName)
 
-      logger.LogDebug("Writing migration to {Path} with directory: {MigrationsDirectory} and name: {MigrationName}", path.LocalPath, migrationsDir.LocalPath, migrationName)
+      logger.LogDebug(
+        "Writing migration to {Path} with directory: {MigrationsDirectory} and name: {MigrationName}",
+        path.LocalPath,
+        migrationsDir.LocalPath,
+        migrationName
+      )
 
       let file = FileInfo(path.LocalPath)
       file.Directory.Create()
@@ -381,7 +404,7 @@ module PhysicalFileSystemImpl =
       do!
         File.WriteAllTextAsync(
           path.LocalPath,
-          serializer.MigrationSerializer.EncodeText migration,
+          serializer.EncodeText migration,
           cancellationToken = token
         )
         |> Async.AwaitTask
@@ -389,7 +412,7 @@ module PhysicalFileSystemImpl =
 
   let listMigrations
     (
-      serializer: SerializerService,
+      serializer: MigrationSerializer,
       logger: ILogger,
       projectRoot: Uri,
       migrationsDir: string<RelativeUserDirectoryPath>
@@ -397,7 +420,11 @@ module PhysicalFileSystemImpl =
     let operation = result {
       let path = Uri(projectRoot, UMX.untag migrationsDir)
 
-      logger.LogDebug("Listing migrations from {Path} with directory: {MigrationsDir}", path.LocalPath, migrationsDir)
+      logger.LogDebug(
+        "Listing migrations from {Path} with directory: {MigrationsDir}",
+        path.LocalPath,
+        migrationsDir
+      )
 
       let directory = DirectoryInfo(path.LocalPath)
 
@@ -415,7 +442,7 @@ module PhysicalFileSystemImpl =
         files
         |> List.traverseResultA(fun (name, contents) ->
           try
-            serializer.MigrationSerializer.DecodeText(contents, name) |> Ok
+            serializer.DecodeText(contents, name) |> Ok
           with :? DeserializationFailed as ex ->
             MalformedSource(name, ex.Reason, ex.Source) |> Error
         )
@@ -429,7 +456,7 @@ module PhysicalFileSystemImpl =
 
   let listMigrationsAsync
     (
-      serializer: SerializerService,
+      serializer: MigrationSerializer,
       logger: ILogger,
       projectRoot: Uri,
       migrationsDir: string<RelativeUserDirectoryPath>
@@ -438,7 +465,11 @@ module PhysicalFileSystemImpl =
       let! operation = asyncResult {
         let path = Uri(projectRoot, UMX.untag migrationsDir)
 
-        logger.LogDebug("Listing migrations from {Path} with directory: {MigrationsDir}", path.LocalPath, migrationsDir)
+        logger.LogDebug(
+          "Listing migrations from {Path} with directory: {MigrationsDir}",
+          path.LocalPath,
+          migrationsDir
+        )
 
         let directory = DirectoryInfo(path.LocalPath)
 
@@ -464,7 +495,7 @@ module PhysicalFileSystemImpl =
           |> Array.toList
           |> List.traverseResultA(fun (name, contents) ->
             try
-              serializer.MigrationSerializer.DecodeText(contents, name) |> Ok
+              serializer.DecodeText(contents, name) |> Ok
             with :? DeserializationFailed as ex ->
               MalformedSource(name, ex.Reason, ex.Source) |> Error
           )
@@ -484,18 +515,28 @@ type FileSystemServiceFactory =
 
   static member GetInstance
     (
-      serializer: #SerializerService,
-      logger: #ILogger,
       projectRootUri: Uri,
-      migrationsRootUri: Uri
+      migrationsRootUri: Uri,
+      logger: ILogger,
+      [<Optional>] ?configurationSerializer: ConfigurationSerializer,
+      [<Optional>] ?migrationSerializer: MigrationSerializer
     ) =
+    let configSerializer =
+      defaultArg
+        configurationSerializer
+        (SerializationFactory.GetConfigurationSerializer())
+
+    let migrationSerializer =
+      defaultArg
+        migrationSerializer
+        (SerializationFactory.GetMigrationSerializer())
 
     let migrationsWorkingDir = Uri(projectRootUri, migrationsRootUri)
 
     { new FileSystemService with
         member _.ListMigrations(readFrom) =
           PhysicalFileSystemImpl.listMigrations(
-            serializer,
+            migrationSerializer,
             logger,
             projectRootUri,
             UMX.tag readFrom
@@ -504,7 +545,7 @@ type FileSystemServiceFactory =
         member _.ListMigrationsAsync(arg1, [<Optional>] ?cancellationToken) =
           let computation =
             PhysicalFileSystemImpl.listMigrationsAsync(
-              serializer,
+              migrationSerializer,
               logger,
               projectRootUri,
               UMX.tag arg1
@@ -514,7 +555,7 @@ type FileSystemServiceFactory =
 
         member _.ReadConfiguration(readFrom) =
           PhysicalFileSystemImpl.readConfiguration(
-            serializer,
+            configSerializer,
             logger,
             projectRootUri,
             UMX.tag readFrom
@@ -527,7 +568,7 @@ type FileSystemServiceFactory =
           ) =
           let computation =
             PhysicalFileSystemImpl.readConfigurationAsync(
-              serializer,
+              configSerializer,
               logger,
               projectRootUri,
               UMX.tag readFrom
@@ -537,7 +578,7 @@ type FileSystemServiceFactory =
 
         member _.ReadMigration readFrom =
           PhysicalFileSystemImpl.readMigration(
-            serializer,
+            migrationSerializer,
             logger,
             migrationsWorkingDir,
             UMX.tag readFrom
@@ -546,7 +587,7 @@ type FileSystemServiceFactory =
         member _.ReadMigrationAsync(readFrom, [<Optional>] ?cancellationToken) =
           let computation =
             PhysicalFileSystemImpl.readMigrationAsync(
-              serializer,
+              migrationSerializer,
               logger,
               migrationsWorkingDir,
               UMX.tag readFrom
@@ -556,7 +597,7 @@ type FileSystemServiceFactory =
 
         member _.WriteConfiguration(config: MigrondiConfig, writeTo) : unit =
           PhysicalFileSystemImpl.writeConfiguration(
-            serializer,
+            configSerializer,
             logger,
             config,
             projectRootUri,
@@ -571,7 +612,7 @@ type FileSystemServiceFactory =
           ) =
           let computation =
             PhysicalFileSystemImpl.writeConfigurationAsync(
-              serializer,
+              configSerializer,
               logger,
               config,
               projectRootUri,
@@ -582,7 +623,7 @@ type FileSystemServiceFactory =
 
         member _.WriteMigration(arg1: Migration, arg2) : unit =
           PhysicalFileSystemImpl.writeMigration(
-            serializer,
+            migrationSerializer,
             logger,
             arg1,
             migrationsWorkingDir,
@@ -597,7 +638,7 @@ type FileSystemServiceFactory =
           ) =
           let computation =
             PhysicalFileSystemImpl.writeMigrationAsync(
-              serializer,
+              migrationSerializer,
               logger,
               arg1,
               migrationsWorkingDir,

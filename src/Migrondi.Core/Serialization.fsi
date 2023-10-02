@@ -1,39 +1,9 @@
 namespace Migrondi.Core.Serialization
 
-
-open System.Text
-open System.Text.RegularExpressions
 open System.Runtime.InteropServices
-
-open Thoth.Json.Net
-
-open FsToolkit.ErrorHandling
 
 open Migrondi.Core
 
-
-/// <summary>
-/// This service is responsible for serializing and deserializing the configuration and migration files.
-/// The default implementation uses JSON as the serialization format.
-/// </summary>
-[<Interface>]
-type ConfigurationSerializer =
-
-  /// <summary>
-  /// Takes a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object and returns a string
-  /// </summary>
-  /// <param name="content">The <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object to serialize</param>
-  /// <returns>A string</returns>
-  abstract member Encode: content: MigrondiConfig -> string
-
-  /// <summary>
-  /// Takes a string and returns a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object
-  /// </summary>
-  /// <param name="content">The string to deserialize</param>
-  /// <exception cref="Migrondi.Core.DeserializationFailed">
-  /// Thrown when the serialization fails
-  /// </exception>
-  abstract member Decode: content: string -> MigrondiConfig
 
 /// <summary>
 /// This service is responsible for serializing and deserializing the migration files.
@@ -97,12 +67,6 @@ type MigrationSerializer =
   /// </exception>
   abstract member DecodeText: content: string * [<Optional>] ?migrationName: string -> Migration
 
-/// <summary>
-/// This service is responsible for serializing and deserializing the migration records.
-/// The default implementation uses JSON as the serialization format.
-/// </summary>
-[<Interface>]
-type MigrationRecordSerializer =
 
   /// <summary>
   /// Takes a <see cref="Migrondi.Core.MigrationRecord">MigrationRecord</see> object and returns a string
@@ -112,7 +76,7 @@ type MigrationRecordSerializer =
   /// <remarks>
   /// The string is the content of the migration file
   /// </remarks>
-  abstract member Encode: content: MigrationRecord -> string
+  abstract member EncodeMigrationRecord: content: MigrationRecord -> string
 
   /// <summary>
   /// Takes a string and returns a <see cref="Migrondi.Core.MigrationRecord">MigrationRecord</see> object
@@ -128,7 +92,7 @@ type MigrationRecordSerializer =
   /// <exception cref="Migrondi.Core.DeserializationFailed">
   /// Thrown when the serialization fails
   /// </exception>
-  abstract member Decode: content: string -> MigrationRecord
+  abstract member DecodeMigrationRecord: content: string -> MigrationRecord
 
 /// <summary>
 /// This is a container service for the actual serializers of the application, given that
@@ -136,24 +100,35 @@ type MigrationRecordSerializer =
 /// keep track of multiple services all over the place.
 /// </summary>
 [<Interface>]
-type SerializerService =
+type ConfigurationSerializer =
 
-  abstract member ConfigurationSerializer: ConfigurationSerializer
-  abstract member MigrationSerializer: MigrationSerializer
-  abstract member MigrationRecordSerializer: MigrationRecordSerializer
+  /// <summary>
+  /// Takes a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object and returns a string
+  /// </summary>
+  /// <param name="content">The <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object to serialize</param>
+  /// <returns>A string</returns>
+  abstract member Encode: content: MigrondiConfig -> string
+
+  /// <summary>
+  /// Takes a string and returns a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object
+  /// </summary>
+  /// <param name="content">The string to deserialize</param>
+  /// <exception cref="Migrondi.Core.DeserializationFailed">
+  /// Thrown when the serialization fails
+  /// </exception>
+  abstract member Decode: content: string -> MigrondiConfig
 
 [<Class>]
-type SerializerServiceFactory =
+type SerializationFactory =
+
+  /// <summary>
+  /// Generates an instance of a built-in migration serializer
+  /// That handles both v0 and v1 formats.
+  /// </summary>
+  static member GetMigrationSerializer: unit -> MigrationSerializer
 
   /// <summary>
   /// Generates the container for the serializer services, you can provide custom implementations for the serializers.
   /// </summary>
-  /// <param name="configurationSerializer">A custom configuration serializer</param>
-  /// <param name="migrationRecordSerializer">A custom migration record serializer</param>
-  /// <param name="migrationSerializer">A custom migration serializer</param>
   /// <returns>A serializer service</returns>
-  static member GetInstance:
-    ?configurationSerializer: ConfigurationSerializer *
-    ?migrationRecordSerializer: MigrationRecordSerializer *
-    ?migrationSerializer: MigrationSerializer ->
-      SerializerService
+  static member GetConfigurationSerializer: unit -> ConfigurationSerializer

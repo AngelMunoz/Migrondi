@@ -156,9 +156,16 @@ type FileSystemServiceFactory =
   /// Generates a new file system service, this can be further customized by passing in a custom serializer
   /// an absolute Uri to the project root and a relative Uri to the migrations root.
   /// </summary>
-  /// <param name="serializer">A serializer service that can be used to serialize and deserialize migration objects.</param>
   /// <param name="projectRootUri">An absolute Uri to the project root.</param>
   /// <param name="migrationsRootUri">A relative Uri to the migrations root.</param>
+  /// <param name="logger">A logger instance</param>
+  /// <param name="configurationSerializer">A custom configuration serializer</param>
+  /// <param name="migrationSerializer">A custom migration serializer</param>
   /// <returns>A new file system service</returns>
   static member GetInstance:
-    serializer: #SerializerService * #ILogger * projectRootUri: Uri * migrationsRootUri: Uri -> FileSystemService
+    projectRootUri: Uri *
+    migrationsRootUri: Uri *
+    logger: ILogger *
+    [<Optional>] ?configurationSerializer: ConfigurationSerializer *
+    [<Optional>] ?migrationSerializer: MigrationSerializer ->
+      FileSystemService
