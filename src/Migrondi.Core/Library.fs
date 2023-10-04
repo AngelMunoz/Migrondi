@@ -16,6 +16,24 @@ type MigrondiDriver =
   | Postgresql
   | Mysql
 
+  member this.AsString =
+    match this with
+    | Mssql -> "mssql"
+    | Sqlite -> "sqlite"
+    | Postgresql -> "postgresql"
+    | Mysql -> "mysql"
+
+  member _.ToMigrondiDriver(value: string) =
+
+    match value.ToLowerInvariant() with
+    | "mssql" -> Mssql
+    | "sqlite" -> Sqlite
+    | "postgresql" -> Postgresql
+    | "mysql" -> Mysql
+    | _ -> invalidArg (nameof value) $"Unknown driver: %s{value}"
+
+
+
 /// Represents the configuration that will be used to run migrations
 type MigrondiConfig = {
   /// An ADO compatible connection string

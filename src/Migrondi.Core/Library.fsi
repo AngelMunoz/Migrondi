@@ -7,7 +7,7 @@ open System.Runtime.CompilerServices
 module Core =
   /// This is only supported filename format at the moment, your implementations
   /// have to have this REGEX in mind when creating migration in custom implementations
-  /// of the  <see cref="Migrondi.Core.FileSystem.FileSystemService">FileSystem</see> type
+  /// of the  <see cref="Migrondi.Core.FileSystem.IMiFileSystem">FileSystem</see> type
   [<Literal>]
   val MigrationNameSchema: string = "(.+)_([0-9]+).(sql|SQL)"
 
@@ -18,6 +18,21 @@ type MigrondiDriver =
   | Sqlite
   | Postgresql
   | Mysql
+
+  /// Returns a string representation of the driver
+  member AsString: string
+
+  /// <summary>Takes a string and tries to convert it to a MigrondiDriver</summary>
+  /// <param name="value">The string to convert</param>
+  /// <returns> A MigrondiDriver if the conversion was successful</returns>
+  /// <exception cref="System.ArgumentException">
+  /// Thrown when the conversion was not successful
+  /// </exception>
+  /// <remarks>
+  /// if the string is not a valid driver then it will throw an exception
+  /// with the name of the driver that was not found
+  /// </remarks>
+  member ToMigrondiDriver: value: string -> MigrondiDriver
 
 /// Represents the configuration that will be used to run migrations
 type MigrondiConfig =
