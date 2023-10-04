@@ -1,11 +1,13 @@
 namespace Migrondi.Core.Migrondi
 
+open System
 open System.Collections.Generic
 open System.Threading.Tasks
 open System.Runtime.InteropServices
 
 
 open Migrondi.Core
+open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Database
 open System.Threading
@@ -16,7 +18,7 @@ open FsToolkit.ErrorHandling
 open IcedTasks
 
 [<Interface>]
-type MigrondiService =
+type IMigrondi =
 
   /// <summary>
   /// Runs all pending migrations against the database
@@ -158,8 +160,8 @@ module private MigrondiserviceImpl =
 
 
   let runUp
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
@@ -195,8 +197,8 @@ module private MigrondiserviceImpl =
     db.ApplyMigrations migrationsToRun
 
   let runDown
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
@@ -236,8 +238,8 @@ module private MigrondiserviceImpl =
     db.RollbackMigrations migrationsToRun
 
   let runDryUp
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -258,8 +260,8 @@ module private MigrondiserviceImpl =
     | None -> pending
 
   let runDryDown
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -280,8 +282,8 @@ module private MigrondiserviceImpl =
     | None -> pending
 
   let migrationsList
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (config: MigrondiConfig)
     =
     let migrations = fs.ListMigrations config.migrations
@@ -303,8 +305,8 @@ module private MigrondiserviceImpl =
     :> IReadOnlyList<MigrationStatus>
 
   let scriptStatus
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (migrationPath: string)
     =
     let migration = fs.ReadMigration migrationPath
@@ -314,8 +316,8 @@ module private MigrondiserviceImpl =
     | None -> Pending migration
 
   let runUpAsync
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
@@ -358,8 +360,8 @@ module private MigrondiserviceImpl =
     }
 
   let runDownAsync
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
@@ -405,8 +407,8 @@ module private MigrondiserviceImpl =
 
 
   let dryRunUpAsync
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -431,8 +433,8 @@ module private MigrondiserviceImpl =
     }
 
   let dryRunDownAsync
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
@@ -460,8 +462,8 @@ module private MigrondiserviceImpl =
     }
 
   let migrationsListAsync
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (config: MigrondiConfig)
     =
     cancellableTask {
@@ -487,8 +489,8 @@ module private MigrondiserviceImpl =
     }
 
   let scriptStatusAsync
-    (db: DatabaseService)
-    (fs: FileSystemService)
+    (db: IMiDatabaseHandler)
+    (fs: IMiFileSystem)
     (migrationPath: string)
     =
     cancellableTask {
@@ -502,110 +504,110 @@ module private MigrondiserviceImpl =
 
 
 [<Class>]
-type MigrondiServiceFactory =
+type Migrondi
+  (
+    config: MigrondiConfig,
+    database: IMiDatabaseHandler,
+    fileSystem: IMiFileSystem,
+    logger: ILogger
+  ) =
 
-  static member GetInstance
-    (
-      database: #DatabaseService,
-      fileSystem: #FileSystemService,
-      logger: #ILogger,
-      config: MigrondiConfig
-    ) =
-    { new MigrondiService with
-        member _.DryRunUp([<Optional>] ?amount) : IReadOnlyList<Migration> =
-          MigrondiserviceImpl.runDryUp database fileSystem config amount
 
-        member _.DryRunDown([<Optional>] ?amount) : IReadOnlyList<Migration> =
-          MigrondiserviceImpl.runDryDown database fileSystem config amount
+  static member MigrondiFactory(logger: ILogger) =
+    Func<_, _, _, _>(fun
+                         (config: MigrondiConfig)
+                         (projectRoot: Uri)
+                         (migrationsDIr: Uri) ->
+      let database = MiDatabaseHandler(logger, config)
+      let serializer = MigrondiSerializer()
 
-        member _.RunDown
-          ([<Optional>] ?amount)
-          : IReadOnlyList<MigrationRecord> =
-          MigrondiserviceImpl.runDown database fileSystem logger config amount
+      let fileSystem =
+        MiFileSystem(
+          logger,
+          serializer,
+          serializer,
+          projectRoot,
+          migrationsDIr
+        )
 
-        member _.RunUp([<Optional>] ?amount) : IReadOnlyList<MigrationRecord> =
-          MigrondiserviceImpl.runUp database fileSystem logger config amount
+      new Migrondi(config, database, fileSystem, logger) :> IMigrondi
+    )
 
-        member _.MigrationsList() : IReadOnlyList<MigrationStatus> =
-          MigrondiserviceImpl.migrationsList database fileSystem config
+  interface IMigrondi with
+    member _.DryRunUp([<Optional>] ?amount) : IReadOnlyList<Migration> =
+      MigrondiserviceImpl.runDryUp database fileSystem config amount
 
-        member _.ScriptStatus(arg1: string) : MigrationStatus =
-          MigrondiserviceImpl.scriptStatus database fileSystem arg1
+    member _.DryRunDown([<Optional>] ?amount) : IReadOnlyList<Migration> =
+      MigrondiserviceImpl.runDryDown database fileSystem config amount
 
-        member _.RunUpAsync
-          (
-            [<Optional>] ?amount,
-            [<Optional>] ?cancellationToken
-          ) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.RunDown([<Optional>] ?amount) : IReadOnlyList<MigrationRecord> =
+      MigrondiserviceImpl.runDown database fileSystem logger config amount
 
-          MigrondiserviceImpl.runUpAsync
-            database
-            fileSystem
-            logger
-            config
-            amount
-            token
+    member _.RunUp([<Optional>] ?amount) : IReadOnlyList<MigrationRecord> =
+      MigrondiserviceImpl.runUp database fileSystem logger config amount
 
-        member _.RunDownAsync
-          (
-            [<Optional>] ?amount,
-            [<Optional>] ?cancellationToken
-          ) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.MigrationsList() : IReadOnlyList<MigrationStatus> =
+      MigrondiserviceImpl.migrationsList database fileSystem config
 
-          MigrondiserviceImpl.runDownAsync
-            database
-            fileSystem
-            logger
-            config
-            amount
-            token
+    member _.ScriptStatus(arg1: string) : MigrationStatus =
+      MigrondiserviceImpl.scriptStatus database fileSystem arg1
 
-        member _.DryRunDownAsync
-          (
-            [<Optional>] ?amount,
-            [<Optional>] ?cancellationToken
-          ) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.RunUpAsync([<Optional>] ?amount, [<Optional>] ?cancellationToken) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
-          MigrondiserviceImpl.dryRunDownAsync
-            database
-            fileSystem
-            logger
-            config
-            amount
-            token
+      MigrondiserviceImpl.runUpAsync
+        database
+        fileSystem
+        logger
+        config
+        amount
+        token
 
-        member _.DryRunUpAsync
-          (
-            [<Optional>] ?amount,
-            [<Optional>] ?cancellationToken
-          ) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.RunDownAsync
+      (
+        [<Optional>] ?amount,
+        [<Optional>] ?cancellationToken
+      ) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
-          MigrondiserviceImpl.dryRunUpAsync
-            database
-            fileSystem
-            config
-            amount
-            token
+      MigrondiserviceImpl.runDownAsync
+        database
+        fileSystem
+        logger
+        config
+        amount
+        token
 
-        member _.MigrationsListAsync([<Optional>] ?cancellationToken) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.DryRunDownAsync
+      (
+        [<Optional>] ?amount,
+        [<Optional>] ?cancellationToken
+      ) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
-          MigrondiserviceImpl.migrationsListAsync
-            database
-            fileSystem
-            config
-            token
+      MigrondiserviceImpl.dryRunDownAsync
+        database
+        fileSystem
+        logger
+        config
+        amount
+        token
 
-        member _.ScriptStatusAsync
-          (
-            arg1: string,
-            [<Optional>] ?cancellationToken
-          ) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.DryRunUpAsync
+      (
+        [<Optional>] ?amount,
+        [<Optional>] ?cancellationToken
+      ) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
-          MigrondiserviceImpl.scriptStatusAsync database fileSystem arg1 token
-    }
+      MigrondiserviceImpl.dryRunUpAsync database fileSystem config amount token
+
+    member _.MigrationsListAsync([<Optional>] ?cancellationToken) =
+      let token = defaultArg cancellationToken CancellationToken.None
+
+      MigrondiserviceImpl.migrationsListAsync database fileSystem config token
+
+    member _.ScriptStatusAsync(arg1: string, [<Optional>] ?cancellationToken) =
+      let token = defaultArg cancellationToken CancellationToken.None
+
+      MigrondiserviceImpl.scriptStatusAsync database fileSystem arg1 token

@@ -1,5 +1,6 @@
 namespace Migrondi.Core.Migrondi
 
+open System
 open System.Collections.Generic
 open System.Threading.Tasks
 open System.Runtime.InteropServices
@@ -17,7 +18,7 @@ open System.Threading
 /// Operate against the databases and the file system.
 /// </summary>
 [<Interface>]
-type MigrondiService =
+type IMigrondi =
 
   /// <summary>
   /// Runs all pending migrations against the database
@@ -107,7 +108,7 @@ type MigrondiService =
 
 
 [<Class>]
-type MigrondiServiceFactory =
+type Migrondi =
   /// <summary>
   /// Generates a new Migrondi service, this can be further customized by passing in a custom database service
   /// a custom file system service and a custom logger.
@@ -115,11 +116,13 @@ type MigrondiServiceFactory =
   /// Please keep in mind that both the file system implementation can also be async, not just synchronous
   /// for other use cases.
   /// </summary>
+  /// <param name="config">A configuration object to be able to find the connection string for the database.</param>
   /// <param name="database">A database service that can be used to run migrations against the database</param>
   /// <param name="fileSystem">A file system service that can be used to read and write migrations</param>
   /// <param name="logger">A Serilog compatible ILogger this is used for the lifetime of the service.</param>
-  /// <param name="config">A configuration object to be able to find the connection string for the database.</param>
   /// <returns>A new Migrondi service</returns>
-  static member GetInstance:
-    database: #DatabaseService * fileSystem: #FileSystemService * logger: #ILogger * config: MigrondiConfig ->
-      MigrondiService
+  new: config: MigrondiConfig * database: IMiDatabaseHandler * fileSystem: IMiFileSystem * logger: ILogger -> Migrondi
+
+  static member MigrondiFactory: logger: ILogger -> Func<MigrondiConfig, Uri, Uri, IMigrondi>
+
+  interface IMigrondi

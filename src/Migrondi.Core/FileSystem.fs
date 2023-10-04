@@ -32,7 +32,7 @@ open Units
 
 
 [<Interface>]
-type FileSystemService =
+type IMiFileSystem =
 
   /// <summary>
   /// Take the path to a configuration source, reads and transforms it into a configuration object
@@ -185,7 +185,7 @@ module PhysicalFileSystemImpl =
 
   let readConfiguration
     (
-      serializer: ConfigurationSerializer,
+      serializer: IMiConfigurationSerializer,
       logger: ILogger,
       projectRoot: Uri,
       readFrom: string<RelativeUserPath>
@@ -211,7 +211,7 @@ module PhysicalFileSystemImpl =
 
   let readConfigurationAsync
     (
-      serializer: ConfigurationSerializer,
+      serializer: IMiConfigurationSerializer,
       logger: ILogger,
       projectRoot: Uri,
       readFrom: string<RelativeUserPath>
@@ -246,7 +246,7 @@ module PhysicalFileSystemImpl =
 
   let writeConfiguration
     (
-      serializer: ConfigurationSerializer,
+      serializer: IMiConfigurationSerializer,
       logger: ILogger,
       config: MigrondiConfig,
       projectRoot: Uri,
@@ -267,7 +267,7 @@ module PhysicalFileSystemImpl =
 
   let writeConfigurationAsync
     (
-      serializer: ConfigurationSerializer,
+      serializer: IMiConfigurationSerializer,
       logger: ILogger,
       config: MigrondiConfig,
       projectRoot: Uri,
@@ -296,7 +296,7 @@ module PhysicalFileSystemImpl =
 
   let readMigration
     (
-      serializer: MigrationSerializer,
+      serializer: IMiMigrationSerializer,
       logger: ILogger,
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
@@ -326,7 +326,7 @@ module PhysicalFileSystemImpl =
 
   let readMigrationAsync
     (
-      serializer: MigrationSerializer,
+      serializer: IMiMigrationSerializer,
       logger: ILogger,
       migrationsDir: Uri,
       migrationName: string<RelativeUserPath>
@@ -366,7 +366,7 @@ module PhysicalFileSystemImpl =
 
   let writeMigration
     (
-      serializer: MigrationSerializer,
+      serializer: IMiMigrationSerializer,
       logger: ILogger,
       migration: Migration,
       migrationsDir: Uri,
@@ -388,7 +388,7 @@ module PhysicalFileSystemImpl =
 
   let writeMigrationAsync
     (
-      serializer: MigrationSerializer,
+      serializer: IMiMigrationSerializer,
       logger: ILogger,
       migration: Migration,
       migrationsDir: Uri,
@@ -418,7 +418,7 @@ module PhysicalFileSystemImpl =
 
   let listMigrations
     (
-      serializer: MigrationSerializer,
+      serializer: IMiMigrationSerializer,
       logger: ILogger,
       projectRoot: Uri,
       migrationsDir: string<RelativeUserDirectoryPath>
@@ -462,7 +462,7 @@ module PhysicalFileSystemImpl =
 
   let listMigrationsAsync
     (
-      serializer: MigrationSerializer,
+      serializer: IMiMigrationSerializer,
       logger: ILogger,
       projectRoot: Uri,
       migrationsDir: string<RelativeUserDirectoryPath>
@@ -517,121 +517,105 @@ module PhysicalFileSystemImpl =
     }
 
 [<Class>]
-type FileSystemServiceFactory =
+type MiFileSystem
+  (
+    logger: ILogger,
+    configurationSerializer: IMiConfigurationSerializer,
+    migrationSerializer: IMiMigrationSerializer,
+    projectRootUri: Uri,
+    migrationsRootUri: Uri
+  ) =
 
-  static member GetInstance
-    (
-      projectRootUri: Uri,
-      migrationsRootUri: Uri,
-      logger: ILogger,
-      [<Optional>] ?configurationSerializer: ConfigurationSerializer,
-      [<Optional>] ?migrationSerializer: MigrationSerializer
-    ) =
-    let configSerializer =
-      defaultArg
-        configurationSerializer
-        (SerializationFactory.GetConfigurationSerializer())
+  let migrationsWorkingDir = Uri(projectRootUri, migrationsRootUri)
 
-    let migrationSerializer =
-      defaultArg
-        migrationSerializer
-        (SerializationFactory.GetMigrationSerializer())
+  interface IMiFileSystem with
+    member _.ListMigrations(readFrom) =
+      PhysicalFileSystemImpl.listMigrations(
+        migrationSerializer,
+        logger,
+        projectRootUri,
+        UMX.tag readFrom
+      )
 
-    let migrationsWorkingDir = Uri(projectRootUri, migrationsRootUri)
+    member _.ListMigrationsAsync(arg1, [<Optional>] ?cancellationToken) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
-    { new FileSystemService with
-        member _.ListMigrations(readFrom) =
-          PhysicalFileSystemImpl.listMigrations(
-            migrationSerializer,
-            logger,
-            projectRootUri,
-            UMX.tag readFrom
-          )
+      PhysicalFileSystemImpl.listMigrationsAsync
+        (migrationSerializer, logger, projectRootUri, UMX.tag arg1)
+        token
 
-        member _.ListMigrationsAsync(arg1, [<Optional>] ?cancellationToken) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.ReadConfiguration(readFrom) =
+      PhysicalFileSystemImpl.readConfiguration(
+        configurationSerializer,
+        logger,
+        projectRootUri,
+        UMX.tag readFrom
+      )
 
-          PhysicalFileSystemImpl.listMigrationsAsync
-            (migrationSerializer, logger, projectRootUri, UMX.tag arg1)
-            token
+    member _.ReadConfigurationAsync(readFrom, [<Optional>] ?cancellationToken) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
-        member _.ReadConfiguration(readFrom) =
-          PhysicalFileSystemImpl.readConfiguration(
-            configSerializer,
-            logger,
-            projectRootUri,
-            UMX.tag readFrom
-          )
+      PhysicalFileSystemImpl.readConfigurationAsync
+        (configurationSerializer, logger, projectRootUri, UMX.tag readFrom)
+        token
 
-        member _.ReadConfigurationAsync
-          (
-            readFrom,
-            [<Optional>] ?cancellationToken
-          ) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.ReadMigration readFrom =
+      PhysicalFileSystemImpl.readMigration(
+        migrationSerializer,
+        logger,
+        migrationsWorkingDir,
+        UMX.tag readFrom
+      )
 
-          PhysicalFileSystemImpl.readConfigurationAsync
-            (configSerializer, logger, projectRootUri, UMX.tag readFrom)
-            token
+    member _.ReadMigrationAsync(readFrom, [<Optional>] ?cancellationToken) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
-        member _.ReadMigration readFrom =
-          PhysicalFileSystemImpl.readMigration(
-            migrationSerializer,
-            logger,
-            migrationsWorkingDir,
-            UMX.tag readFrom
-          )
+      PhysicalFileSystemImpl.readMigrationAsync
+        (migrationSerializer, logger, migrationsWorkingDir, UMX.tag readFrom)
+        token
 
-        member _.ReadMigrationAsync(readFrom, [<Optional>] ?cancellationToken) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.WriteConfiguration(config: MigrondiConfig, writeTo) : unit =
+      PhysicalFileSystemImpl.writeConfiguration(
+        configurationSerializer,
+        logger,
+        config,
+        projectRootUri,
+        UMX.tag writeTo
+      )
 
-          PhysicalFileSystemImpl.readMigrationAsync
-            (migrationSerializer, logger, migrationsWorkingDir, UMX.tag readFrom)
-            token
+    member _.WriteConfigurationAsync
+      (
+        config: MigrondiConfig,
+        writeTo,
+        [<Optional>] ?cancellationToken
+      ) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
-        member _.WriteConfiguration(config: MigrondiConfig, writeTo) : unit =
-          PhysicalFileSystemImpl.writeConfiguration(
-            configSerializer,
-            logger,
-            config,
-            projectRootUri,
-            UMX.tag writeTo
-          )
+      PhysicalFileSystemImpl.writeConfigurationAsync
+        (configurationSerializer,
+         logger,
+         config,
+         projectRootUri,
+         UMX.tag writeTo)
+        token
 
-        member _.WriteConfigurationAsync
-          (
-            config: MigrondiConfig,
-            writeTo,
-            [<Optional>] ?cancellationToken
-          ) =
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.WriteMigration(arg1: Migration, arg2) : unit =
+      PhysicalFileSystemImpl.writeMigration(
+        migrationSerializer,
+        logger,
+        arg1,
+        migrationsWorkingDir,
+        UMX.tag arg2
+      )
 
-          PhysicalFileSystemImpl.writeConfigurationAsync
-            (configSerializer, logger, config, projectRootUri, UMX.tag writeTo)
-            token
+    member _.WriteMigrationAsync
+      (
+        arg1: Migration,
+        arg2,
+        [<Optional>] ?cancellationToken
+      ) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
-        member _.WriteMigration(arg1: Migration, arg2) : unit =
-          PhysicalFileSystemImpl.writeMigration(
-            migrationSerializer,
-            logger,
-            arg1,
-            migrationsWorkingDir,
-            UMX.tag arg2
-          )
-
-        member _.WriteMigrationAsync
-          (
-            arg1: Migration,
-            arg2,
-            [<Optional>] ?cancellationToken
-          ) =
-          let token = defaultArg cancellationToken CancellationToken.None
-
-          PhysicalFileSystemImpl.writeMigrationAsync
-            (migrationSerializer,
-             logger,
-             arg1,
-             migrationsWorkingDir,
-             UMX.tag arg2)
-            token
-    }
+      PhysicalFileSystemImpl.writeMigrationAsync
+        (migrationSerializer, logger, arg1, migrationsWorkingDir, UMX.tag arg2)
+        token

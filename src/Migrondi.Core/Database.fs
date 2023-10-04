@@ -23,10 +23,8 @@ open Migrondi.Core
 open IcedTasks
 
 
-
-
 [<Interface>]
-type DatabaseService =
+type IMiDatabaseHandler =
 
   /// <summary>
   /// Creates the required tables in the database.
@@ -567,157 +565,144 @@ module MigrationsAsyncImpl =
     }
 
 [<Class>]
-type DatabaseServiceFactory =
+type MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
 
-  static member GetInstance(logger: #ILogger, config: MigrondiConfig) =
-    { new DatabaseService with
+  interface IMiDatabaseHandler with
 
-        member _.SetupDatabase() =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
+    member _.SetupDatabase() =
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
 
-          MigrationsImpl.setupDatabase connection config.driver config.tableName
+      MigrationsImpl.setupDatabase connection config.driver config.tableName
 
-        member _.FindLastApplied() : MigrationRecord option =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
+    member _.FindLastApplied() : MigrationRecord option =
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
 
-          MigrationsImpl.findLastApplied connection config.tableName
+      MigrationsImpl.findLastApplied connection config.tableName
 
-        member _.ApplyMigrations(migrations: Migration seq) =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
+    member _.ApplyMigrations(migrations: Migration seq) =
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
 
+      migrations
+      |> Seq.toList
+      |> MigrationsImpl.applyMigrations connection logger config.tableName
+      :> MigrationRecord IReadOnlyList
+
+    member _.FindMigration(name: string) : MigrationRecord option =
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
+
+      MigrationsImpl.findMigration connection config.tableName name
+
+    member _.ListMigrations() =
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
+
+      MigrationsImpl.listMigrations connection config.tableName
+
+    member _.RollbackMigrations(migrations: Migration seq) =
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
+
+      migrations
+      |> Seq.toList
+      |> MigrationsImpl.rollbackMigrations connection logger config.tableName
+      :> MigrationRecord IReadOnlyList
+
+    member _.FindLastAppliedAsync([<Optional>] ?cancellationToken) =
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
+
+      let token = defaultArg cancellationToken CancellationToken.None
+
+      MigrationsAsyncImpl.findLastAppliedAsync connection config.tableName token
+
+
+    member _.ApplyMigrationsAsync
+      (
+        migrations: Migration seq,
+        [<Optional>] ?cancellationToken
+      ) =
+      task {
+        let token = defaultArg cancellationToken CancellationToken.None
+
+        use connection =
+          MigrationsImpl.getConnection(config.connection, config.driver)
+
+        let computation =
           migrations
           |> Seq.toList
-          |> MigrationsImpl.applyMigrations connection logger config.tableName
-          :> MigrationRecord IReadOnlyList
-
-        member _.FindMigration(name: string) : MigrationRecord option =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
-
-          MigrationsImpl.findMigration connection config.tableName name
-
-        member _.ListMigrations() =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
-
-          MigrationsImpl.listMigrations connection config.tableName
-
-        member _.RollbackMigrations(migrations: Migration seq) =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
-
-          migrations
-          |> Seq.toList
-          |> MigrationsImpl.rollbackMigrations
+          |> MigrationsAsyncImpl.applyMigrationsAsync
             connection
             logger
             config.tableName
-          :> MigrationRecord IReadOnlyList
 
-        member _.FindLastAppliedAsync([<Optional>] ?cancellationToken) =
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
+        let! result = computation token
+        return result :> IReadOnlyList<MigrationRecord>
+      }
 
-          let token = defaultArg cancellationToken CancellationToken.None
+    member _.RollbackMigrationsAsync
+      (
+        migrations: Migration seq,
+        [<Optional>] ?cancellationToken
+      ) =
+      task {
+        let token = defaultArg cancellationToken CancellationToken.None
 
-          MigrationsAsyncImpl.findLastAppliedAsync
+        use connection =
+          MigrationsImpl.getConnection(config.connection, config.driver)
+
+        let computation =
+          migrations
+          |> Seq.toList
+          |> MigrationsAsyncImpl.rollbackMigrationsAsync
             connection
+            logger
             config.tableName
-            token
+
+        let! result = computation token
+        return result :> IReadOnlyList<MigrationRecord>
+      }
+
+    member _.SetupDatabaseAsync([<Optional>] ?cancellationToken) =
+      let token = defaultArg cancellationToken CancellationToken.None
+
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
 
 
-        member _.ApplyMigrationsAsync
-          (
-            migrations: Migration seq,
-            [<Optional>] ?cancellationToken
-          ) =
-          task {
-            let token = defaultArg cancellationToken CancellationToken.None
-
-            use connection =
-              MigrationsImpl.getConnection(config.connection, config.driver)
-
-            let computation =
-              migrations
-              |> Seq.toList
-              |> MigrationsAsyncImpl.applyMigrationsAsync
-                connection
-                logger
-                config.tableName
-
-            let! result = computation token
-            return result :> IReadOnlyList<MigrationRecord>
-          }
-
-        member _.RollbackMigrationsAsync
-          (
-            migrations: Migration seq,
-            [<Optional>] ?cancellationToken
-          ) =
-          task {
-            let token = defaultArg cancellationToken CancellationToken.None
-
-            use connection =
-              MigrationsImpl.getConnection(config.connection, config.driver)
-
-            let computation =
-              migrations
-              |> Seq.toList
-              |> MigrationsAsyncImpl.rollbackMigrationsAsync
-                connection
-                logger
-                config.tableName
-
-            let! result = computation token
-            return result :> IReadOnlyList<MigrationRecord>
-          }
-
-        member _.SetupDatabaseAsync([<Optional>] ?cancellationToken) =
-          let token = defaultArg cancellationToken CancellationToken.None
-
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
+      MigrationsAsyncImpl.setupDatabaseAsync
+        connection
+        config.driver
+        config.tableName
+        token
 
 
-          MigrationsAsyncImpl.setupDatabaseAsync
-            connection
-            config.driver
-            config.tableName
-            token
+    member _.FindMigrationAsync(name: string, [<Optional>] ?cancellationToken) =
+      let token = defaultArg cancellationToken CancellationToken.None
 
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
 
-        member _.FindMigrationAsync
-          (
-            name: string,
-            [<Optional>] ?cancellationToken
-          ) =
-          let token = defaultArg cancellationToken CancellationToken.None
+      MigrationsAsyncImpl.findMigrationAsync
+        connection
+        config.tableName
+        name
+        token
 
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
+    member _.ListMigrationsAsync([<Optional>] ?cancellationToken) = task {
+      let token = defaultArg cancellationToken CancellationToken.None
 
-          MigrationsAsyncImpl.findMigrationAsync
-            connection
-            config.tableName
-            name
-            token
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
 
-        member _.ListMigrationsAsync([<Optional>] ?cancellationToken) = task {
-          let token = defaultArg cancellationToken CancellationToken.None
+      let! result =
+        MigrationsAsyncImpl.listMigrationsAsync
+          connection
+          config.tableName
+          token
 
-          use connection =
-            MigrationsImpl.getConnection(config.connection, config.driver)
-
-          let! result =
-            MigrationsAsyncImpl.listMigrationsAsync
-              connection
-              config.tableName
-              token
-
-          return result :> IReadOnlyList<MigrationRecord>
-        }
-
+      return result :> IReadOnlyList<MigrationRecord>
     }

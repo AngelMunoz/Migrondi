@@ -12,7 +12,7 @@ open Migrondi.Core
 /// </summary>
 
 [<Interface>]
-type MigrationSerializer =
+type IMiMigrationSerializer =
 
   /// <summary>
   /// Takes a <see cref="Migrondi.Core.Migration">Migration</see> object and returns a string
@@ -100,7 +100,7 @@ type MigrationSerializer =
 /// keep track of multiple services all over the place.
 /// </summary>
 [<Interface>]
-type ConfigurationSerializer =
+type IMiConfigurationSerializer =
 
   /// <summary>
   /// Takes a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object and returns a string
@@ -119,16 +119,7 @@ type ConfigurationSerializer =
   abstract member Decode: content: string -> MigrondiConfig
 
 [<Class>]
-type SerializationFactory =
-
-  /// <summary>
-  /// Generates an instance of a built-in migration serializer
-  /// That handles both v0 and v1 formats.
-  /// </summary>
-  static member GetMigrationSerializer: unit -> MigrationSerializer
-
-  /// <summary>
-  /// Generates the container for the serializer services, you can provide custom implementations for the serializers.
-  /// </summary>
-  /// <returns>A serializer service</returns>
-  static member GetConfigurationSerializer: unit -> ConfigurationSerializer
+type MigrondiSerializer =
+  new: unit -> MigrondiSerializer
+  interface IMiMigrationSerializer
+  interface IMiConfigurationSerializer

@@ -337,14 +337,7 @@ module private MigrationRecord =
     })
 
 [<Interface>]
-type ConfigurationSerializer =
-
-  abstract member Encode: content: MigrondiConfig -> string
-  abstract member Decode: content: string -> MigrondiConfig
-
-
-[<Interface>]
-type MigrationSerializer =
+type IMiMigrationSerializer =
 
   abstract member EncodeJson: content: Migration -> string
   abstract member EncodeText: content: Migration -> string
@@ -356,56 +349,58 @@ type MigrationSerializer =
   abstract member EncodeMigrationRecord: content: MigrationRecord -> string
   abstract member DecodeMigrationRecord: content: string -> MigrationRecord
 
+[<Interface>]
+type IMiConfigurationSerializer =
+
+  abstract member Encode: content: MigrondiConfig -> string
+  abstract member Decode: content: string -> MigrondiConfig
+
+
+
 [<Class>]
-type SerializationFactory =
+type MigrondiSerializer() =
 
-  static member GetMigrationSerializer() =
+  interface IMiMigrationSerializer with
+    member _.DecodeJson(content: string) : Migration =
+      Decode.fromString Migration.DecodeJson content
+      |> function
+        | Ok value -> value
+        | Error err -> DeserializationFailed(content, err) |> raise
 
-    { new MigrationSerializer with
-        member _.DecodeJson(content: string) : Migration =
-          Decode.fromString Migration.DecodeJson content
-          |> function
-            | Ok value -> value
-            | Error err -> DeserializationFailed(content, err) |> raise
+    member _.EncodeJson(content: Migration) : string =
+      let content = Migration.EncodeJson content
+      Encode.toString 0 content
 
-        member _.EncodeJson(content: Migration) : string =
-          let content = Migration.EncodeJson content
-          Encode.toString 0 content
+    member _.EncodeText(content: Migration) : string =
+      Migration.EncodeText content
 
-        member _.EncodeText(content: Migration) : string =
-          Migration.EncodeText content
+    member _.DecodeText
+      (
+        content: string,
+        migrationName: string option
+      ) : Migration =
+      Migration.DecodeText(content, migrationName)
+      |> function
+        | Ok value -> value
+        | Error err -> DeserializationFailed(content, err) |> raise
 
-        member _.DecodeText
-          (
-            content: string,
-            migrationName: string option
-          ) : Migration =
-          Migration.DecodeText(content, migrationName)
-          |> function
-            | Ok value -> value
-            | Error err -> DeserializationFailed(content, err) |> raise
+    member _.DecodeMigrationRecord(content: string) : MigrationRecord =
+      Decode.fromString MigrationRecord.Decode content
+      |> function
+        | Ok value -> value
+        | Error err -> DeserializationFailed(content, err) |> raise
 
-        member _.DecodeMigrationRecord(content: string) : MigrationRecord =
-          Decode.fromString MigrationRecord.Decode content
-          |> function
-            | Ok value -> value
-            | Error err -> DeserializationFailed(content, err) |> raise
+    member _.EncodeMigrationRecord(content: MigrationRecord) : string =
+      let content = MigrationRecord.Encode content
+      Encode.toString 0 content
 
-        member _.EncodeMigrationRecord(content: MigrationRecord) : string =
-          let content = MigrationRecord.Encode content
-          Encode.toString 0 content
-    }
+  interface IMiConfigurationSerializer with
+    member _.Decode(content: string) : MigrondiConfig =
+      Decode.fromString MigrondiConfig.Decode content
+      |> function
+        | Ok value -> value
+        | Error err -> DeserializationFailed(content, err) |> raise
 
-  static member GetConfigurationSerializer() =
-
-    { new ConfigurationSerializer with
-        member _.Decode(content: string) : MigrondiConfig =
-          Decode.fromString MigrondiConfig.Decode content
-          |> function
-            | Ok value -> value
-            | Error err -> DeserializationFailed(content, err) |> raise
-
-        member _.Encode(content: MigrondiConfig) : string =
-          let content = MigrondiConfig.Encode content
-          Encode.toString 2 content
-    }
+    member _.Encode(content: MigrondiConfig) : string =
+      let content = MigrondiConfig.Encode content
+      Encode.toString 2 content

@@ -17,7 +17,7 @@ open Migrondi.Core.Serialization
 /// It provides both sync and async methods to read and write migrondi specific files.
 /// </summary>
 [<Interface>]
-type FileSystemService =
+type IMiFileSystem =
 
   /// <summary>
   /// Take the path to a configuration source, reads and transforms it into a configuration object
@@ -151,21 +151,23 @@ type FileSystemService =
 
 
 [<Class>]
-type FileSystemServiceFactory =
+type MiFileSystem =
   /// <summary>
   /// Generates a new file system service, this can be further customized by passing in a custom serializer
   /// an absolute Uri to the project root and a relative Uri to the migrations root.
   /// </summary>
-  /// <param name="projectRootUri">An absolute Uri to the project root.</param>
-  /// <param name="migrationsRootUri">A relative Uri to the migrations root.</param>
   /// <param name="logger">A logger instance</param>
   /// <param name="configurationSerializer">A custom configuration serializer</param>
   /// <param name="migrationSerializer">A custom migration serializer</param>
+  /// <param name="projectRootUri">An absolute Uri to the project root.</param>
+  /// <param name="migrationsRootUri">A relative Uri to the migrations root.</param>
   /// <returns>A new file system service</returns>
-  static member GetInstance:
-    projectRootUri: Uri *
-    migrationsRootUri: Uri *
+  new:
     logger: ILogger *
-    [<Optional>] ?configurationSerializer: ConfigurationSerializer *
-    [<Optional>] ?migrationSerializer: MigrationSerializer ->
-      FileSystemService
+    configurationSerializer: IMiConfigurationSerializer *
+    migrationSerializer: IMiMigrationSerializer *
+    projectRootUri: Uri *
+    migrationsRootUri: Uri ->
+      MiFileSystem
+
+  interface IMiFileSystem
