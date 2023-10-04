@@ -10,7 +10,6 @@ open Spectre.Console
 open Migrondi.Core
 open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
-open Migrondi.Core.Migrondi
 
 [<RequireQualifiedAccess>]
 module Init =

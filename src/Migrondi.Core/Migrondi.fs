@@ -1,4 +1,4 @@
-namespace Migrondi.Core.Migrondi
+namespace Migrondi.Core
 
 open System
 open System.Collections.Generic

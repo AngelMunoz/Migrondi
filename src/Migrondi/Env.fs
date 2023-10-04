@@ -6,7 +6,6 @@ open System.IO
 open Migrondi.Core
 open Migrondi.Core.Database
 open Migrondi.Core.FileSystem
-open Migrondi.Core.Migrondi
 open Migrondi.Core.Serialization
 
 open Microsoft.Extensions.Logging
