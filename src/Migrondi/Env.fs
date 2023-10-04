@@ -15,11 +15,11 @@ open Microsoft.Extensions.Logging
 type AppEnv
   (
     logger: ILogger,
-    configSerializer: ConfigurationSerializer,
-    migrationSerializer: MigrationSerializer,
-    fs: FileSystemService,
-    db: DatabaseService,
-    migrondi: MigrondiService,
+    configSerializer: IMiConfigurationSerializer,
+    migrationSerializer: IMiMigrationSerializer,
+    fs: IMiFileSystem,
+    db: IMiDatabaseHandler,
+    migrondi: IMigrondi,
     jsonOutput: bool
   ) =
 
@@ -27,15 +27,16 @@ type AppEnv
 
   member _.JsonOutput: bool = jsonOutput
 
-  member _.Database: DatabaseService = db
+  member _.Database: IMiDatabaseHandler = db
 
-  member _.FileSystem: FileSystemService = fs
+  member _.FileSystem: IMiFileSystem = fs
 
-  member _.Migrondi: MigrondiService = migrondi
+  member _.Migrondi: IMigrondi = migrondi
 
-  member _.ConfigurationSerializer: ConfigurationSerializer = configSerializer
+  member _.ConfigurationSerializer: IMiConfigurationSerializer =
+    configSerializer
 
-  member _.MigrationSerializer: MigrationSerializer = migrationSerializer
+  member _.MigrationSerializer: IMiMigrationSerializer = migrationSerializer
 
 
   static member BuildDefault(cwd: string, logger: ILogger, jsonOutput) =
@@ -43,7 +44,7 @@ type AppEnv
       (
         cwd: string,
         logger: ILogger,
-        serializer: ConfigurationSerializer
+        serializer: IMiConfigurationSerializer
       ) =
       let fileContent =
         try
@@ -64,10 +65,9 @@ type AppEnv
           exit(1)
       | None -> MigrondiConfig.Default
 
-    let configSerializer = SerializationFactory.GetConfigurationSerializer()
-    let migrationSerializer = SerializationFactory.GetMigrationSerializer()
+    let serializer = MigrondiSerializer()
 
-    let config = readLocalConfig(cwd, logger, configSerializer)
+    let config = readLocalConfig(cwd, logger, serializer)
 
 
     let migrationsDir =
@@ -79,24 +79,16 @@ type AppEnv
 
 
     let fs =
-      FileSystemServiceFactory.GetInstance(
-        Uri(cwd, UriKind.Absolute),
-        Uri(migrationsDir, UriKind.Relative),
+      MiFileSystem(
         logger,
-        configSerializer,
-        migrationSerializer
+        serializer,
+        serializer,
+        Uri(cwd, UriKind.Absolute),
+        Uri(migrationsDir, UriKind.Relative)
       )
 
-    let db = DatabaseServiceFactory.GetInstance(logger, config)
+    let db = MiDatabaseHandler(logger, config)
 
-    let migrondi = MigrondiServiceFactory.GetInstance(db, fs, logger, config)
+    let migrondi = Migrondi(config, db, fs, logger)
 
-    AppEnv(
-      logger,
-      configSerializer,
-      migrationSerializer,
-      fs,
-      db,
-      migrondi,
-      jsonOutput
-    )
+    AppEnv(logger, serializer, serializer, fs, db, migrondi, jsonOutput)

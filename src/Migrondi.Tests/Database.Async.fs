@@ -31,7 +31,8 @@ type DatabaseAsyncTests() =
   let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
 
   let databaseEnv =
-    DatabaseServiceFactory.GetInstance(logger, DatabaseData.getConfig dbName)
+    MiDatabaseHandler(logger, DatabaseData.getConfig dbName)
+    :> IMiDatabaseHandler
 
 
 

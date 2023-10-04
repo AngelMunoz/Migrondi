@@ -82,18 +82,18 @@ type FileSystemTests() =
 
   let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
 
-  let configSerializer = SerializationFactory.GetConfigurationSerializer()
 
-  let migrationSerializer = SerializationFactory.GetMigrationSerializer()
+  let serializer = MigrondiSerializer()
 
   let fileSystem =
-    FileSystemServiceFactory.GetInstance(
-      baseUri,
-      Uri("fs-migrations/", UriKind.Relative),
+    MiFileSystem(
       logger,
-      configSerializer,
-      migrationSerializer
+      serializer,
+      serializer,
+      baseUri,
+      Uri("fs-migrations/", UriKind.Relative)
     )
+    :> IMiFileSystem
 
   do printfn $"Using '{rootDir.FullName}' as Root Directory"
 
@@ -107,7 +107,9 @@ type FileSystemTests() =
   [<TestMethod>]
   member _.``Can write a migrondi.json file``() =
 
-    let expected = configSerializer.Encode MigrondiConfigData.configSampleObject
+    let expected =
+      (serializer :> IMiConfigurationSerializer).Encode
+        MigrondiConfigData.configSampleObject
 
     fileSystem.WriteConfiguration(
       MigrondiConfigData.configSampleObject,
@@ -130,7 +132,7 @@ type FileSystemTests() =
       )
 
       File.ReadAllText(MigrondiConfigData.fsMigrondiConfigPath rootDir.FullName)
-      |> configSerializer.Decode
+      |> (serializer :> IMiConfigurationSerializer).Decode
 
     let fileResult =
       fileSystem.ReadConfiguration(
@@ -143,7 +145,8 @@ type FileSystemTests() =
   member _.``Can write a migrondi.json file async``() =
     task {
       let expected =
-        configSerializer.Encode MigrondiConfigData.configSampleObject
+        (serializer :> IMiConfigurationSerializer).Encode
+          MigrondiConfigData.configSampleObject
 
       do!
         fileSystem.WriteConfigurationAsync(
@@ -174,7 +177,7 @@ type FileSystemTests() =
             MigrondiConfigData.fsMigrondiConfigPath rootDir.FullName
           )
 
-        return result |> configSerializer.Decode
+        return result |> (serializer :> IMiConfigurationSerializer).Decode
       }
 
       let! fileResult =
@@ -197,7 +200,9 @@ type FileSystemTests() =
     let encoded =
       migrations
       |> List.map(fun (migration, name) ->
-        let encoded = migrationSerializer.EncodeText migration
+        let encoded =
+          (serializer :> IMiMigrationSerializer).EncodeText migration
+
         let name = Path.GetFileName(name)
         name, encoded
       )
@@ -242,7 +247,9 @@ type FileSystemTests() =
       let encoded =
         migrations
         |> List.map(fun (migration, name) ->
-          let encoded = migrationSerializer.EncodeText migration
+          let encoded =
+            (serializer :> IMiMigrationSerializer).EncodeText migration
+
           let name = Path.GetFileName(name)
           name, encoded
         )

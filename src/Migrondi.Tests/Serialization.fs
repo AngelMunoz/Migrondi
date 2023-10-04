@@ -90,8 +90,9 @@ module MigrationRecordData =
 [<TestClass>]
 type SerializationTests() =
 
-  let configSerializer = SerializationFactory.GetConfigurationSerializer()
-  let migrationSerializer = SerializationFactory.GetMigrationSerializer()
+  let serializer = MigrondiSerializer()
+  let configSerializer = serializer :> IMiConfigurationSerializer
+  let migrationSerializer = serializer :> IMiMigrationSerializer
 
   [<TestMethod>]
   member _.``Can Encode Configuration``() =

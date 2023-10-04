@@ -14,7 +14,7 @@ open Migrondi.Core.Migrondi
 
 [<RequireQualifiedAccess>]
 module Init =
-  let handler (path: DirectoryInfo, fs: FileSystemService, logger: ILogger) =
+  let handler (path: DirectoryInfo, fs: IMiFileSystem, logger: ILogger) =
     logger.LogInformation(
       "Initializing a new migrondi project at: {PathName}.",
       path.FullName
@@ -36,7 +36,7 @@ module Init =
 [<RequireQualifiedAccess>]
 module Migrations =
 
-  let newMigration (name: string, logger: ILogger, fs: FileSystemService) =
+  let newMigration (name: string, logger: ILogger, fs: IMiFileSystem) =
     logger.LogInformation(
       "Creating a new migration with name: {MigrationName}.",
       name
@@ -80,7 +80,7 @@ module Migrations =
 
       1
 
-  let runUp (amount: int option, logger: ILogger, migrondi: MigrondiService) =
+  let runUp (amount: int option, logger: ILogger, migrondi: IMigrondi) =
 
     try
       let appliedMigrations = migrondi.RunUp(?amount = amount)
@@ -101,12 +101,7 @@ module Migrations =
       1
 
 
-  let runDryUp
-    (
-      amount: int option,
-      logger: ILogger,
-      migrondi: MigrondiService
-    ) =
+  let runDryUp (amount: int option, logger: ILogger, migrondi: IMigrondi) =
     let migrations = migrondi.DryRunUp(?amount = amount)
 
     logger.LogInformation "DRY RUN: The following migrations would be applied:"
@@ -123,7 +118,7 @@ module Migrations =
 
     0
 
-  let runDown (amount: int option, logger: ILogger, migrondi: MigrondiService) =
+  let runDown (amount: int option, logger: ILogger, migrondi: IMigrondi) =
 
     try
       let reverted = migrondi.RunDown(?amount = amount)
@@ -143,12 +138,7 @@ module Migrations =
 
       1
 
-  let runDryDown
-    (
-      amount: int option,
-      logger: ILogger,
-      migrondi: MigrondiService
-    ) =
+  let runDryDown (amount: int option, logger: ILogger, migrondi: IMigrondi) =
     let migrations = migrondi.DryRunDown(?amount = amount)
 
     logger.LogInformation "DRY RUN: The following migrations would be reverted:"
@@ -171,9 +161,9 @@ module Migrations =
     (
       useJson: bool,
       logger: ILogger,
-      serializer: MigrationSerializer,
+      serializer: IMiMigrationSerializer,
       kind: MigrationType option,
-      migrondi: MigrondiService
+      migrondi: IMigrondi
     ) =
 
     let printMigrationsTable (table: Table, migrations: Migration seq) =
@@ -296,12 +286,7 @@ module Migrations =
 
     0
 
-  let migrationStatus
-    (
-      name: string,
-      logger: ILogger,
-      migrondi: MigrondiService
-    ) =
+  let migrationStatus (name: string, logger: ILogger, migrondi: IMigrondi) =
     let formatTimestamp timestamp =
       let date =
         DateTimeOffset.FromUnixTimeMilliseconds(timestamp).ToLocalTime()
