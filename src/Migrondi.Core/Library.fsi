@@ -9,7 +9,7 @@ module Core =
   /// have to have this REGEX in mind when creating migration in custom implementations
   /// of the  <see cref="Migrondi.Core.FileSystem.IMiFileSystem">FileSystem</see> type
   [<Literal>]
-  val MigrationNameSchema: string = "(.+)_([0-9]+).(sql|SQL)"
+  val MigrationNameSchema: string = "^(?<Name>.+)_(?<Timestamp>[0-9]+).(sql|SQL)$"
 
 /// DU that represents the currently supported drivers
 [<RequireQualifiedAccess>]
@@ -32,7 +32,7 @@ type MigrondiDriver =
   /// if the string is not a valid driver then it will throw an exception
   /// with the name of the driver that was not found
   /// </remarks>
-  member ToMigrondiDriver: value: string -> MigrondiDriver
+  static member FromString: value: string -> MigrondiDriver
 
 /// Represents the configuration that will be used to run migrations
 type MigrondiConfig =

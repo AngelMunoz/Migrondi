@@ -6,7 +6,7 @@ open System.Runtime.CompilerServices
 [<AutoOpen>]
 module Core =
   [<Literal>]
-  let MigrationNameSchema = "(.+)_([0-9]+).(sql|SQL)"
+  let MigrationNameSchema = "^(?<Name>.+)_(?<Timestamp>[0-9]+).(sql|SQL)$"
 
 /// DU that represents the currently supported drivers
 [<RequireQualifiedAccess>]
@@ -23,7 +23,7 @@ type MigrondiDriver =
     | Postgresql -> "postgresql"
     | Mysql -> "mysql"
 
-  member _.ToMigrondiDriver(value: string) =
+  static member FromString(value: string) =
 
     match value.ToLowerInvariant() with
     | "mssql" -> Mssql
@@ -77,10 +77,7 @@ type Migration = {
     (filename: string)
     : Validation<string * int64, string> =
     validation {
-      let nameSchema =
-        System.Text.RegularExpressions.Regex(
-          "^(?<Name>.+)_(?<Timestamp>[0-9]+).(sql|SQL)$"
-        )
+      let nameSchema = System.Text.RegularExpressions.Regex(MigrationNameSchema)
 
       let value = nameSchema.Match filename
 
