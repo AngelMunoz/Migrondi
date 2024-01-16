@@ -22,7 +22,7 @@
   <ItemGroup>
     <PackageReference Include="FSharp.SystemTextJson" Version="0.17.4" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="2.7.0" />
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="3.0.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="3.1.5" />
     <PackageReference Include="Microsoft.Data.SQLite" Version="5.0.8" />
     <PackageReference Include="RepoDb" Version="1.12.7" />
     <PackageReference Include="RepoDb.MySql" Version="1.1.4" />
