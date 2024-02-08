@@ -20,6 +20,58 @@ open IcedTasks
 [<Interface>]
 type IMigrondi =
 
+
+  /// <summary>
+  /// Creates a new migration file with
+  /// the default naming convention and returns it
+  /// </summary>
+  /// <param name="friendlyName">
+  /// The friendly name of the migration, usually this comes from
+  /// the user's input
+  /// </param>
+  /// <param name="upContent">
+  /// The content of the up migration
+  /// </param>
+  /// <param name="downContent">
+  /// The content of the down migration
+  /// </param>
+  /// <returns>
+  /// The newly created migration as a record
+  /// </returns>
+  abstract member RunNew:
+    friendlyName: string *
+    [<Optional>] ?upContent: string *
+    [<Optional>] ?downContent: string ->
+      Migration
+
+  /// <summary>
+  /// Creates a new migration file with
+  /// the default naming convention and returns it
+  /// </summary>
+  /// <param name="friendlyName">
+  /// The friendly name of the migration, usually this comes from
+  /// the user's input
+  /// </param>
+  /// <param name="upContent">
+  /// The content of the up migration
+  /// </param>
+  /// <param name="downContent">
+  /// The content of the down migration
+  /// </param>
+  /// <param name="cancellationToken">
+  /// A cancellation token to cancel the operation
+  /// </param>
+  /// <returns>
+  /// The newly created migration as a record
+  /// </returns>
+  abstract member RunNewAsync:
+    friendlyName: string *
+    [<Optional>] ?upContent: string *
+    [<Optional>] ?downContent: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Migration>
+
+
   /// <summary>
   /// Runs all pending migrations against the database
   /// </summary>
@@ -512,6 +564,19 @@ type Migrondi
     logger: ILogger
   ) =
 
+  let getMigration (name, timestamp, upContent, downContent) = {
+    name = name
+    timestamp = timestamp
+    upContent =
+      defaultArg
+        upContent
+        "-- Add your SQL migration code below. You can delete this line but do not delete the comments above.\n\n"
+    downContent =
+      defaultArg
+        downContent
+        "-- Add your SQL rollback code below. You can delete this line but do not delete the comment above.\n\n"
+  }
+
 
   static member MigrondiFactory(logger: ILogger) =
     Func<_, _, _, _>(fun
@@ -534,6 +599,39 @@ type Migrondi
     )
 
   interface IMigrondi with
+
+    member _.RunNew
+      (
+        friendlyName,
+        [<Optional>] ?upContent,
+        [<Optional>] ?downContent
+      ) : Migration =
+      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+      let name = $"{friendlyName}_{timestamp}.sql"
+
+      let migration = getMigration(name, timestamp, upContent, downContent)
+
+      fileSystem.WriteMigration(migration, name)
+      migration
+
+    member _.RunNewAsync
+      (
+        friendlyName,
+        [<Optional>] ?upContent,
+        [<Optional>] ?downContent,
+        [<Optional>] ?cancellationToken
+      ) =
+      let token = defaultArg cancellationToken CancellationToken.None
+
+      task {
+        let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+        let name = $"{friendlyName}_{timestamp}.sql"
+        let migration = getMigration(name, timestamp, upContent, downContent)
+        do! fileSystem.WriteMigrationAsync(migration, name, token)
+
+        return migration
+      }
+
     member _.DryRunUp([<Optional>] ?amount) : IReadOnlyList<Migration> =
       MigrondiserviceImpl.runDryUp database fileSystem config amount
 

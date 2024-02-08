@@ -21,6 +21,53 @@ open System.Threading
 type IMigrondi =
 
   /// <summary>
+  /// Creates a new migration file with
+  /// the default naming convention and returns it
+  /// </summary>
+  /// <param name="friendlyName">
+  /// The friendly name of the migration, usually this comes from
+  /// the user's input
+  /// </param>
+  /// <param name="upContent">
+  /// The content of the up migration
+  /// </param>
+  /// <param name="downContent">
+  /// The content of the down migration
+  /// </param>
+  /// <returns>
+  /// The newly created migration as a record
+  /// </returns>
+  abstract member RunNew:
+    friendlyName: string * [<Optional>] ?upContent: string * [<Optional>] ?downContent: string -> Migration
+
+  /// <summary>
+  /// Creates a new migration file with
+  /// the default naming convention and returns it
+  /// </summary>
+  /// <param name="friendlyName">
+  /// The friendly name of the migration, usually this comes from
+  /// the user's input
+  /// </param>
+  /// <param name="upContent">
+  /// The content of the up migration
+  /// </param>
+  /// <param name="downContent">
+  /// The content of the down migration
+  /// </param>
+  /// <param name="cancellationToken">
+  /// A cancellation token to cancel the operation
+  /// </param>
+  /// <returns>
+  /// The newly created migration as a record
+  /// </returns>
+  abstract member RunNewAsync:
+    friendlyName: string *
+    [<Optional>] ?upContent: string *
+    [<Optional>] ?downContent: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Migration>
+
+  /// <summary>
   /// Runs all pending migrations against the database
   /// </summary>
   /// <param name="amount">The amount of migrations to apply</param>

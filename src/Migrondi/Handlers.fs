@@ -35,31 +35,18 @@ module Init =
 [<RequireQualifiedAccess>]
 module Migrations =
 
-  let newMigration (name: string, logger: ILogger, fs: IMiFileSystem) =
+  let newMigration (name: string, logger: ILogger, migrondi: IMigrondi) =
     logger.LogInformation(
       "Creating a new migration with name: {MigrationName}.",
       name
     )
 
-    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-    let name = $"{name}_{timestamp}.sql"
-
     try
-      fs.WriteMigration(
-        {
-          name = name
-          timestamp = timestamp
-          upContent =
-            "-- Add your SQL migration code below. You can delete this line but do not delete the comments above.\n\n"
-          downContent =
-            "-- Add your SQL rollback code below. You can delete this line but do not delete the comment above.\n\n"
-        },
-        name
-      )
+      let migration =  migrondi.RunNew(name)
 
       logger.LogInformation(
         "Migration {MigrationName} created successfully.",
-        name
+        migration.name
       )
 
       0

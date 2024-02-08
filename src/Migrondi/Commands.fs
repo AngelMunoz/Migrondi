@@ -35,7 +35,7 @@ module ArgumentMapper =
     | None -> Migrations.runDown(amount, appEnv.Logger, appEnv.Migrondi)
 
   let inline New (appEnv: AppEnv) (name: string) =
-    name, appEnv.Logger, appEnv.FileSystem
+    name, appEnv.Logger, appEnv.Migrondi
 
   let inline List (appEnv: AppEnv) (kind: MigrationType option) =
     appEnv.JsonOutput,
