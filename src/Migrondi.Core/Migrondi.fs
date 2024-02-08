@@ -20,6 +20,10 @@ open IcedTasks
 [<Interface>]
 type IMigrondi =
 
+  abstract member Initialize: unit -> unit
+
+  abstract member InitializeAsync:
+    [<Optional>] ?cancellationToken: CancellationToken -> Task
 
   /// <summary>
   /// Creates a new migration file with
@@ -599,6 +603,12 @@ type Migrondi
     )
 
   interface IMigrondi with
+
+    member _.Initialize() = database.SetupDatabase()
+
+    member _.InitializeAsync([<Optional>] ?cancellationToken) =
+      let token = defaultArg cancellationToken CancellationToken.None
+      database.SetupDatabaseAsync(token)
 
     member _.RunNew
       (

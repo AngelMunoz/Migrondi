@@ -1,6 +1,6 @@
 #r "nuget: Microsoft.Extensions.Logging"
 #r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Migrondi.Core, 1.0.0-beta-007"
+#r "nuget: Migrondi.Core, 1.0.0-beta-008"
 
 open System
 open System.IO
@@ -44,14 +44,20 @@ let migrondi =
     Uri(migrationsDir, UriKind.Relative)
   )
 
-// Let's create a new Migration
+
+// Let's create a new Migration, since this is just an I/O operation
+// there's no need to initialize the database yet, but ideally
+// you would want to do that anyways for safety
 migrondi.RunNew(
   "add-test-table",
   "create table if not exists test (id int not null primary key);",
   "drop table if exists test;"
 )
 
-
+// Before we can do anything we need to initialize the migrondi service
+// this will ensure that the migrations directory exists and that the
+// database is ready to accept migrations
+migrondi.Initialize()
 let applied = migrondi.DryRunUp()
 
 logger.LogInformation(

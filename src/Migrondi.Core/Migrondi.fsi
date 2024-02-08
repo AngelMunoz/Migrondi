@@ -20,6 +20,11 @@ open System.Threading
 [<Interface>]
 type IMigrondi =
 
+  abstract member Initialize: unit -> unit
+
+
+  abstract member InitializeAsync: [<Optional>] ?cancellationToken: CancellationToken -> Task
+
   /// <summary>
   /// Creates a new migration file with
   /// the default naming convention and returns it
