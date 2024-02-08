@@ -10,6 +10,7 @@
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
         <PackageReadmeFile>README.md</PackageReadmeFile>
         <WarnOn>3390;$(WarnOn)</WarnOn>
+        <OtherFlags>$(OtherFlags) --test:GraphBasedChecking --test:ParallelOptimization --test:ParallelIlxGen</OtherFlags>
         <Description>
           This is a simple SQL migrations tool
           Write your Migration SQL apply them or revert them from your database.
