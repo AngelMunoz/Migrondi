@@ -171,10 +171,10 @@ type Migrondi =
   /// <param name="config">A configuration object to be able to find the connection string for the database.</param>
   /// <param name="database">A database service that can be used to run migrations against the database</param>
   /// <param name="fileSystem">A file system service that can be used to read and write migrations</param>
-  /// <param name="logger">A Serilog compatible ILogger this is used for the lifetime of the service.</param>
+  /// <param name="logger"></param>
   /// <returns>A new Migrondi service</returns>
   new: config: MigrondiConfig * database: IMiDatabaseHandler * fileSystem: IMiFileSystem * logger: ILogger -> Migrondi
 
-  static member MigrondiFactory: logger: ILogger -> Func<MigrondiConfig, Uri, Uri, IMigrondi>
+  static member MigrondiFactory: config: MigrondiConfig * rootDirectory: string * ?logger: ILogger<IMigrondi> -> IMigrondi
 
   interface IMigrondi

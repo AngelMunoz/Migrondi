@@ -175,7 +175,6 @@ type IMigrondi =
 
 module private MigrondiserviceImpl =
 
-
   let obtainPendingUp
     (migrations: IReadOnlyList<Migration>)
     (appliedMigrations: IReadOnlyList<MigrationRecord>)
@@ -558,6 +557,10 @@ module private MigrondiserviceImpl =
       | None -> return Pending migration
     }
 
+  let defaultLoggerFactory = lazy(
+    LoggerFactory.Create(fun builder ->
+      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
+    ))
 
 [<Class>]
 type Migrondi
@@ -581,26 +584,37 @@ type Migrondi
         "-- Add your SQL rollback code below. You can delete this line but do not delete the comment above.\n\n"
   }
 
+  static member MigrondiFactory(config: MigrondiConfig, rootDirectory: string, ?logger: ILogger<IMigrondi>): IMigrondi =
 
-  static member MigrondiFactory(logger: ILogger) =
-    Func<_, _, _, _>(fun
-                         (config: MigrondiConfig)
-                         (projectRoot: Uri)
-                         (migrationsDIr: Uri) ->
-      let database = MiDatabaseHandler(logger, config)
-      let serializer = MigrondiSerializer()
+    let logger =
+      defaultArg
+        logger
+        (MigrondiserviceImpl.defaultLoggerFactory.Value.CreateLogger<IMigrondi>())
 
-      let fileSystem =
-        MiFileSystem(
-          logger,
-          serializer,
-          serializer,
-          projectRoot,
-          migrationsDIr
-        )
+    let database = new MiDatabaseHandler(logger, config)
+    let serializer = new MigrondiSerializer()
+    let projectRoot =
+      let rootDirectory = IO.Path.GetFullPath(rootDirectory)
+      if IO.Path.EndsInDirectorySeparator rootDirectory then
+        Uri(rootDirectory, UriKind.Absolute)
+      else
+        Uri($"{rootDirectory}{IO.Path.DirectorySeparatorChar}", UriKind.Absolute)
 
-      new Migrondi(config, database, fileSystem, logger) :> IMigrondi
+    let migrationsDir =
+      if IO.Path.EndsInDirectorySeparator config.migrations then
+        Uri(config.migrations, UriKind.Relative)
+      else
+        Uri($"{config.migrations}{IO.Path.DirectorySeparatorChar}", UriKind.Relative)
+
+    let fileSystem = MiFileSystem(logger, serializer, serializer, projectRoot, migrationsDir)
+
+    Migrondi(
+      config,
+      database,
+      fileSystem,
+      logger
     )
+
 
   interface IMigrondi with
 
