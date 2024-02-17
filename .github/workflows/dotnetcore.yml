@@ -9,12 +9,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    name: Build dotnet 8.0
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Setup dotnet
-        uses: actions/setup-dotnet@v1
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
-          include-prerelease: true
-      - run: dotnet build src/Migrondi --configuration Release
-      - run: dotnet test src/Migrondi.Tests
+      - run: dotnet restore
+      - run: dotnet build src/Migrondi -f net8.0 --configuration Release --no-restore
+      - run: dotnet test src/Migrondi.Tests --no-restore
+  buildnet6:
+    runs-on: ubuntu-latest
+    name: Build dotnet 6.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - run: dotnet restore
+      - run: dotnet build src/Migrondi -f net6.0 --configuration Release --no-restore
+      - run: dotnet test src/Migrondi.Tests -f net6.0 --no-restore
