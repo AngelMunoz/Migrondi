@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
     <Description>
       This is the core library for the Migrondi CLI, you can use this
       library to run the same functionality of Migrondi as part of your source
@@ -34,6 +34,8 @@
     <PackageReference Include="FsToolkit.ErrorHandling" Version="4.6.0" />
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" Version="4.6.0" />
     <PackageReference Include="IcedTasks" Version="0.8.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
     <PackageReference Include="Thoth.Json.Net" Version="11.0.0" />
     <!-- RepoDB Packages to handle SQL Servers -->
     <PackageReference Include="RepoDb" Version="1.13.1" />
