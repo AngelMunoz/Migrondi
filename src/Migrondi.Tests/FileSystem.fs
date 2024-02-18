@@ -57,6 +57,7 @@ module MigrationData =
 );"
         downContent = $"DROP TABLE migration;"
         timestamp = timestamp
+        manualTransaction = false
       },
       $"AddTable{i}_{timestamp}.sql"
   ]
