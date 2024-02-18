@@ -386,6 +386,7 @@ type DatabaseAsyncTests() =
         timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
         upContent = "create table test_1();"
         downContent = "drop table test_5;"
+        manualTransaction = false
       }
 
       let runnableMigrations = [
@@ -448,6 +449,7 @@ type DatabaseAsyncTests() =
         timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
         upContent = "create table test_1();"
         downContent = "drop table test_5;"
+        manualTransaction = false
       }
 
       let runnableMigrations = [

@@ -82,6 +82,7 @@ module DatabaseData =
         timestamp = timestamp
         upContent = upContent
         downContent = downContent
+        manualTransaction = false
       }
 
   ]
@@ -416,6 +417,7 @@ type DatabaseTests() =
       timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
       upContent = "create table test_1();"
       downContent = "drop table test_5;"
+      manualTransaction = false
     }
 
     let runnableMigrations = [
@@ -459,6 +461,7 @@ type DatabaseTests() =
       timestamp = DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
       upContent = "create table test_1();"
       downContent = "drop table test_5;"
+      manualTransaction = false
     }
 
     let runnableMigrations = [
@@ -486,3 +489,28 @@ type DatabaseTests() =
     match databaseEnv.FindLastApplied() with
     | Some migration -> Assert.AreEqual("test_3", migration.name)
     | None -> Assert.Fail($"Failed to find the last applied migration")
+
+  [<TestMethod>]
+  member _.``Migrations with ManualTransaction can be applied``() =
+    databaseEnv.SetupDatabase()
+
+    let applied =
+      databaseEnv.ApplyMigrations(
+        [
+          {
+            name = "manual-transaction"
+            timestamp =
+              DateTimeOffset.Now.AddMinutes(2.).ToUnixTimeMilliseconds()
+            upContent =
+              """create table test_1(value int);
+begin transaction;
+insert into test_1 (value) values (1);
+commit;
+"""
+            downContent = "drop table test_1;"
+            manualTransaction = true
+          }
+        ]
+      )
+
+    Assert.AreEqual(1, applied.Count)

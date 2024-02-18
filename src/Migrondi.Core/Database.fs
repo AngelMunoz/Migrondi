@@ -252,48 +252,110 @@ module internal MigrationsImpl =
     )
     |> Seq.toList
 
+  let runQuery
+    (logger: ILogger, connection: IDbConnection, tableName)
+    (migration, content, isUp)
+    =
+    logger.LogDebug(
+      "Applying migration {Name} with content: {Content}",
+      migration.name,
+      content
+    )
+
+    if migration.manualTransaction then
+      logger.LogDebug("Executing migration in manual transaction mode")
+
+      try
+        connection.ExecuteNonQuery($"{content};;") |> ignore
+
+        if isUp then
+          connection.Insert(
+            tableName = tableName,
+            entity = {|
+              name = migration.name
+              timestamp = migration.timestamp
+            |},
+            fields = Field.From("name", "timestamp")
+          )
+          |> ignore
+        else
+          connection.Delete(
+            tableName = tableName,
+            where = QueryGroup([ QueryField("name", migration.name) ])
+          )
+          |> ignore
+      with ex ->
+        logger.LogError(
+          "Failed to execute migration {Name} due: {Message}",
+          migration.name,
+          ex.Message
+        )
+
+        if isUp then
+          raise(MigrationApplicationFailed migration)
+        else
+          raise(MigrationRollbackFailed migration)
+    else
+      use transaction = connection.EnsureOpen().BeginTransaction()
+
+      try
+        connection.ExecuteNonQuery($"{content};;", transaction = transaction)
+        |> ignore
+
+        if isUp then
+          connection.Insert(
+            tableName = tableName,
+            entity = {|
+              name = migration.name
+              timestamp = migration.timestamp
+            |},
+            fields = Field.From("name", "timestamp"),
+            transaction = transaction
+          )
+          |> ignore
+        else
+          connection.Delete(
+            tableName = tableName,
+            where = QueryGroup([ QueryField("name", migration.name) ]),
+            transaction = transaction
+          )
+          |> ignore
+
+        transaction.Commit()
+      with ex ->
+        logger.LogError(
+          "Failed to execute migration {Name} due: {Message}",
+          migration.name,
+          ex.Message
+        )
+
+        transaction.Rollback()
+
+        if isUp then
+          raise(MigrationApplicationFailed migration)
+        else
+          raise(MigrationRollbackFailed migration)
+
   let applyMigrations
     (connection: IDbConnection)
     (logger: ILogger)
     tableName
     (migrations: Migration list)
     =
+    let executeMigration = runQuery(logger, connection, tableName)
+
     for migration in migrations do
       let content = migration.upContent
 
       if String.IsNullOrWhiteSpace(content) then
-        logger.LogError ("Migration {Name} does not have an up migration, the migration process will stop here.", migration.name)
-        raise (MigrationApplicationFailed migration)
-
-      use transaction = connection.EnsureOpen().BeginTransaction()
-
-      try
-        logger.LogDebug(
-          "Applying migration {Name} with content: {Content}",
-          migration.name,
-          content
+        logger.LogError(
+          "Migration {Name} does not have an up migration, the migration process will stop here.",
+          migration.name
         )
-        // execute the user's migration
-        connection.ExecuteNonQuery($"{content};;", transaction = transaction)
-        |> ignore
 
-        // Insert the tracking record after the user's migration was executed
-        connection.Insert(
-          tableName = tableName,
-          entity = {|
-            name = migration.name
-            timestamp = migration.timestamp
-          |},
-          fields = Field.From("name", "timestamp"),
-          transaction = transaction
-        )
-        |> ignore
+        raise(MigrationApplicationFailed migration)
 
-        transaction.Commit()
-      with ex ->
-        logger.LogDebug("Failed to apply migration due: {Message}", ex.Message)
-        transaction.Rollback()
-        reriseCustom(MigrationApplicationFailed migration)
+      executeMigration(migration, content, true)
 
     connection.QueryAll<MigrationRecord>(
       tableName = tableName,
@@ -309,6 +371,7 @@ module internal MigrationsImpl =
     tableName
     (migrations: Migration list)
     =
+    let executeMigration = runQuery(logger, connection, tableName)
 
     let rolledBack =
       connection.Query<MigrationRecord>(
@@ -326,44 +389,19 @@ module internal MigrationsImpl =
         ]
       )
 
+
     for migration in migrations do
       let content = migration.downContent
 
       if String.IsNullOrWhiteSpace(content) then
-        logger.LogError ("Migration {Name} does not have a down migration, the rollback process will stop here.", migration.name)
-        raise (MigrationRollbackFailed migration)
-
-      use transaction = connection.EnsureOpen().BeginTransaction()
-
-      try
-
-        logger.LogDebug(
-          "Rolling back migration {Name} with content: {Content}",
-          migration.name,
-          content
+        logger.LogError(
+          "Migration {Name} does not have a down migration, the rollback process will stop here.",
+          migration.name
         )
 
-        // Rollback the migration
-        connection.ExecuteNonQuery($"{content};;", transaction = transaction)
-        |> ignore
+        raise(MigrationRollbackFailed migration)
 
-        // Remove the existing MigrationRecord that represented this migration
-        connection.Delete(
-          tableName = tableName,
-          where = QueryGroup([ QueryField("timestamp", migration.timestamp) ]),
-          transaction = transaction
-        )
-        |> ignore
-
-        transaction.Commit()
-      with ex ->
-        logger.LogDebug(
-          "Failed to rollback migration due: {Message}",
-          ex.Message
-        )
-
-        transaction.Rollback()
-        reriseCustom(MigrationRollbackFailed migration)
+      executeMigration(migration, content, false)
 
     rolledBack |> Seq.toList
 
@@ -446,6 +484,112 @@ module MigrationsAsyncImpl =
     return result |> Seq.toList
   }
 
+  let runQueryAsync
+    (logger: ILogger, connection: IDbConnection, tableName)
+    (migration, content, isUp)
+    =
+    cancellableTask {
+      logger.LogDebug(
+        "Applying migration {Name} with content: {Content}",
+        migration.name,
+        content
+      )
+
+      let! token = CancellableTask.getCancellationToken()
+
+      if migration.manualTransaction then
+        logger.LogDebug("Executing migration in manual transaction mode")
+
+        try
+          do!
+            connection.ExecuteNonQueryAsync(
+              $"%s{content};;",
+              cancellationToken = token
+            )
+            :> Task
+
+          do!
+            if isUp then
+              connection.InsertAsync(
+                tableName = tableName,
+                entity = {|
+                  name = migration.name
+                  timestamp = migration.timestamp
+                |},
+                fields = Field.From("name", "timestamp"),
+                cancellationToken = token
+              )
+              :> Task
+            else
+              connection.DeleteAsync(
+                tableName = tableName,
+                where = QueryGroup([ QueryField("name", migration.name) ]),
+                cancellationToken = token
+              )
+              :> Task
+
+          return ()
+        with ex ->
+          logger.LogError(
+            "Failed to execute migration {Name} due: {Message}",
+            migration.name,
+            ex.Message
+          )
+
+          if isUp then
+            raise(MigrationApplicationFailed migration)
+          else
+            raise(MigrationRollbackFailed migration)
+      else
+        use transaction = connection.EnsureOpen().BeginTransaction()
+
+        try
+          do!
+            connection.ExecuteNonQueryAsync(
+              $"{content};;",
+              transaction = transaction,
+              cancellationToken = token
+            )
+            :> Task
+
+          do!
+            if isUp then
+              connection.InsertAsync(
+                tableName = tableName,
+                entity = {|
+                  name = migration.name
+                  timestamp = migration.timestamp
+                |},
+                fields = Field.From("name", "timestamp"),
+                transaction = transaction,
+                cancellationToken = token
+              )
+              :> Task
+            else
+              connection.DeleteAsync(
+                tableName = tableName,
+                where = QueryGroup([ QueryField("name", migration.name) ]),
+                transaction = transaction,
+                cancellationToken = token
+              )
+              :> Task
+
+          return transaction.Commit()
+        with ex ->
+          logger.LogError(
+            "Failed to execute migration {Name} due: {Message}",
+            migration.name,
+            ex.Message
+          )
+
+          transaction.Rollback()
+
+          if isUp then
+            raise(MigrationApplicationFailed migration)
+          else
+            raise(MigrationRollbackFailed migration)
+    }
+
   let applyMigrationsAsync
     (connection: IDbConnection)
     (logger: ILogger)
@@ -454,53 +598,20 @@ module MigrationsAsyncImpl =
     =
     cancellableTask {
       let! token = CancellableTask.getCancellationToken()
+      let executeMigration = runQueryAsync(logger, connection, tableName)
 
       for migration in migrations do
         let content = migration.upContent
 
         if String.IsNullOrWhiteSpace(content) then
-          logger.LogError ("Migration {Name} does not have an up migration, the migration process will stop here.", migration.name)
-          raise (MigrationApplicationFailed migration)
-
-        use transaction = connection.EnsureOpen().BeginTransaction()
-
-        try
-          logger.LogDebug(
-            "Applying migration {Name} with content: {Content}",
-            migration.name,
-            content
+          logger.LogError(
+            "Migration {Name} does not have an up migration, the migration process will stop here.",
+            migration.name
           )
 
-          let! _ =
-            // execute the user's migration
-            connection.ExecuteNonQueryAsync(
-              $"{content};;",
-              transaction = transaction,
-              cancellationToken = token
-            )
-
-          let! _ =
-            // Insert the tracking record after the user's migration was executed
-            connection.InsertAsync(
-              tableName = tableName,
-              entity = {|
-                name = migration.name
-                timestamp = migration.timestamp
-              |},
-              fields = Field.From("name", "timestamp"),
-              transaction = transaction,
-              cancellationToken = token
-            )
-
-          transaction.Commit()
-        with ex ->
-          logger.LogDebug(
-            "Failed to apply migration due: {Message}",
-            ex.Message
-          )
-
-          transaction.Rollback()
           raise(MigrationApplicationFailed migration)
+
+        do! executeMigration(migration, content, true)
 
       let! result =
         connection.QueryAllAsync<MigrationRecord>(
@@ -525,50 +636,20 @@ module MigrationsAsyncImpl =
     cancellableTask {
       let! token = CancellableTask.getCancellationToken()
 
+      let executeMigration = runQueryAsync(logger, connection, tableName)
+
       for migration in migrations do
         let content = migration.downContent
 
         if String.IsNullOrWhiteSpace(content) then
-          logger.LogError ("Migration {Name} does not have a down migration, the rollback process will stop here.", migration.name)
-          raise (MigrationRollbackFailed migration)
-
-        use transaction = connection.EnsureOpen().BeginTransaction()
-
-        try
-
-          logger.LogDebug(
-            "Rolling back migration {Name} with content: {Content}",
-            migration.name,
-            content
+          logger.LogError(
+            "Migration {Name} does not have a down migration, the rollback process will stop here.",
+            migration.name
           )
 
-          let! _ =
-            // Rollback the migration
-            connection.ExecuteNonQueryAsync(
-              $"{content};;",
-              transaction = transaction,
-              cancellationToken = token
-            )
-
-          let! _ =
-            // Remove the existing MigrationRecord that represented this migration
-            connection.DeleteAsync(
-              tableName = tableName,
-              where =
-                QueryGroup([ QueryField("timestamp", migration.timestamp) ]),
-              transaction = transaction,
-              cancellationToken = token
-            )
-
-          transaction.Commit()
-        with ex ->
-          logger.LogDebug(
-            "Failed to rollback migration due: {Message}",
-            ex.Message
-          )
-
-          transaction.Rollback()
           raise(MigrationRollbackFailed migration)
+
+        do! executeMigration(migration, content, false)
 
       let! result =
         connection.QueryAllAsync<MigrationRecord>(

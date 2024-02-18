@@ -27,12 +27,29 @@ module ConfigurationData =
 module MigrationData =
   [<Literal>]
   let jsonMigrationSample =
-    """{"name":"AddUsersTable","timestamp":"1586550686936","upContent":"-- Write your Up migrations here\nCREATE TABLE IF NOT EXISTS migration(\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    name VARCHAR(255) NOT NULL,\n    timestamp BIGINT NOT NULL\n);","downContent":"-- Write how to revert the migration here\nDROP TABLE IF EXISTS migrations;"}"""
+    """{"name":"AddUsersTable","timestamp":"1586550686936","upContent":"-- Write your Up migrations here\nCREATE TABLE IF NOT EXISTS migration(\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    name VARCHAR(255) NOT NULL,\n    timestamp BIGINT NOT NULL\n);","downContent":"-- Write how to revert the migration here\nDROP TABLE IF EXISTS migrations;","manualTransaction":false}"""
 
   [<Literal>]
   let textMigrationSampleV1 =
     """-- MIGRONDI:NAME=AddUsersTable
 -- MIGRONDI:TIMESTAMP=1586550686936
+-- ---------- MIGRONDI:UP ----------
+-- Write your Up migrations here
+CREATE TABLE IF NOT EXISTS migration(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name VARCHAR(255) NOT NULL,
+    timestamp BIGINT NOT NULL
+);
+-- ---------- MIGRONDI:DOWN ----------
+-- Write how to revert the migration here
+DROP TABLE IF EXISTS migrations;
+"""
+
+  [<Literal>]
+  let textMigrationSampleV1ManualTransaction =
+    """-- MIGRONDI:NAME=AddUsersTable
+-- MIGRONDI:TIMESTAMP=1586550686936
+-- MIGRONDI:ManualTransaction=True
 -- ---------- MIGRONDI:UP ----------
 -- Write your Up migrations here
 CREATE TABLE IF NOT EXISTS migration(
@@ -72,6 +89,7 @@ CREATE TABLE IF NOT EXISTS migration(
     downContent =
       """-- Write how to revert the migration here
 DROP TABLE IF EXISTS migrations;"""
+    manualTransaction = false
   }
 
 module MigrationRecordData =
@@ -181,3 +199,17 @@ type SerializationTests() =
       encoded,
       "Migration should be encoded correctly"
     )
+
+  [<TestMethod>]
+  member _.``Can Decode Text Migration v1 with Manual Transaction``() =
+    let decoded =
+      migrationSerializer.DecodeText(
+        MigrationData.textMigrationSampleV1ManualTransaction
+      )
+
+    let expected = {
+      MigrationData.migrationObject with
+          manualTransaction = true
+    }
+
+    Assert.AreEqual(expected, decoded)

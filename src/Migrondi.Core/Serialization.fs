@@ -89,6 +89,7 @@ module private Migration =
         "timestamp", Encode.int64 migration.timestamp
         "upContent", Encode.string migration.upContent
         "downContent", Encode.string migration.downContent
+        "manualTransaction", Encode.bool migration.manualTransaction
       ]
 
   let EncodeText (migration: Migration) : string =
@@ -201,6 +202,7 @@ module private Migration =
         upContent = upContent.Trim()
         downContent = downContent.Trim()
         timestamp = timestamp
+        manualTransaction = false
       }
     }
 
@@ -209,6 +211,7 @@ module private Migration =
     // -- Do not remove MIGRONDI comments.
     // -- MIGRONDI:Name=AddUsersTable
     // -- MIGRONDI:TIMESTAMP=1586550686936
+    // -- MIGRONDI:ManualTransaction=true
     // -- ---------- MIGRONDI:UP ----------
     // -- Write your Up migrations here
     //
@@ -247,6 +250,23 @@ module private Migration =
           Error $"Invalid timestamp: {ex.Message}"
       )
 
+    let manualTransaction =
+      let parseTransaction (value: string) =
+        let value = if value = null then "" else value
+
+        match value.ToLowerInvariant() with
+        | "true" -> true
+        | "false" -> false
+        | _ -> false
+
+      metadataCollection
+      |> Seq.tryFind(fun value ->
+        value.Groups["Key"].Value = "ManualTransaction"
+      )
+      |> fun value ->
+          match value with
+          | Some value -> value.Groups["Value"].Value |> parseTransaction
+          | None -> false
 
     do!
       upDownCollection.Count = 2
@@ -287,6 +307,7 @@ module private Migration =
       upContent = upContent.Trim()
       downContent = downContent.Trim()
       timestamp = timestamp
+      manualTransaction = manualTransaction
     }
   }
 
@@ -315,6 +336,7 @@ module private Migration =
       upContent = get.Required.Field "upContent" Decode.string
       downContent = get.Required.Field "downContent" Decode.string
       timestamp = get.Required.Field "timestamp" Decode.int64
+      manualTransaction = get.Required.Field "manualTransaction" Decode.bool
     })
 
 [<RequireQualifiedAccess;
