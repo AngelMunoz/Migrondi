@@ -260,6 +260,11 @@ module internal MigrationsImpl =
     =
     for migration in migrations do
       let content = migration.upContent
+
+      if String.IsNullOrWhiteSpace(content) then
+        logger.LogError ("Migration {Name} does not have an up migration, the migration process will stop here.", migration.name)
+        raise (MigrationApplicationFailed migration)
+
       use transaction = connection.EnsureOpen().BeginTransaction()
 
       try
@@ -322,10 +327,15 @@ module internal MigrationsImpl =
       )
 
     for migration in migrations do
+      let content = migration.downContent
+
+      if String.IsNullOrWhiteSpace(content) then
+        logger.LogError ("Migration {Name} does not have a down migration, the rollback process will stop here.", migration.name)
+        raise (MigrationRollbackFailed migration)
+
       use transaction = connection.EnsureOpen().BeginTransaction()
 
       try
-        let content = migration.downContent
 
         logger.LogDebug(
           "Rolling back migration {Name} with content: {Content}",
@@ -446,8 +456,13 @@ module MigrationsAsyncImpl =
       let! token = CancellableTask.getCancellationToken()
 
       for migration in migrations do
-        use transaction = connection.EnsureOpen().BeginTransaction()
         let content = migration.upContent
+
+        if String.IsNullOrWhiteSpace(content) then
+          logger.LogError ("Migration {Name} does not have an up migration, the migration process will stop here.", migration.name)
+          raise (MigrationApplicationFailed migration)
+
+        use transaction = connection.EnsureOpen().BeginTransaction()
 
         try
           logger.LogDebug(
@@ -511,8 +526,13 @@ module MigrationsAsyncImpl =
       let! token = CancellableTask.getCancellationToken()
 
       for migration in migrations do
-        use transaction = connection.EnsureOpen().BeginTransaction()
         let content = migration.downContent
+
+        if String.IsNullOrWhiteSpace(content) then
+          logger.LogError ("Migration {Name} does not have a down migration, the rollback process will stop here.", migration.name)
+          raise (MigrationRollbackFailed migration)
+
+        use transaction = connection.EnsureOpen().BeginTransaction()
 
         try
 
