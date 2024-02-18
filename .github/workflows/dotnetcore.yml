@@ -27,7 +27,7 @@ jobs:
       - name: Setup dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: "6.0.x"
       - run: dotnet restore
       - run: dotnet build src/Migrondi -f net6.0 --configuration Release --no-restore
       - run: dotnet test src/Migrondi.Tests -f net6.0 --no-restore
