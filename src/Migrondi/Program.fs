@@ -1,111 +1,70 @@
-﻿open Argu
+open System
+open System.IO
 
-open FsToolkit.ErrorHandling
+open System.CommandLine.Builder
+open FSharp.SystemCommandLine
 
-open Migrondi.Types
-open Migrondi.Options.Cli
-open Migrondi.Migrations
+open Serilog
+open Serilog.Formatting.Compact
+open Serilog.Extensions.Logging
+
+open Migrondi.Core
+open Migrondi.Commands
+open Migrondi.Env
+open Migrondi.Middleware
 
 [<EntryPoint>]
 let main argv =
-    let getCommand () : Result<MigrondiArgs * bool * bool, exn> =
-        result {
-            let parser = ArgumentParser.Create<MigrondiArgs>()
 
-            let! parsed =
-                try
-                    parser.Parse argv |> Ok
-                with
-                | :? Argu.ArguParseException as ex -> CommandNotParsedException(ex.Message) |> Error
+  let debug = argv |> Array.contains "[mi-debug]"
+
+  let useJson = argv |> Array.contains "[mi-json]"
+
+  // setup services
+  let logger =
+    let config = LoggerConfiguration().Enrich.FromLogContext()
+
+    if debug then
+      config.MinimumLevel.Debug() |> ignore
+    else
+      config.MinimumLevel.Information() |> ignore
+
+    if useJson then
+      config.WriteTo.Console(new RenderedCompactJsonFormatter()) |> ignore
+    else
+      config.WriteTo.Console() |> ignore
+
+    config.CreateLogger()
+
+  let loggerFactory = new SerilogLoggerFactory(logger)
+
+  let logger = loggerFactory.CreateLogger("Migrondi")
+
+  let cwd = $"{Environment.CurrentDirectory}{Path.DirectorySeparatorChar}"
+  let appEnv = AppEnv.BuildDefault(cwd, logger, useJson)
 
 
-            let json =
-                parsed.TryGetResult(MigrondiArgs.Json)
-                |> Option.map
-                    (fun opt ->
-                        if opt.IsNone then
-                            true
-                        else
-                            opt |> Option.defaultValue false)
-                |> Option.defaultValue false
+  rootCommand argv {
+    description
+      "A dead simple SQL migrations runner, apply or rollback migrations at your ease"
 
-            let noColor =
-                parsed.TryGetResult(MigrondiArgs.No_Color)
-                |> Option.map
-                    (fun opt ->
-                        if opt.IsNone then
-                            true
-                        else
-                            opt |> Option.defaultValue false)
-                |> Option.defaultValue false
+    usePipeline(fun pipeline ->
+      pipeline
+        .EnableDirectives(true)
+        // run the setup database for select commands
+        .AddMiddleware(Middleware.SetupDatabase appEnv)
+      |> ignore
+    )
 
-            let cliArgs =
-                parsed.GetAllResults()
-                |> List.filter
-                    (fun result ->
-                        match result with
-                        | Json _
-                        | No_Color _ -> false
-                        | _ -> true)
+    setHandler id
 
-            match cliArgs with
-            | [ Init subcmd ] -> return Init subcmd, noColor, json
-            | [ New subcmd ] -> return New subcmd, noColor, json
-            | [ Up subcmd ] -> return Up subcmd, noColor, json
-            | [ Down subcmd ] -> return Down subcmd, noColor, json
-            | [ List subcmd ] -> return List subcmd, noColor, json
-            | [ Status subcmd ] -> return Status subcmd, noColor, json
-            | args ->
-                return!
-                    CommandNotParsedException $"%A{args}"
-                    |> Result.Error
-        }
+    addCommands [
+      Commands.Init appEnv
+      Commands.New appEnv
+      Commands.Up appEnv
+      Commands.Down appEnv
+      Commands.List appEnv
+      Commands.Status appEnv
+    ]
 
-    result {
-        let! command = getCommand ()
-
-        return!
-            match command with
-            | (MigrondiArgs.Init args, noColor, json) ->
-                InitArgs.GetOptions(args, noColor, json)
-                |> MigrondiRunner.RunInit
-            | (MigrondiArgs.New args, noColor, json) ->
-                NewArgs.GetOptions(args, noColor, json)
-                |> MigrondiRunner.RunNew
-            | (MigrondiArgs.Up args, noColor, json) ->
-                UpArgs.GetOptions(args, noColor, json)
-                |> MigrondiRunner.RunUp
-            | (MigrondiArgs.Down args, noColor, json) ->
-                DownArgs.GetOptions(args, noColor, json)
-                |> MigrondiRunner.RunDown
-            | (MigrondiArgs.List args, noColor, json) ->
-                ListArgs.GetOptions(args, noColor, json)
-                |> MigrondiRunner.RunList
-            | (MigrondiArgs.Status args, noColor, json) ->
-                StatusArgs.GetOptions(args, noColor, json)
-                |> MigrondiRunner.RunStatus
-            | args ->
-                CommandNotParsedException $"%A{args}"
-                |> Result.Error
-    }
-    |> function
-        | Ok exitCode -> exitCode
-        | Error ex ->
-            match ex with
-            | InvalidDriverException message
-            | EmptyPath message
-            | ConfigurationExists message
-            | ConfigurationNotFound message
-            | InvalidMigrationName message
-            | FailedToReadFile message
-            | FailedToExecuteQuery message
-            | InvalidOptionSetException message
-            | CommandNotParsedException message
-            | AmountExeedsExistingException message -> eprintfn "%s" message
-            | MigrationApplyFailedException (message, file, driver) ->
-                eprintfn $"Failed to apply {file.name} with {driver.AsString()}: {message}"
-            | MissingMigrationContent content ->
-                eprintfn $"The migration file is corrupt or missing parts, found: %A{content}"
-            | others -> eprintfn $"%s{others.Message}, at %s{others.Source}"
-
-            1
+  }

@@ -1,0 +1,6 @@
+{
+  "connection": "Data Source=./migrondi.db",
+  "migrations": "./migrations",
+  "tableName": "__migrondi_migrations",
+  "driver": "sqlite"
+}

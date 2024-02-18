@@ -1,33 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <GenerateProgramFile>false</GenerateProgramFile>
+    <IsTestProject>true</IsTestProject>
+    <EnableMSTestRunner>true</EnableMSTestRunner>
   </PropertyGroup>
-
   <ItemGroup>
-    <Compile Include="Tests.fs" />
-    <Compile Include="Program.fs" />
+    <Compile Include="Library.fs" />
+    <Compile Include="Serialization.fs" />
+    <Compile Include="FileSystem.fs" />
+    <Compile Include="Database.fs" />
+    <Compile Include="Database.Async.fs" />
+    <Compile Include="Main.fs" />
   </ItemGroup>
-
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.10.0" />
-    <PackageReference Include="MSTest.TestAdapter" Version="2.2.5" />
-    <PackageReference Include="MSTest.TestFramework" Version="2.2.5" />
-    <PackageReference Include="coverlet.collector" Version="3.1.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="MSTest" Version="3.2.1" />
   </ItemGroup>
-
   <ItemGroup>
-    <ProjectReference Include="..\Migrondi.Lib\Migrondi.Lib.fsproj" />
+    <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
   </ItemGroup>
-
-   <ItemGroup>
-     <PackageReference Update="FSharp.Core" Version="5.0.2" />
-   </ItemGroup>
-
 </Project>

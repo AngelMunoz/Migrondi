@@ -356,9 +356,15 @@ MigrationBackup/
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
 
+# Don't save any local databases
 *.db
 
-migrations/
-migrondi.json
-dist
 /.idea
+
+.fsdocs/
+output/
+tmp/
+dist/
+
+# ignore script created migrations
+samples/scripts/migrations/
