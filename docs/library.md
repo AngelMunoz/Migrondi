@@ -77,21 +77,17 @@ The same service provides also an async version of the same methods
 
 While you could do this entirely on your own, there are some helper methods that you can use to get started, but for that you will need a couple of services as well.
 
-- `MigrondiServiceFactory.GetInstance`
+- `Migrondi.MigrondiFactory`
 
-That is a factory method that will create a new instance of the `MigrondiService` class.
-It requires a couple of services as well as a configuration object.
+That is a factory method that will create a new instance of the `IMigrondi` class.
 
-- `DatabaseService` - This service is in charge of handling the database connection and executing the SQL scripts.
-- `FileSystemService` - This service is in charge of handling the file system and the migrations files.
-- `ILogger` - a `Microsoft.Extensions.Logging.ILogger` compatible instance logger.
-- `MigrondiConfig` - a configuration object that contains the configuration for the library.
+Feel free to check the [F# Scripts](./examples/fsharp.fsx) section to see a direct example of how to use the library in the most straight forward way.
 
-What the `MigrondiService` does is to coordinate between both the database and whatever file system you're using to store the migration scripts.
+The `Migrondi.MigrondiFactory` method returns a `IMigrondi` object provides the already orchestrated services that will work on a local file system although if you want to use migrondi for something custom (e.g. across network) you could implement your own services
 
-We can talk more deeply about the existing services and how to use them in the next sections.
+For a more detailed information about the services check out
 
+- [Database](./services/database.fsx)
+- [FileSystem](./services/filesystem.fsx)
+- [Migrondi](./services/migrondi.md)
 - [Serialization](./services/serialization.md)
-- [FileSystemService](./services/filesystem.md)
-- [DatabaseService](./services/database.md)
-- [MigrondiService](./services/migrondi.md)

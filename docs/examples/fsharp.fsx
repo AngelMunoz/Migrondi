@@ -6,146 +6,47 @@ categoryindex: 1
 ---
 Migrondi can be used in F# scripts, which is a great way to get the hang of the library and easy to prototype.
 
-The following example shows a couple of things
+This example adds the most simple way to get started, the default migrondi behavior is used and the API reflects the CLI commands.
 
-- Get the dependencies for the default services
-- Setup the Database
-- Create a new migration
-- Do a dry run of the migrations
+To begin we need to add the Migrondi.Core package to the script, this can be done by adding the following line to the top of the script:
 
-We'll start with a little prelude of the code that is needed to get the dependencies for the services.
-and opening the required namespaces.
 *)
+#r "nuget: Migrondi.Core, 1.0.0-beta-010"
 
-#r "nuget: Microsoft.Extensions.Logging"
-#r "nuget: Microsoft.Extensions.Logging.Console"
-#r "nuget: Migrondi.Core, 1.0.0-beta-003"
-
-open System
-open System.IO
 open Migrondi.Core
-open Migrondi.Core.Database
-open Migrondi.Core.FileSystem
-open Migrondi.Core.Migrondi
-open Migrondi.Core.Serialization
-
-open Microsoft.Extensions.Logging
-
-module Config =
-  let getLogger loggerName =
-    let loggerFactory =
-      LoggerFactory.Create(fun builder ->
-        builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
-      )
-
-    loggerFactory.CreateLogger loggerName
-
-  let ensureWellFormed (migrationsDir: string) =
-    // when you're using URIs "./path" is not the same as "./path/"
-    // the first one is a file and the second one is a directory
-    // so ensure you always end your paths with a directory separator
-
-    if Path.EndsInDirectorySeparator(migrationsDir) then
-      migrationsDir
-    else
-      $"{migrationsDir}{Path.DirectorySeparatorChar}"
 
 (**
-We need to get a serializer, a logger, and a configuration object to create the services.
-mostly because this is designed to play well with DI containers.
+The next step is to create a new Migrondi object, this object will be used to interact with the database and the migrations.
 
-
- *)
+Migrondi works with a "root" directory, so the paths to the database and directories are relative to this root directory.
+The default migrondi configuration uses an sqlite database relative to the in the root directory.
+*)
 let config = MigrondiConfig.Default
 
-let logger = Config.getLogger("sample-app")
-
-let serializer = SerializerServiceFactory.GetInstance()
-
-let fileSystemService =
-  let migrationsDir = Config.ensureWellFormed config.migrations
-
-  FileSystemServiceFactory.GetInstance(
-    serializer,
-    logger,
-    Uri(
-      __SOURCE_DIRECTORY__ + $"{Path.DirectorySeparatorChar}",
-      UriKind.Absolute
-    ),
-    Uri(migrationsDir, UriKind.Relative)
-  )
-
-let databaseService = DatabaseServiceFactory.GetInstance(logger, config)
-
-let migrondi =
-  MigrondiServiceFactory.GetInstance(
-    databaseService,
-    fileSystemService,
-    logger,
-    config
-  )
+// In this context "." means the current directory
+// But you can specify a Absolute Path here e.g. C:\Users\user\project\ or /home/user/project/
+// all of the relative files used in the configuration will be relative to this specified path
+let migrondi = Migrondi.MigrondiFactory(config, ".")
 
 (**
-For any database related work you _MUST_ call `SetupDatabase` before doing anything else.
-Otherwise the driver won't be initialized and the tables won't be created.
+There are certain operations like creating a new migration, or initializing the directory with the migrondi files.
+These operations can run before initializing the database.
 *)
-
-
-databaseService.SetupDatabase()
-
-(**
-We can start with a simple migration.
-
-> The name schema for the migrations is basically a string separated by an underscode and a timestamp followed by the .sql extension
-
-> ```fsharp
-> let MigrationNameSchema = "(.+)_([0-9]+).(sql|SQL)"
-> ```
-*)
-
-let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-let name = $"add-test-table_{timestamp}.sql"
-
-fileSystemService.WriteMigration(
-  {
-    name = name
-    timestamp = timestamp
-    upContent = "create table if not exists test (id int not null primary key);"
-    downContent = "drop table if exists test;"
-  },
-  name
+migrondi.RunNew(
+  "add-test-table",
+  "create table if not exists test (id int not null primary key);",
+  "drop table if exists test;"
 )
 
-
 (**
-Once the services are in place and we have a migration in the local file system then we can
-Attempt a dry run of the migrations.
-
-Dry runs only return the scripts that would be executed in the order they would be executed.
-so you can `for migration in migrations do ...` and review that everything comes in order.
+For operations that require database access like listing, up, down, and similar
+We need to initialize the database, which is jargon to say we need to create the required tables, initialize the driver and so on.
+we use [RepoDB](https://repodb.net/) under the hood, so we need to initialize the database before we can run any operations.
 *)
+migrondi.Initialize()
 
+// once that the migrondi service is initialized we can try to commmunicate to the
+// database and in this case go for a dry run
 let applied = migrondi.DryRunUp()
 
-logger.LogInformation(
-  $"List of the migrations that would have been ran: %A{applied}"
-)
-
-(**
-That should show you a list of the migrations that would have been ran.
-
-```text
-dbug: sample-app[0]
-      Writing migration to c:\path\to\scripts\migrations\add-test-table_1696144424109.sql with directory: c:\path\to\scripts\migrations\ and name: add-test-table_1696144424109.sql
-dbug: sample-app[0]
-      Listing migrations from c:\path\to\scripts\migrations with directory: ./migrations
-info: sample-app[0]
-      List of the migrations that would have been ran: [{ name = "add-test-table_1696144424109"
-   timestamp = 1696144424109L
-   upContent = "create table if not exists test (id int not null primary key);"
-   downContent = "drop table if exists test;" }]
-```
-
-Keep in mind that the migrations are not actually ran, so the database is not updated.
-From there on you can encode your logic specifically to know when to apply or revert migrations.
-*)
+printfn $"List of the migrations that would have been ran:\n\n%A{applied}"
