@@ -71,6 +71,8 @@ type Migration = {
   /// the actual SQL statements that will be used to run against the database
   /// when rolling back migrations from the database
   downContent: string
+
+  manualTransaction: bool
 } with
 
   static member ExtractFromFilename
