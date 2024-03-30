@@ -32,156 +32,46 @@ open Units
 
 
 [<Interface>]
-type IMiFileSystem =
-
-  /// <summary>
-  /// Take the path to a configuration source, reads and transforms it into a configuration object
-  /// </summary>
-  /// <param name="readFrom">A path Relative to the RootPath that targets to the configuration file</param>
-  /// <returns>A <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object</returns>
-  /// <exception cref="Migrondi.Core.FileSystem.SourceNotFound">
-  /// Thrown when the source is not found
-  /// </exception>
-  /// <exception cref="Migrondi.Core.FileSystem.MalformedSource">
-  /// Thrown when the source is found but can't be deserialized from disk
-  /// </exception>
+type internal IMiFileSystem =
   abstract member ReadConfiguration: readFrom: string -> MigrondiConfig
 
-  /// <summary>
-  /// Take the path to a configuration source, reads and transforms it into a configuration object
-  /// </summary>
-  /// <param name="readFrom">A path Relative to the RootPath that targets to the configuration file</param>
-  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
-  /// <returns>
-  /// A Result that may contain a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object
-  /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
-  /// </returns>
-  /// <exception cref="Migrondi.Core.FileSystem.SourceNotFound">
-  /// Thrown when the file is not found
-  /// </exception>
-  /// <exception cref="Migrondi.Core.FileSystem.MalformedSource">
-  /// Thrown when the file is found but can't be deserialized from the source
-  /// </exception>
   abstract member ReadConfigurationAsync:
     readFrom: string * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrondiConfig>
 
-  /// <summary>
-  /// Take a configuration object and writes it to a location dictated by the `writeTo` parameter
-  /// </summary>
-  /// <param name="config">The configuration object</param>
-  /// <param name="writeTo">The path to the configuration file</param>
   abstract member WriteConfiguration:
     config: MigrondiConfig * writeTo: string -> unit
 
-  /// <summary>
-  /// Take a configuration object and writes it to a file
-  /// </summary>
-  /// <param name="config">The configuration object</param>
-  /// <param name="writeTo">The path to the configuration file</param>
-  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
-  /// <returns>
-  /// A unit result object that means that the operation was successful
-  /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
-  /// </returns>
   abstract member WriteConfigurationAsync:
     config: MigrondiConfig *
     writeTo: string *
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task
 
-  /// <summary>
-  /// Takes a path to a migration, reads its contents and transforms it into a Migration object
-  /// </summary>
-  /// <param name="migrationName">A path Relative to the RootPath that targets to the migration</param>
-  /// <returns>
-  /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
-  /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
-  /// </returns>
-  /// <exception cref="Migrondi.Core.FileSystem.SourceNotFound">
-  /// Thrown when the file is not found
-  /// </exception>
-  /// <exception cref="Migrondi.Core.FileSystem.MalformedSource">
-  /// Thrown when the file is found but can't be deserialized from the source
-  /// </exception>
   abstract member ReadMigration: migrationName: string -> Migration
 
-  /// <summary>
-  /// Takes a path to a migration, reads its contents and transforms it into a Migration object
-  /// </summary>
-  /// <param name="migrationName">A path Relative to the RootPath that targets to the migration</param>
-  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
-  /// <returns>
-  /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
-  /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
-  /// </returns>
-  /// <exception cref="Migrondi.Core.FileSystem.SourceNotFound">
-  ///  Thrown when the file is not found
-  /// </exception>
   abstract member ReadMigrationAsync:
     migrationName: string * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration>
 
-  /// <summary>
-  /// Takes a migration and serializes its contents into a location dictated by the path
-  /// </summary>
-  /// <param name="migration">The migration object</param>
-  /// <param name="migrationName">The path to the migration file</param>
-  /// <returns>
-  /// A unit result object that means that the operation was successful
-  /// </returns>
   abstract member WriteMigration:
     migration: Migration * migrationName: string -> unit
 
-  /// <summary>
-  /// Takes a migration and serializes its contents into a location dictated by the path
-  /// </summary>
-  /// <param name="migration">The migration object</param>
-  /// <param name="migrationName">The path to the migration file</param>
-  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
-  /// <returns>
-  /// A unit result object that means that the operation was successful
-  /// </returns>
   abstract member WriteMigrationAsync:
     migration: Migration *
     migrationName: string *
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task
 
-  /// <summary>
-  /// Takes a path to a directory-like source, and reads the sql scripts inside it
-  /// </summary>
-  /// <param name="migrationsLocation">A path Relative to the RootPath that targets to the migration.</param>
-  /// <returns>
-  /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
-  /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
-  /// </returns>
-  /// <exception cref="System.AggregateException">
-  /// A list of exceptions in case the sources were not readable or malformed
-  /// This normally includes exceptions of the type <see cref="Migrondi.Core.FileSystem.MalformedSource">MalformedSource</see>
-  /// </exception>
   abstract member ListMigrations:
     migrationsLocation: string -> Migration IReadOnlyList
 
-  /// <summary>
-  /// Takes a path to a directory-like source, and reads the sql scripts inside it
-  /// </summary>
-  /// <param name="migrationsLocation">A path Relative to the RootPath that targets to the migration</param>
-  /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
-  /// <returns>
-  /// A Result that may contain a <see cref="Migrondi.Core.Migration">Migration</see> object
-  /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
-  /// </returns>
   abstract member ListMigrationsAsync:
     migrationsLocation: string *
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration IReadOnlyList>
 
-
-
 module PhysicalFileSystemImpl =
-
-  let nameSchema = Regex(MigrationNameSchema)
 
   let readConfiguration
     (
@@ -437,10 +327,11 @@ module PhysicalFileSystemImpl =
       let files =
         directory.GetFileSystemInfos()
         |> Array.Parallel.choose(fun file ->
-          if (nameSchema.IsMatch(file.Name)) then
-            Some(file.Name, file.FullName |> File.ReadAllText)
-          else
-            None
+
+          match file.Name with
+          | V0Name _
+          | V1Name _ -> Some(file.Name, file.FullName |> File.ReadAllText)
+          | _ -> None
         )
         |> Array.toList
 
@@ -482,7 +373,10 @@ module PhysicalFileSystemImpl =
         let! files =
           directory.GetFileSystemInfos()
           |> Array.Parallel.choose(fun file ->
-            if (nameSchema.IsMatch(file.Name)) then Some file else None
+            match file.Name with
+            | V1Name _
+            | V0Name _ -> Some file
+            | _ -> None
           )
           |> Array.Parallel.map(fun file -> async {
             let! token = Async.CancellationToken
@@ -517,7 +411,7 @@ module PhysicalFileSystemImpl =
     }
 
 [<Class>]
-type MiFileSystem
+type internal MiFileSystem
   (
     logger: ILogger,
     configurationSerializer: IMiConfigurationSerializer,

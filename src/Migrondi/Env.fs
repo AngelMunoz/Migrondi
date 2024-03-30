@@ -11,7 +11,7 @@ open Migrondi.Core.Serialization
 open Microsoft.Extensions.Logging
 
 
-type AppEnv
+type internal AppEnv
   (
     logger: ILogger,
     configSerializer: IMiConfigurationSerializer,

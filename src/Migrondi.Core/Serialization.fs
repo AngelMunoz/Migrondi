@@ -359,7 +359,7 @@ module private MigrationRecord =
     })
 
 [<Interface>]
-type IMiMigrationSerializer =
+type internal IMiMigrationSerializer =
 
   abstract member EncodeJson: content: Migration -> string
   abstract member EncodeText: content: Migration -> string
@@ -372,15 +372,13 @@ type IMiMigrationSerializer =
   abstract member DecodeMigrationRecord: content: string -> MigrationRecord
 
 [<Interface>]
-type IMiConfigurationSerializer =
+type internal IMiConfigurationSerializer =
 
   abstract member Encode: content: MigrondiConfig -> string
   abstract member Decode: content: string -> MigrondiConfig
 
-
-
 [<Class>]
-type MigrondiSerializer() =
+type internal MigrondiSerializer() =
 
   interface IMiMigrationSerializer with
     member _.DecodeJson(content: string) : Migration =

@@ -25,49 +25,12 @@ type IMigrondi =
   abstract member InitializeAsync:
     [<Optional>] ?cancellationToken: CancellationToken -> Task
 
-  /// <summary>
-  /// Creates a new migration file with
-  /// the default naming convention and returns it
-  /// </summary>
-  /// <param name="friendlyName">
-  /// The friendly name of the migration, usually this comes from
-  /// the user's input
-  /// </param>
-  /// <param name="upContent">
-  /// The content of the up migration
-  /// </param>
-  /// <param name="downContent">
-  /// The content of the down migration
-  /// </param>
-  /// <returns>
-  /// The newly created migration as a record
-  /// </returns>
   abstract member RunNew:
     friendlyName: string *
     [<Optional>] ?upContent: string *
     [<Optional>] ?downContent: string ->
       Migration
 
-  /// <summary>
-  /// Creates a new migration file with
-  /// the default naming convention and returns it
-  /// </summary>
-  /// <param name="friendlyName">
-  /// The friendly name of the migration, usually this comes from
-  /// the user's input
-  /// </param>
-  /// <param name="upContent">
-  /// The content of the up migration
-  /// </param>
-  /// <param name="downContent">
-  /// The content of the down migration
-  /// </param>
-  /// <param name="cancellationToken">
-  /// A cancellation token to cancel the operation
-  /// </param>
-  /// <returns>
-  /// The newly created migration as a record
-  /// </returns>
   abstract member RunNewAsync:
     friendlyName: string *
     [<Optional>] ?upContent: string *
@@ -75,74 +38,19 @@ type IMigrondi =
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration>
 
-
-  /// <summary>
-  /// Runs all pending migrations against the database
-  /// </summary>
-  /// <param name="amount">The amount of migrations to apply</param>
-  /// <returns>
-  /// A list of all migrations that were applied including previously applied ones
-  /// </returns>
-  /// <remarks>
-  /// This method coordinates between the source scripts and the database
-  /// </remarks>
   abstract member RunUp:
     [<Optional>] ?amount: int -> IReadOnlyList<MigrationRecord>
 
-  /// <summary>
-  /// Reverts all migrations that were previously applied
-  /// </summary>
-  /// <param name="amount">The amount of migrations to roll back</param>
-  /// <returns>
-  /// A list of all migrations that were reverted including previously applied ones
-  /// </returns>
-  /// <remarks>
-  /// This method coordinates between the source scripts and the database
-  /// </remarks>
   abstract member RunDown:
     [<Optional>] ?amount: int -> IReadOnlyList<MigrationRecord>
 
-  /// <summary>
-  /// Makes a list of the pending migrations that would be applied
-  /// </summary>
-  /// <param name="amount">The amount of migrations to apply</param>
-  /// <returns>
-  /// A list of all migrations that would be applied
-  /// </returns>
   abstract member DryRunUp: [<Optional>] ?amount: int -> Migration IReadOnlyList
 
-  /// <summary>
-  /// Makes a list of the pending migrations that would be reverted
-  /// </summary>
-  /// <param name="amount">The amount of migrations to roll back</param>
-  /// <returns>
-  /// A list of all migrations that would be reverted
-  /// </returns>
   abstract member DryRunDown:
     [<Optional>] ?amount: int -> Migration IReadOnlyList
 
-  /// <summary>
-  /// Makes a list of all migrations and their status
-  /// </summary>
-  /// <returns>
-  /// A list of all migrations and their status
-  /// </returns>
-  /// <remarks>
-  /// This method coordinates between the source scripts and the database
-  /// </remarks>
   abstract member MigrationsList: unit -> MigrationStatus IReadOnlyList
 
-  /// <summary>
-  /// Takes a relative path to the migrations dir to a migration file
-  /// and returns its status
-  /// </summary>
-  /// <param name="migrationPath">The relative path to the migration file</param>
-  /// <returns>
-  /// The status of the migration
-  /// </returns>
-  /// <remarks>
-  /// This method coordinates between the source scripts and the database
-  /// </remarks>
   abstract member ScriptStatus: migrationPath: string -> MigrationStatus
 
   abstract member RunUpAsync:
@@ -642,7 +550,7 @@ type Migrondi
         [<Optional>] ?downContent
       ) : Migration =
       let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-      let name = $"{friendlyName}_{timestamp}.sql"
+      let name = $"{timestamp}_{friendlyName}.sql"
 
       let migration = getMigration(name, timestamp, upContent, downContent)
 
@@ -660,7 +568,7 @@ type Migrondi
 
       task {
         let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-        let name = $"{friendlyName}_{timestamp}.sql"
+        let name = $"{timestamp}_{friendlyName}.sql"
         let migration = getMigration(name, timestamp, upContent, downContent)
         do! fileSystem.WriteMigrationAsync(migration, name, token)
 

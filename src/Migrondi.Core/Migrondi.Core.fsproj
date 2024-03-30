@@ -16,6 +16,7 @@
   </PropertyGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Migrondi.Tests" />
+    <InternalsVisibleTo Include="Migrondi" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Library.fsi" />

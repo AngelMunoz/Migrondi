@@ -12,7 +12,7 @@ open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
 
 [<RequireQualifiedAccess>]
-module Init =
+module internal Init =
   let handler (path: DirectoryInfo, fs: IMiFileSystem, logger: ILogger) =
     logger.LogInformation(
       "Initializing a new migrondi project at: {PathName}.",
@@ -33,7 +33,7 @@ module Init =
 
 
 [<RequireQualifiedAccess>]
-module Migrations =
+module internal Migrations =
 
   let newMigration (name: string, logger: ILogger, migrondi: IMigrondi) =
     logger.LogInformation(
@@ -42,7 +42,7 @@ module Migrations =
     )
 
     try
-      let migration =  migrondi.RunNew(name)
+      let migration = migrondi.RunNew(name)
 
       logger.LogInformation(
         "Migration {MigrationName} created successfully.",

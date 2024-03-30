@@ -24,7 +24,7 @@ open IcedTasks
 
 
 [<Interface>]
-type IMiDatabaseHandler =
+type internal IMiDatabaseHandler =
 
   /// <summary>
   /// Creates the required tables in the database.
@@ -151,7 +151,6 @@ type IMiDatabaseHandler =
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationRecord IReadOnlyList>
 
-
 [<RequireQualifiedAccess>]
 module Queries =
   let createTable driver tableName =
@@ -183,7 +182,7 @@ CREATE TABLE dbo.%s{tableName}(
 );
 GO"""
 
-module internal MigrationsImpl =
+module MigrationsImpl =
 
   let getConnection (connectionString: string, driver: MigrondiDriver) =
     match driver with
@@ -666,7 +665,7 @@ module MigrationsAsyncImpl =
     }
 
 [<Class>]
-type MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
+type internal MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
 
   interface IMiDatabaseHandler with
 

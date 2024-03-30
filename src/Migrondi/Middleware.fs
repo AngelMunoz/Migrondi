@@ -61,8 +61,7 @@ module Helpers =
 
     InvocationMiddleware(mdl)
 
-
-module Database =
+module internal Database =
   open Migrondi.Env
 
   let setup
@@ -87,7 +86,7 @@ module Database =
 
 
 
-module Middleware =
+module internal Middleware =
 
   let SetupDatabase appEnv =
     Database.setup appEnv

@@ -12,7 +12,7 @@ open Migrondi.Core
 /// </summary>
 
 [<Interface>]
-type IMiMigrationSerializer =
+type internal IMiMigrationSerializer =
 
   /// <summary>
   /// Takes a <see cref="Migrondi.Core.Migration">Migration</see> object and returns a string
@@ -100,7 +100,7 @@ type IMiMigrationSerializer =
 /// keep track of multiple services all over the place.
 /// </summary>
 [<Interface>]
-type IMiConfigurationSerializer =
+type internal IMiConfigurationSerializer =
 
   /// <summary>
   /// Takes a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object and returns a string
@@ -119,7 +119,7 @@ type IMiConfigurationSerializer =
   abstract member Decode: content: string -> MigrondiConfig
 
 [<Class>]
-type MigrondiSerializer =
+type internal MigrondiSerializer =
   new: unit -> MigrondiSerializer
   interface IMiMigrationSerializer
   interface IMiConfigurationSerializer

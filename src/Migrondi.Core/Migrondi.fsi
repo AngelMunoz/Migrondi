@@ -173,8 +173,10 @@ type Migrondi =
   /// <param name="fileSystem">A file system service that can be used to read and write migrations</param>
   /// <param name="logger"></param>
   /// <returns>A new Migrondi service</returns>
-  new: config: MigrondiConfig * database: IMiDatabaseHandler * fileSystem: IMiFileSystem * logger: ILogger -> Migrondi
+  internal new:
+    config: MigrondiConfig * database: IMiDatabaseHandler * fileSystem: IMiFileSystem * logger: ILogger -> Migrondi
 
-  static member MigrondiFactory: config: MigrondiConfig * rootDirectory: string * ?logger: ILogger<IMigrondi> -> IMigrondi
+  static member MigrondiFactory:
+    config: MigrondiConfig * rootDirectory: string * ?logger: ILogger<IMigrondi> -> IMigrondi
 
   interface IMigrondi

@@ -11,7 +11,7 @@ open Migrondi.Inputs
 open Migrondi.Handlers
 
 [<RequireQualifiedAccess>]
-module ArgumentMapper =
+module internal ArgumentMapper =
 
 
   let inline Init (appEnv: AppEnv) (dir: DirectoryInfo option) =
@@ -48,7 +48,7 @@ module ArgumentMapper =
     name, appEnv.Logger, appEnv.Migrondi
 
 [<RequireQualifiedAccess>]
-module Commands =
+module internal Commands =
 
   let Init appEnv = command "init" {
     description

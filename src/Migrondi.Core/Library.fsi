@@ -1,15 +1,32 @@
 namespace Migrondi.Core
 
+open System
 open FsToolkit.ErrorHandling
 open System.Runtime.CompilerServices
 
 [<AutoOpen>]
-module Core =
-  /// This is only supported filename format at the moment, your implementations
-  /// have to have this REGEX in mind when creating migration in custom implementations
-  /// of the  <see cref="Migrondi.Core.FileSystem.IMiFileSystem">FileSystem</see> type
-  [<Literal>]
-  val MigrationNameSchema: string = "^(?<Name>.+)_(?<Timestamp>[0-9]+).(sql|SQL)$"
+module internal Matcher =
+
+  module internal V0 =
+    /// Pre-v1 version of migrondi used this schema for your migrations names
+    /// This is currently deprecated, don't use this to validate your names.
+    /// Please check out the V1 module for the current schema
+    [<Literal>]
+    val MigrationNameSchema: string = "^(?<Name>.+)_(?<Timestamp>[0-9]+).(sql|SQL)$"
+
+    val reg: Lazy<System.Text.RegularExpressions.Regex>
+
+  module internal V1 =
+    /// This is only supported filename format at the moment, your implementations
+    /// have to have this REGEX in mind when creating migration in custom implementations
+    /// of the  <see cref="Migrondi.Core.FileSystem.IMiFileSystem">FileSystem</see> type
+    [<Literal>]
+    val MigrationNameSchema: string = "^(?<Timestamp>[0-9]+)_(?<Name>.+).(sql|SQL)$"
+
+    val reg: Lazy<System.Text.RegularExpressions.Regex>
+
+
+  val (|V0Name|V1Name|NotMatched|): string -> Choice<(string * int64), (string * int64), unit>
 
 /// DU that represents the currently supported drivers
 [<RequireQualifiedAccess>]
@@ -20,7 +37,7 @@ type MigrondiDriver =
   | Mysql
 
   /// Returns a string representation of the driver
-  member AsString: string
+  member internal AsString: string
 
   /// <summary>Takes a string and tries to convert it to a MigrondiDriver</summary>
   /// <param name="value">The string to convert</param>
@@ -32,7 +49,7 @@ type MigrondiDriver =
   /// if the string is not a valid driver then it will throw an exception
   /// with the name of the driver that was not found
   /// </remarks>
-  static member FromString: value: string -> MigrondiDriver
+  static member internal FromString: value: string -> MigrondiDriver
 
 /// Represents the configuration that will be used to run migrations
 type MigrondiConfig =
@@ -85,7 +102,7 @@ type Migration =
   /// A Result that may contain a tuple of the migration name and timestamp
   /// or a set of strings that may represent all of the found errors while validating the filename
   /// </returns>
-  static member ExtractFromFilename: filename: string -> Validation<(string * int64), string>
+  static member internal ExtractFromFilename: filename: string -> Validation<(string * int64), string>
 
   /// <summary>
   /// Takes a path and tries to extract the migration information from it
@@ -98,7 +115,7 @@ type Migration =
   /// A Result that may contain a tuple of the migration name and timestamp
   /// or a set of strings that may represent all of the found errors while validating the path
   /// </returns>
-  static member ExtractFromPath: path: string -> Validation<(string * int64), string>
+  static member internal ExtractFromPath: path: string -> Validation<(string * int64), string>
 
 /// Migration information can be obtained from a file or the database
 /// this DU allows to identify where the information is coming from
@@ -117,7 +134,7 @@ type MigrationType =
   | Up
   | Down
 
-  member AsString: string
+  member internal AsString: string
 
 /// <summary>
 /// Used by the Migrondi Service to represent the status of a migration.
@@ -126,12 +143,12 @@ type MigrationStatus =
   | Applied of Migration
   | Pending of Migration
 
-  member Value: Migration
+  member internal Value: Migration
 
 [<AutoOpen>]
 module Exceptions =
   open System.Runtime.ExceptionServices
-  val inline reriseCustom: exn: exn -> 'ReturnValue
+  val internal reriseCustom: exn: exn -> 'ReturnValue
 
 /// <summary>
 /// Represents an error that happened while we were trying to create the database
