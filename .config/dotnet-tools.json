@@ -3,16 +3,18 @@
   "isRoot": true,
   "tools": {
     "fsdocs-tool": {
-      "version": "20.0.0",
+      "version": "20.0.1",
       "commands": [
         "fsdocs"
-      ]
+      ],
+      "rollForward": false
     },
     "fantomas": {
-      "version": "6.2.3",
+      "version": "6.3.16",
       "commands": [
         "fantomas"
-      ]
+      ],
+      "rollForward": false
     }
   }
 }
