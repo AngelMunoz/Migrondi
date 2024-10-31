@@ -4,9 +4,8 @@ category: Overview
 categoryindex: 2
 ---
 
-Migrondi takes the directory where it was invoked as the root of the project, it also expects to find a `migrondi.json` file right there.
-
-Otherwise it will take the default values for the configuration.
+Migrondi takes the directory where it was invoked as the root of the project, it will also try to read a full `migrondi.json` file right there.
+If the file is not found or it is not valid it will default to the following configuration:
 
 ```json
 {
@@ -16,6 +15,8 @@ Otherwise it will take the default values for the configuration.
   "driver": "sqlite"
 }
 ```
+
+> **_NOTE_**: Partial configuration is not supported yet, you either provide a full configuration file or use the environment variables to override the default configuration.
 
 ## Getting started
 
