@@ -41,14 +41,16 @@ let main argv =
   let logger = loggerFactory.CreateLogger("Migrondi")
 
   let cwd = $"{Environment.CurrentDirectory}{Path.DirectorySeparatorChar}"
-  let appEnv = AppEnv.BuildDefault(cwd, logger, useJson)
-
+  let appEnv = AppEnv.BuildDefault(cwd, logger, useJson, argv)
 
   rootCommand argv {
     description
       "A dead simple SQL migrations runner, apply or rollback migrations at your ease"
 
     usePipeline(fun pipeline ->
+      // enable passing configuration flags before the actual commands
+      pipeline.Command.TreatUnmatchedTokensAsErrors <- false
+
       pipeline
         .EnableDirectives(true)
         // run the setup database for select commands
