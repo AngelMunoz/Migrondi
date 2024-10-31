@@ -721,10 +721,8 @@ type internal MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
 
 
     member _.ApplyMigrationsAsync
-      (
-        migrations: Migration seq,
-        [<Optional>] ?cancellationToken
-      ) =
+      (migrations: Migration seq, [<Optional>] ?cancellationToken)
+      =
       task {
         let token = defaultArg cancellationToken CancellationToken.None
 
@@ -744,10 +742,8 @@ type internal MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
       }
 
     member _.RollbackMigrationsAsync
-      (
-        migrations: Migration seq,
-        [<Optional>] ?cancellationToken
-      ) =
+      (migrations: Migration seq, [<Optional>] ?cancellationToken)
+      =
       task {
         let token = defaultArg cancellationToken CancellationToken.None
 

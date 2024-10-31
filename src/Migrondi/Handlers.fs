@@ -176,10 +176,8 @@ module internal Migrations =
       AnsiConsole.Write table
 
     let printBothMigrationsTable
-      (
-        table: Table,
-        migrations: MigrationStatus seq
-      ) =
+      (table: Table, migrations: MigrationStatus seq)
+      =
 
       table.AddColumns(
         TableColumn(Markup("[green]Status[/]")),

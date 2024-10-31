@@ -312,10 +312,8 @@ module private Migration =
   }
 
   let DecodeText
-    (
-      content: string,
-      name: string option
-    ) : Result<Migration, string> =
+    (content: string, name: string option)
+    : Result<Migration, string> =
     let matcher =
       Regex(
         "-- ---------- MIGRONDI:(?<Identifier>UP|DOWN):(?<Timestamp>[0-9]+) ----------",
@@ -395,10 +393,8 @@ type internal MigrondiSerializer() =
       Migration.EncodeText content
 
     member _.DecodeText
-      (
-        content: string,
-        migrationName: string option
-      ) : Migration =
+      (content: string, migrationName: string option)
+      : Migration =
       Migration.DecodeText(content, migrationName)
       |> function
         | Ok value -> value

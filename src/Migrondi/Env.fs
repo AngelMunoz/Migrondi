@@ -134,11 +134,8 @@ module internal Configuration =
     }
 
   let readLocalConfig
-    (
-      cwd: string,
-      logger: ILogger,
-      serializer: IMiConfigurationSerializer
-    ) =
+    (cwd: string, logger: ILogger, serializer: IMiConfigurationSerializer)
+    =
     let fileContent =
       try
         File.ReadAllText(Path.Combine(cwd, "migrondi.json")) |> Some

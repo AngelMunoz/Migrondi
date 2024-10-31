@@ -495,11 +495,7 @@ type Migrondi
   }
 
   static member MigrondiFactory
-    (
-      config: MigrondiConfig,
-      rootDirectory: string,
-      ?logger: ILogger<IMigrondi>
-    ) : IMigrondi =
+    (config: MigrondiConfig, rootDirectory: string, ?logger: ILogger<IMigrondi>) : IMigrondi =
 
     let logger =
       defaultArg
@@ -544,11 +540,8 @@ type Migrondi
       database.SetupDatabaseAsync(token)
 
     member _.RunNew
-      (
-        friendlyName,
-        [<Optional>] ?upContent,
-        [<Optional>] ?downContent
-      ) : Migration =
+      (friendlyName, [<Optional>] ?upContent, [<Optional>] ?downContent)
+      : Migration =
       let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
       let name = $"{timestamp}_{friendlyName}.sql"
 
@@ -605,10 +598,8 @@ type Migrondi
         token
 
     member _.RunDownAsync
-      (
-        [<Optional>] ?amount,
-        [<Optional>] ?cancellationToken
-      ) =
+      ([<Optional>] ?amount, [<Optional>] ?cancellationToken)
+      =
       let token = defaultArg cancellationToken CancellationToken.None
 
       MigrondiserviceImpl.runDownAsync
@@ -620,10 +611,8 @@ type Migrondi
         token
 
     member _.DryRunDownAsync
-      (
-        [<Optional>] ?amount,
-        [<Optional>] ?cancellationToken
-      ) =
+      ([<Optional>] ?amount, [<Optional>] ?cancellationToken)
+      =
       let token = defaultArg cancellationToken CancellationToken.None
 
       MigrondiserviceImpl.dryRunDownAsync
@@ -635,10 +624,8 @@ type Migrondi
         token
 
     member _.DryRunUpAsync
-      (
-        [<Optional>] ?amount,
-        [<Optional>] ?cancellationToken
-      ) =
+      ([<Optional>] ?amount, [<Optional>] ?cancellationToken)
+      =
       let token = defaultArg cancellationToken CancellationToken.None
 
       MigrondiserviceImpl.dryRunUpAsync database fileSystem config amount token

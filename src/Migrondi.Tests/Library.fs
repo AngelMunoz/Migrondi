@@ -19,11 +19,8 @@ type CoreTests() =
             "add products table",
             1686280663373L)>]
   member _.``Can extract name and timestamp from migration file name``
-    (
-      filename: string,
-      expectedName: string,
-      expectedTimestamp: int64
-    ) =
+    (filename: string, expectedName: string, expectedTimestamp: int64)
+    =
     match Migration.ExtractFromFilename filename with
     | Ok(name, timestamp) ->
       Assert.AreEqual(expectedName, name)
@@ -43,11 +40,8 @@ type CoreTests() =
             "add products table",
             1686280663373L)>]
   member _.``Can extract name and timestamp from migration file path name``
-    (
-      filepath: string,
-      expectedName: string,
-      expectedTimestamp: int64
-    ) =
+    (filepath: string, expectedName: string, expectedTimestamp: int64)
+    =
     match Migration.ExtractFromPath filepath with
     | Ok(name, timestamp) ->
       Assert.AreEqual(expectedName, name)

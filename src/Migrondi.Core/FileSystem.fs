@@ -478,11 +478,8 @@ type internal MiFileSystem
       )
 
     member _.WriteConfigurationAsync
-      (
-        config: MigrondiConfig,
-        writeTo,
-        [<Optional>] ?cancellationToken
-      ) =
+      (config: MigrondiConfig, writeTo, [<Optional>] ?cancellationToken)
+      =
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.writeConfigurationAsync
@@ -503,11 +500,8 @@ type internal MiFileSystem
       )
 
     member _.WriteMigrationAsync
-      (
-        arg1: Migration,
-        arg2,
-        [<Optional>] ?cancellationToken
-      ) =
+      (arg1: Migration, arg2, [<Optional>] ?cancellationToken)
+      =
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.writeMigrationAsync
