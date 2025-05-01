@@ -4,23 +4,27 @@ open System
 open System.IO
 open Migrondi.Core
 
+open FsToolkit.ErrorHandling
 
 module Migrations =
 
-  let GetMigrondi() =
+  let GetMigrondi() = voption {
     let path = Path.GetFullPath AppContext.BaseDirectory
 
-    let config =
-      Path.Combine(path, "migrondi.json")
-      |> System.IO.File.ReadAllText
-      |> System.Text.Json.JsonSerializer.Deserialize<MigrondiConfig>
+    let migrations = Path.Combine(path, "migrations")
+    let dataSource = Path.Combine(path, "migrondi.db")
 
-    match config with
-    | null -> ValueNone
-    | config ->
-      let migrondi = Migrondi.MigrondiFactory(config, path)
-      migrondi.Initialize()
-      ValueSome migrondi
+    let config = {
+      MigrondiConfig.Default with
+          migrations = migrations
+          connection = $"Data Source={dataSource};"
+    }
+
+    let migrondi = Migrondi.MigrondiFactory(config, path)
+    migrondi.Initialize()
+
+    return migrondi
+  }
 
   let Migrate(migrondi: IMigrondi) =
     let hasPending =

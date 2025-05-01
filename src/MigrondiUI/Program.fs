@@ -4,29 +4,27 @@ open Avalonia
 open Avalonia.Controls
 open NXUI.Extensions
 
+open Navs.Avalonia
+
 open MigrondiUI
 
-let BuildMainWindow(_: Navs.IRouter<_>) = Window().Width(300).Height 300
+let BuildMainWindow(router: Navs.IRouter<_>) =
 
-let ApplyMigrations migrondi = Migrations.Migrate migrondi
+  Window().Content(router.Content |> AVal.toBinding).Width(300).Height 300
 
-let CreateRouter(_: Projects.IProjectRepository) =
-  let router: Navs.IRouter<_> = Navs.Avalonia.AvaloniaRouter([])
+let inline ApplyMigrations migrondi = Migrations.Migrate migrondi
 
-  router
-
-let CreateProjectRepository() =
+let inline CreateProjectRepository() =
   Projects.GetRepository Database.ConnectionFactory
 
-let GetMigrondi() =
+let inline GetMigrondi() =
   Migrations.GetMigrondi()
   |> ValueOption.defaultWith(fun () -> failwith "No migrondi found")
-
 
 let Orchestrate() =
   GetMigrondi() |> ApplyMigrations
 
-  CreateProjectRepository() |> CreateRouter |> BuildMainWindow
+  CreateProjectRepository() |> Views.Routes.GetRouter |> BuildMainWindow
 
 [<EntryPoint; STAThread>]
 let main argv =

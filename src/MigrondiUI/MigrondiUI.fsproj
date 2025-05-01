@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <TargetFramework>net9.0</TargetFramework>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -9,12 +9,12 @@
     <Compile Include="Types.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="Projects.fs" />
+    <Compile Include="Views/Landing.fs" /><Compile Include="Views\Routes.fs" />
     <Compile Include="Migrations.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="migrations/**" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="migrondi.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.0.0" />
@@ -24,6 +24,7 @@
     <PackageReference Include="Donald" Version="10.1.0" />
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="4.18.0" />
+    <PackageReference Include="JDeck" Version="1.0.0-beta-006" />
     <PackageReference Include="NXUI" Version="11.0.0" />
     <PackageReference Include="NXUI.Desktop" Version="11.0.0" />
     <PackageReference Include="NXUI.FSharp" Version="11.0.0" />

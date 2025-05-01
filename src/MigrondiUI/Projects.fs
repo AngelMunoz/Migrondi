@@ -31,11 +31,10 @@ module Projects =
       try
 
         let json = File.ReadAllText path
-        let config = JsonSerializer.Deserialize<MigrondiConfig> json
 
-        match config with
-        | null -> return! None
-        | config -> return config
+        return!
+          JDeck.Decoding.fromString(json, Decoders.migrondiConfigDecoder)
+          |> Result.toOption
       with :? FileNotFoundException ->
         return! None
     }
