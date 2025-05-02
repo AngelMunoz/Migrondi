@@ -19,6 +19,13 @@ open MigrondiUI.Projects
 module Landing =
   open Avalonia.Controls.Templates
   open System.Collections.Generic
+  open Microsoft.Extensions.Logging
+
+  type LandingViewState =
+    | NewProject
+    | EditProjects
+    | RemoveProjects
+    | Empty
 
   let inline localProjectTemplate(project: LocalProject) =
 
@@ -44,10 +51,19 @@ module Landing =
         .Margin(5)
         .OrientationVertical())
 
-  let repositoryList onProjectSelected (projects: Project list aval) =
+  // Component for empty state
+  let emptyProjectsView() : Control =
+    StackPanel()
+      .Children(TextBlock().Text("No projects available"))
+      .Spacing(5)
+      .Margin(5)
+      .OrientationVertical()
+
+  // Component for the ListBox of projects
+  let projectsListBox onProjectSelected (projects: Project list) : Control =
     let lb =
       ListBox()
-        .ItemsSource(projects |> AVal.toBinding)
+        .ItemsSource(projects)
         .ItemTemplate(repositoryItem)
         .OnSelectionChangedHandler(fun _ args ->
           if args.AddedItems.Count > 0 then
@@ -58,12 +74,61 @@ module Landing =
             ())
 
     lb.SelectionMode <- SelectionMode.Single
-    ScrollViewer().Name("ProjectList").Content(lb)
 
-  type LandingVM(projects: IProjectRepository) =
+    StackPanel()
+      .Children(TextBlock().Text("Available projects:"), lb)
+      .Spacing(5)
+      .Margin(5)
+      .OrientationVertical()
+
+  // Main repository list component
+  let repositoryList onProjectSelected (projects: Project list aval) : Control =
+    let listContent =
+      projects
+      |> AVal.map(fun projects ->
+        match projects with
+        | [] -> emptyProjectsView()
+        | projects -> projectsListBox onProjectSelected projects)
+
+    ScrollViewer().Name("ProjectList").Content(listContent |> AVal.toBinding)
+
+  // Toolbar with a "New Project" button
+  let toolbar selectNewProject : Control =
+    StackPanel()
+      .OrientationHorizontal()
+      .Spacing(10)
+      .Children(
+        Button()
+          .Content("New Project")
+          .OnClickHandler(fun _ _ -> selectNewProject NewProject)
+      )
+
+  let viewContent
+    (viewState: aval<LandingViewState>, projects, handleProjectSelected)
+    : Control =
+    let content =
+      viewState
+      |> AVal.map(fun state ->
+        match state with
+        | NewProject ->
+          TextBlock().Text("[New Project Dialog Placeholder]") :> Control
+        | EditProjects ->
+          TextBlock().Text("[Edit Projects Dialog Placeholder]")
+        | RemoveProjects ->
+          TextBlock().Text("[Remove Projects Dialog Placeholder]")
+        | Empty -> repositoryList handleProjectSelected projects)
+
+    Border().Child(content |> AVal.toBinding)
+
+  type LandingVM(logger: ILogger<LandingVM>, projects: IProjectRepository) =
 
     let _projects = cval []
-    member this.Projects: Project list aval = _projects
+
+    let viewState = cval Empty
+
+    do logger.LogDebug "LandingVM created"
+
+    member _.Projects: Project list aval = _projects
 
     member _.LoadProjects() = async {
       let! projects = projects.GetProjects()
@@ -71,29 +136,41 @@ module Landing =
       return ()
     }
 
+    member _.SetLandingState(state: LandingViewState) =
+      logger.LogDebug("Setting landing state to {State}", state)
+      viewState.setValue state
+
+    member _.EmptyViewState() =
+      logger.LogDebug("Setting landing state to Empty")
+      viewState.setValue Empty
+
+    member _.ViewState: aval<LandingViewState> = viewState
+
   let View (vm: LandingVM) _ (nav: INavigable<Control>) : Async<Control> = async {
     vm.LoadProjects() |> Async.StartImmediate
 
     let handleProjectSelected(project: Project) =
-      nav.Navigate $"/projects/%s{project.Id.ToString()}"
-      |> Async.AwaitTask
-      |> Async.Ignore
+      async {
+        match! nav.Navigate $"/projects/%s{project.Id.ToString()}" with
+        | Ok _ -> ()
+        | Error(NavigationFailed e) -> printfn "Navigation failed: %s" e
+        | _ -> printfn "Unknown navigation error"
+
+      }
       |> Async.StartImmediate
-      // Handle the selected project here
-      printfn $"Selected project: %s{project.Name}"
 
     return
       UserControl()
         .Name("Landing")
         .Content(
-          StackPanel()
+          DockPanel()
+            .LastChildFill(true)
             .Children(
-              TextBlock().Text("Welcome to Migrondi!"),
-              repositoryList handleProjectSelected vm.Projects
+              toolbar(vm.SetLandingState).DockTop(),
+              viewContent(vm.ViewState, vm.Projects, handleProjectSelected)
+                .DockTop()
             )
-            .Spacing(10)
             .Margin(10)
-            .OrientationVertical()
         )
       :> Control
   }
