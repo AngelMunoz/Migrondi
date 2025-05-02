@@ -10,7 +10,7 @@ open MigrondiUI
 
 let BuildMainWindow(router: Navs.IRouter<_>) =
 
-  Window().Content(router.Content |> AVal.toBinding).Width(300).Height 300
+  Window().Content(RouterOutlet().router router).Width(300).Height 300
 
 let inline ApplyMigrations migrondi = Migrations.Migrate migrondi
 
