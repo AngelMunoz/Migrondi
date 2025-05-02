@@ -1,5 +1,7 @@
 open System
 
+open Serilog
+
 open Avalonia
 open Avalonia.Controls
 open NXUI.Extensions
@@ -7,6 +9,19 @@ open NXUI.Extensions
 open Navs.Avalonia
 
 open MigrondiUI
+open Microsoft.Extensions.Logging
+
+Log.Logger <-
+  LoggerConfiguration()
+#if DEBUG
+    .MinimumLevel.Debug()
+#else
+    .MinimumLevel.Information()
+#endif
+    .WriteTo.Console()
+    .CreateLogger()
+
+let loggerFactory = (new LoggerFactory()).AddSerilog(Log.Logger)
 
 let BuildMainWindow(router: Navs.IRouter<_>) =
 
@@ -17,14 +32,15 @@ let inline ApplyMigrations migrondi = Migrations.Migrate migrondi
 let inline CreateProjectRepository() =
   Projects.GetRepository Database.ConnectionFactory
 
-let inline GetMigrondi() =
-  Migrations.GetMigrondi()
-  |> ValueOption.defaultWith(fun () -> failwith "No migrondi found")
-
 let Orchestrate() =
-  GetMigrondi() |> ApplyMigrations
 
-  CreateProjectRepository() |> Views.Routes.GetRouter |> BuildMainWindow
+  Migrations.GetMigrondi loggerFactory
+  |> ValueOption.defaultWith(fun () -> failwith "No migrondi found")
+  |> ApplyMigrations
+
+  CreateProjectRepository()
+  |> Views.Routes.GetRouter loggerFactory
+  |> BuildMainWindow
 
 [<EntryPoint; STAThread>]
 let main argv =
@@ -33,5 +49,5 @@ let main argv =
     .Configure<Application>()
     .UsePlatformDetect()
     .UseFluentTheme(Styling.ThemeVariant.Default)
-    .WithApplicationName("NXUI and F#")
+    .WithApplicationName("Migrondi UI")
     .StartWithClassicDesktopLifetime(Orchestrate, argv)
