@@ -7,8 +7,9 @@ open Migrondi.Core
 open FsToolkit.ErrorHandling
 
 module Migrations =
+  open Microsoft.Extensions.Logging
 
-  let GetMigrondi() = voption {
+  let GetMigrondi(lf: ILoggerFactory) = voption {
     let path = Path.GetFullPath AppContext.BaseDirectory
 
     let migrations = Path.Combine(path, "migrations")
@@ -20,7 +21,9 @@ module Migrations =
           connection = $"Data Source={dataSource};"
     }
 
-    let migrondi = Migrondi.MigrondiFactory(config, path)
+    let migrondi =
+      Migrondi.MigrondiFactory(config, path, lf.CreateLogger<IMigrondi>())
+
     migrondi.Initialize()
 
     return migrondi
