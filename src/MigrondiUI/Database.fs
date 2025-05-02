@@ -9,23 +9,23 @@ module Queries =
   let GetLocalProjects =
     """
     select
-      id, name, description, lp.config_path as config_path
-    from projects
+      p.id as id, p.name as name, p.description as description, lp.config_path as config_path
+    from projects as p
     left join local_projects as lp
       on
-      lp.project_id = projects.id;
+      lp.project_id = p.id;
     """
 
   [<Literal>]
   let GetLocalProjectById =
     """
     select
-      id, name, description, lp.config_path as config_path
-    from projects
+      p.id as id, p.name as name, p.description as description, lp.config_path as config_path
+    from projects as p
     left join local_projects as lp
       on
-      lp.project_id = projects.id
-    where projects.id = @id;
+      lp.project_id = p.id
+    where p.id = @id;
     """
 
   [<Literal>]
