@@ -20,6 +20,9 @@ open MigrondiUI.Projects
 module Landing =
   open Avalonia.Controls.Templates
   open Microsoft.Extensions.Logging
+  open Avalonia.Platform.Storage
+  open System.Collections.Generic
+  open JDeck
 
   type LandingViewState =
     | NewProject
@@ -61,10 +64,45 @@ module Landing =
 
     member _.ViewState: aval<LandingViewState> = viewState
 
-    member _.LoadLocalProject() : Async<Guid> = async {
-      // TODO: Implement actual logic to load a local project and return its Guid
-      // For now, return a new Guid as a placeholder
-      return Guid.NewGuid()
+    member _.LoadLocalProject(view: Control) : Async<Guid voption> = async {
+      logger.LogDebug "Loading local project"
+
+      match TopLevel.GetTopLevel(view) with
+      | null ->
+        logger.LogWarning "TopLevel is null"
+        return ValueNone
+      | topLevel ->
+        let! file =
+          topLevel.StorageProvider.OpenFilePickerAsync(
+            FilePickerOpenOptions(
+              Title = "Select Project File",
+              AllowMultiple = false,
+              FileTypeFilter = [|
+                FilePickerFileType(
+                  "Migrondi Config",
+                  Patterns = [ "migrondi.json" ]
+                )
+              |]
+            )
+          )
+
+        match file |> Seq.tryHead with
+        | Some file ->
+          let! parentFolder = file.GetParentAsync()
+
+          logger.LogDebug("Selected file: {File}", file.Name)
+
+          let! pid =
+            projects.InsertLocalProject(
+              parentFolder.Name,
+              // TODO: handle uris when we're not on desktop platforms
+              configPath = file.Path.LocalPath
+            )
+
+          return ValueSome pid
+        | None ->
+          logger.LogWarning "No file selected"
+          return ValueNone
     }
 
   let inline emptyProjectsView() : Control =
@@ -202,6 +240,7 @@ module Landing =
     (nav: INavigable<Control>)
     : Async<Control> =
     async {
+      let view = UserControl()
       vm.LoadProjects() |> Async.StartImmediate
 
       let handleProjectSelected(project: Project) =
@@ -215,8 +254,10 @@ module Landing =
         |> Async.StartImmediate
 
       let handleSelectLocalProject() = async {
-        let! projectId = vm.LoadLocalProject()
+        let! projectId = vm.LoadLocalProject view
         do vm.SetLandingState Empty
+
+        vm.LoadProjects() |> Async.StartImmediate
 
         match! nav.Navigate $"/projects/%s{projectId.ToString()}" with
         | Ok _ -> ()
@@ -234,7 +275,7 @@ module Landing =
       }
 
       return
-        UserControl()
+        view
           .Name("Landing")
           .Content(
             DockPanel()
