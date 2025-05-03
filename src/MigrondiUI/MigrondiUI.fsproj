@@ -9,7 +9,9 @@
     <Compile Include="Types.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="Projects.fs" />
-    <Compile Include="Views/Landing.fs" /><Compile Include="Views\Routes.fs" />
+    <Compile Include="Views/Landing.fs" />
+    <Compile Include="Views/ProjectDetails.fs" />
+    <Compile Include="Views/Routes.fs" />
     <Compile Include="Migrations.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
