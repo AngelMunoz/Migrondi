@@ -18,8 +18,7 @@ module Projects =
     abstract member InsertVirtualProject: project: VirtualProject -> Task<unit>
 
     abstract member InsertLocalProject:
-      name: string * description: string option * configPath: string ->
-        Task<unit>
+      name: string * configPath: string * ?description: string -> Task<Guid>
 
     abstract member UpdateProject: Project -> Task<unit>
 
@@ -79,7 +78,7 @@ module Projects =
 
         member _.InsertVirtualProject _ = failwith "Not Implemented"
 
-        member _.InsertLocalProject(name, description, path) =
+        member _.InsertLocalProject(name, path, description) =
           insertLocalProject(name, description, path)
 
         member _.UpdateProject arg1 = task {

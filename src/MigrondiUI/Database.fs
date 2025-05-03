@@ -130,6 +130,8 @@ module Database =
           "project_id", sqlString projectId
         ]
         |> Db.Async.exec
+
+      return projectId
     }
 
   let UpdateProject(createDbConnection: unit -> IDbConnection) =
