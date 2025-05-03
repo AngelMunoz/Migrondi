@@ -62,6 +62,23 @@ module Decoders =
       }
     }
 
+  let driverEncoder: Encoder<MigrondiDriver> =
+    fun driver ->
+      match driver with
+      | MigrondiDriver.Mysql -> Encode.string "mysql"
+      | MigrondiDriver.Postgresql -> Encode.string "postgres"
+      | MigrondiDriver.Mssql -> Encode.string "mssql"
+      | MigrondiDriver.Sqlite -> Encode.string "sqlite"
+
+  let migrondiConfigEncoder: Encoder<MigrondiConfig> =
+    fun config ->
+      Json.object [
+        "connection", Encode.string config.connection
+        "migrations", Encode.string config.migrations
+        "tableName", Encode.string config.tableName
+        "driver", driverEncoder config.driver
+      ]
+
 [<AutoOpen>]
 module ProjectExtensions =
   open JDeck

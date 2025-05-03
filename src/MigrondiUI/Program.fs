@@ -23,22 +23,17 @@ Log.Logger <-
 
 let loggerFactory = (new LoggerFactory()).AddSerilog(Log.Logger)
 
-let BuildMainWindow(router: Navs.IRouter<_>) =
+let BuildMainWindow router =
 
   Window().Content(RouterOutlet().router router).Width(300).Height 300
-
-let inline ApplyMigrations migrondi = Migrations.Migrate migrondi
-
-let inline CreateProjectRepository() =
-  Projects.GetRepository Database.ConnectionFactory
 
 let Orchestrate() =
 
   Migrations.GetMigrondi loggerFactory
   |> ValueOption.defaultWith(fun () -> failwith "No migrondi found")
-  |> ApplyMigrations
+  |> Migrations.Migrate
 
-  CreateProjectRepository()
+  Projects.GetRepository Database.ConnectionFactory
   |> Views.Routes.GetRouter loggerFactory
   |> BuildMainWindow
 
