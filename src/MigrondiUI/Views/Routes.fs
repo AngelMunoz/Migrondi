@@ -12,7 +12,7 @@ module Routes =
   /// Factory function to create a Landing view and its VM from an IProjectRepository
   let private landingViewWithVM(lf: ILoggerFactory, projects) =
     let logger = lf.CreateLogger<Landing.LandingVM>()
-    Landing.View(Landing.LandingVM(logger, projects))
+    Landing.View(Landing.LandingVM(logger, projects), logger)
 
   let GetRouter lf (projects: IProjectRepository) =
 
