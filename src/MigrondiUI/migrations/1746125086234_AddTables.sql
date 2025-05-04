@@ -11,7 +11,7 @@ create table if not exists "projects"(
 
 create table if not exists "local_projects"(
     "id" text primary key,
-    "config_path" text not null,
+    "config_path" text not null unique,
     "project_id" text not null unique,
     foreign key("project_id") references "projects"("id") on delete cascade
 );
