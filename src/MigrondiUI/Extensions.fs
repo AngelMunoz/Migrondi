@@ -12,8 +12,32 @@ type ListBox with
     this.SelectionMode <- mode
     this
 
+  member inline this.SingleSelection() = this.SelectionMode SelectionMode.Single
+
+  member inline this.MultipleSelection() =
+    this.SelectionMode SelectionMode.Multiple
+
+  member inline this.ToggleSelection() = this.SelectionMode SelectionMode.Toggle
+
+  member inline this.AlwaysSelectedSelection() =
+    this.SelectionMode SelectionMode.AlwaysSelected
+
 type SelectingItemsControl with
 
-  member inline this.OnSelectionChanged<'T>(f: 'T seq * 'T seq -> unit) =
+  member inline this.OnSelectionChanged<'T>
+    (onSelectionChanged: ('T seq * 'T seq) * SelectingItemsControl -> unit)
+    =
     this.OnSelectionChangedHandler(fun _ args ->
-      f(args.AddedItems |> Seq.cast<'T>, args.RemovedItems |> Seq.cast<'T>))
+      onSelectionChanged(
+        (args.AddedItems |> Seq.cast<'T>, args.RemovedItems |> Seq.cast<'T>),
+        this
+      ))
+
+type Grid with
+  member inline this.RowDefinitions(defs: string) =
+    this.RowDefinitions <- RowDefinitions.Parse(defs)
+    this
+
+  member inline this.ColumnDefinitions(defs: string) =
+    this.ColumnDefinitions <- ColumnDefinitions.Parse(defs)
+    this
