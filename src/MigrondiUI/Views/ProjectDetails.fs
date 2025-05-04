@@ -12,28 +12,22 @@ open Navs.Avalonia
 open MigrondiUI
 open MigrondiUI.Projects
 
-module ProjectDetails =
+module LocalProjectDetails =
   open Microsoft.Extensions.Logging
+  open Migrondi.Core
 
-  type ProjectDetailsVM
+  type LocalProjectDetailsVM
     (
-      logger: ILogger<ProjectDetailsVM>,
-      projects: IProjectRepository,
-      projectId: Guid
+      logger: ILogger<LocalProjectDetailsVM>,
+      migrondi: IMigrondi,
+      project: LocalProject
     ) =
-    let _project = cval None
 
-    do logger.LogDebug "ProjectDetailsVM created"
+    do logger.LogDebug "LocalProjectDetailsVM created"
 
-    member _.ProjectId: Guid = projectId
 
-    member _.Project: Project option aval = _project
+    member _.Project = project
 
-    member _.LoadProject() = async {
-      let! projectOpt = projects.GetProjectById projectId
-      _project.setValue projectOpt
-      return ()
-    }
 
   let toolbar(onNavigateBack: unit -> unit) : Control =
     StackPanel()
@@ -62,65 +56,70 @@ module ProjectDetails =
       .Margin(5)
       .OrientationVertical()
 
-  let virtualProjectView(project: VirtualProject) : Control =
-    TextBlock()
-      .Text(
-        $"Virtual project: {project.name} with connection {project.connection}"
-      )
+  let getProjectbyId
+    (logger: ILogger, projects: IProjectRepository, projectId: Guid)
+    =
+    async {
+      let! project = projects.GetProjectById projectId
 
-  let viewContent(vm: ProjectDetailsVM) : Control =
-    let content =
-      vm.Project
-      |> AVal.map (function
-        | Some(Local project) -> localProjectView project
-        | Some(Virtual project) -> virtualProjectView project
-        | None -> TextBlock().Text("Project not found"))
-      |> AVal.toBinding
+      match project with
+      | Some(Local project) -> return Some project
+      | _ ->
+        logger.LogWarning(
+          "We're not supposed to have a virtual project here. Project ID: {projectId}",
+          projectId
+        )
 
-    Border().Child(content)
+        return None
+    }
 
   let View
-    (logger, projects)
+    (logger: ILogger<LocalProjectDetailsVM>, projects: IProjectRepository)
     (context: RouteContext)
     (nav: INavigable<Control>)
     : Async<Control> =
     async {
-      let vm = voption {
-        let! projectId = context.getParam<Guid>("projectId")
-        return ProjectDetailsVM(logger, projects, projectId)
+      let vm = asyncOption {
+        let! projectId =
+          context.getParam<Guid> "projectId" |> ValueOption.toOption
+
+        let! project = getProjectbyId(logger, projects, projectId)
+
+        let! config = project.config
+
+        let migrondi = Migrondi.MigrondiFactory(config, project.rootDirectory)
+
+        return LocalProjectDetailsVM(logger, migrondi, project)
       }
 
       let onNavigateBack() =
         async {
           match! nav.NavigateByName("landing") with
           | Ok _ -> ()
-          | Error(NavigationFailed e) ->
-            logger.LogWarning("Navigation failed: {error}", e)
-          | err -> logger.LogError("Unknown navigation error: {error}", err)
+          | Error(e) ->
+            logger.LogWarning("Navigation failed: {error}", e.StringError())
         }
         |> Async.StartImmediate
 
 
-      match vm with
-      | ValueSome vm ->
-        vm.LoadProject() |> Async.StartImmediate
+      match! vm with
+      | Some vm ->
         let view = UserControl()
 
         return
           view
             .Name("ProjectDetails")
-            .Tag(vm.ProjectId)
             .Content(
               DockPanel()
                 .LastChildFill(true)
                 .Children(
                   toolbar(onNavigateBack).DockTop(),
-                  viewContent(vm).DockTop()
+                  localProjectView(vm.Project).DockTop()
                 )
                 .Margin(10)
             )
           :> Control
-      | ValueNone ->
+      | None ->
         logger.LogWarning("Project ID not found in route parameters.")
         return TextBlock().Text("Project ID not found.")
     }

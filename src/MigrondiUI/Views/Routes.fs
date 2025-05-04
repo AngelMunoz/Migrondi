@@ -3,10 +3,12 @@ namespace MigrondiUI.Views
 
 open Navs
 open Navs.Avalonia
+open Avalonia.Controls
+open NXUI.Extensions
 
 
 module Routes =
-  open MigrondiUI.Projects
+
   open Microsoft.Extensions.Logging
 
   let private landingViewWithVM(lf: ILoggerFactory, projects) =
@@ -14,8 +16,13 @@ module Routes =
     Landing.View(Landing.LandingVM(logger, projects), logger)
 
   let private projectDetailsViewWithVM(lf: ILoggerFactory, projects) =
-    let logger = lf.CreateLogger<ProjectDetails.ProjectDetailsVM>()
-    ProjectDetails.View(logger, projects)
+    let logger = lf.CreateLogger<LocalProjectDetails.LocalProjectDetailsVM>()
+    LocalProjectDetails.View(logger, projects)
+
+  let private vProjectDetailsViewWithVM() =
+    fun (_: RouteContext) (_: INavigable<_>) ->
+      TextBlock().Text("Virtual project details view not implemented yet")
+
 
   let GetRouter lf projects =
 
@@ -23,9 +30,15 @@ module Routes =
       AvaloniaRouter [
         Route.define("landing", "/", landingViewWithVM(lf, projects))
         Route.define(
-          "project-details",
-          "/projects/:projectId<guid>",
+          "local-project-details",
+          "/projects/local/:projectId<guid>",
           projectDetailsViewWithVM(lf, projects)
+        )
+        |> Route.cache NoCache
+        Route.define(
+          "virtual-project-details",
+          "/projects/virtual/:projectId<guid>",
+          vProjectDetailsViewWithVM()
         )
         |> Route.cache NoCache
       ]

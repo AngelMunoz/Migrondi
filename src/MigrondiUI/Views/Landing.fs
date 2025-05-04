@@ -247,11 +247,15 @@ module Landing =
 
       let handleProjectSelected(project: Project) =
         async {
-          match! nav.Navigate $"/projects/%s{project.Id.ToString()}" with
+          let url =
+            match project with
+            | Local _ -> $"/projects/local/%s{project.Id.ToString()}"
+            | Virtual _ -> $"/projects/virtual/%s{project.Id.ToString()}"
+
+          match! nav.Navigate url with
           | Ok _ -> ()
-          | Error(NavigationFailed e) ->
-            logger.LogWarning("Navigation failed: {error}", e)
-          | err -> logger.LogError("Unknown navigation error: {error}", err)
+          | Error(e) ->
+            logger.LogWarning("Navigation Failure: {error}", e.StringError())
         }
         |> Async.StartImmediate
 
@@ -263,9 +267,8 @@ module Landing =
 
         match! nav.Navigate $"/projects/%s{projectId.ToString()}" with
         | Ok _ -> ()
-        | Error(NavigationFailed e) ->
-          logger.LogWarning("Navigation failed: {error}", e)
-        | err -> logger.LogError("Unknown navigation error: {error}", err)
+        | Error(e) ->
+          logger.LogWarning("Navigation Failure: {error}", e.StringError())
       }
 
       let viewContentProps = {
