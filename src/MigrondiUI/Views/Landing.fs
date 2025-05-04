@@ -2,10 +2,14 @@ namespace MigrondiUI.Views
 
 open System
 
+open Microsoft.Extensions.Logging
+
 open IcedTasks
 open IcedTasks.Polyfill.Async.PolyfillBuilders
 
 open Avalonia.Controls
+open Avalonia.Controls.Templates
+open Avalonia.Platform.Storage
 
 open NXUI.Extensions
 
@@ -18,11 +22,6 @@ open MigrondiUI.Projects
 
 
 module Landing =
-  open Avalonia.Controls.Templates
-  open Microsoft.Extensions.Logging
-  open Avalonia.Platform.Storage
-  open System.Collections.Generic
-  open JDeck
 
   type LandingViewState =
     | NewProject
@@ -130,9 +129,10 @@ module Landing =
       ListBox()
         .ItemsSource(projects)
         .ItemTemplate(repositoryItem)
-        .SelectionMode(SelectionMode.Single)
-        .OnSelectionChanged<Project>(fun args ->
-          args |> fst |> Seq.tryHead |> Option.iter(onProjectSelected))
+        .SingleSelection()
+        .OnSelectionChanged<Project>(fun (args, source) ->
+          args |> fst |> Seq.tryHead |> Option.iter(onProjectSelected)
+          source.SelectedItem <- null)
 
 
     ScrollViewer()
@@ -169,24 +169,11 @@ module Landing =
       )
 
   let importLocalProject(handleSelectLocalProject: unit -> unit) : Control =
-    StackPanel()
-      .Children(
-        TextBlock().Text("[Import Local Project Component]"),
-        Button()
-          .Content("Select Local Project")
-          .OnClickHandler(fun _ _ -> handleSelectLocalProject())
+    Button()
+      .Content("Select Local Project")
+      .OnClickHandler(fun _ _ -> handleSelectLocalProject())
 
-      )
-      .Spacing(5)
-      .Margin(5)
-      .OrientationVertical()
-
-  let createVirtualProject() : Control =
-    StackPanel()
-      .Children(TextBlock().Text("[Create Virtual Project Component]"))
-      .Spacing(5)
-      .Margin(5)
-      .OrientationVertical()
+  let createVirtualProject() : Control = UserControl()
 
   let newProjectView(handleSelectLocalProject: unit -> unit) : Control =
     let projectType = cval "Local"
@@ -195,16 +182,30 @@ module Landing =
       ComboBox()
         .ItemsSource([ "Local"; "Virtual" ])
         .SelectedItem(projectType |> AVal.toBinding)
-        .OnSelectionChanged<string>(fun args ->
+        .OnSelectionChanged<string>(fun (args, _) ->
           args
           |> fst
           |> Seq.tryHead<string>
           |> Option.iter projectType.setValue)
 
-    StackPanel()
+    Grid()
+      .RowDefinitions("Auto,Auto")
+      .ColumnDefinitions("250,*")
       .Children(
-        TextBlock().Text("Select Project Type:"),
-        comboBox,
+        TextBlock().Text("Select Project Type").Row(0).Column(0),
+        comboBox.Row(1).Column(0),
+        Border()
+          .Child(
+            projectType
+            |> AVal.map(fun t ->
+              match t with
+              | "Local" -> TextBlock().Text("Import Local Project")
+              | "Virtual" -> TextBlock().Text("Create Virtual Project")
+              | _ -> TextBlock().Text "Unknown project type")
+            |> AVal.toBinding
+          )
+          .Row(0)
+          .Column(1),
         Border()
           .Child(
             projectType
@@ -215,10 +216,11 @@ module Landing =
               | _ -> TextBlock().Text "Unknown project type")
             |> AVal.toBinding
           )
+          .Row(1)
+          .Column(1)
+
       )
-      .Spacing(10)
       .Margin(10)
-      .OrientationVertical()
 
   let viewContent(props: ViewContentProps) : Control =
     let content =
