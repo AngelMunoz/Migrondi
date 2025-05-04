@@ -25,7 +25,7 @@ let loggerFactory = (new LoggerFactory()).AddSerilog(Log.Logger)
 
 let BuildMainWindow router =
 
-  Window().Content(RouterOutlet().router router).Width(300).Height 300
+  Window().Content(RouterOutlet().router router).MinWidth(800).MinHeight(640)
 
 let Orchestrate() =
 
