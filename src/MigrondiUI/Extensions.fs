@@ -5,6 +5,7 @@ open Avalonia.Controls
 open Avalonia.Controls.Primitives
 
 open NXUI.Extensions
+open Navs
 
 
 type ListBox with
@@ -41,3 +42,16 @@ type Grid with
   member inline this.ColumnDefinitions(defs: string) =
     this.ColumnDefinitions <- ColumnDefinitions.Parse(defs)
     this
+
+
+type NavigationError<'View> with
+  member this.StringError() =
+    match this with
+    | SameRouteNavigation -> "Navigated to the same route"
+    | NavigationCancelled -> "Navigation cancelled"
+    | RouteNotFound(url) -> $"Route not found: {url}"
+    | NavigationFailed(message) -> $"Navigation failed: {message}"
+    | CantDeactivate(deactivatedRoute) ->
+      $"Can't deactivate route: {deactivatedRoute}"
+    | CantActivate(activatedRoute) -> $"Can't activate route: {activatedRoute}"
+    | GuardRedirect(redirectTo) -> $"Guard redirect to: {redirectTo}"

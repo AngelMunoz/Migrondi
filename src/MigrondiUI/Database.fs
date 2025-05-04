@@ -74,6 +74,7 @@ module Mappers =
       name = name
       description = description
       config = config
+      rootDirectory = configPath
     }
 
 module Database =

@@ -8,6 +8,7 @@ type LocalProject = {
   name: string
   description: string option
   config: MigrondiConfig option
+  rootDirectory: string
 }
 
 type VirtualProject = {
