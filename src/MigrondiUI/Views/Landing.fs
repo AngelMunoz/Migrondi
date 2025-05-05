@@ -138,7 +138,12 @@ module Landing =
           logger.LogDebug("Selected directory: {Directory}", directory)
 
           try
-            Directory.CreateDirectory(Path.Combine(directory, "migrations"))
+            Directory.CreateDirectory(
+              Path.Combine(directory, "migrations"),
+              UnixFileMode.UserRead
+              ||| UnixFileMode.UserWrite
+              ||| UnixFileMode.UserExecute
+            )
             |> ignore
           with
           | :? IOException
@@ -175,8 +180,10 @@ module Landing =
             config
           )
 
+          let configPath = Path.Combine(directory, "migrondi.json")
+
           let! pid =
-            projects.InsertLocalProject(dirName, configPath = directory)
+            projects.InsertLocalProject(dirName, configPath = configPath)
 
           logger.LogDebug("Inserted local project with id {Id}", pid)
           return ValueSome pid

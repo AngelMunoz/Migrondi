@@ -83,7 +83,13 @@ module LocalProjectDetails =
         let! projectId =
           context.getParam<Guid> "projectId" |> ValueOption.toOption
 
+        logger.LogDebug(
+          "Project ID from route parameters: {projectId}",
+          projectId
+        )
+
         let! project = getProjectbyId(logger, projects, projectId)
+        logger.LogDebug("Project from repository: {project}", project)
 
         let! config = project.config
 
