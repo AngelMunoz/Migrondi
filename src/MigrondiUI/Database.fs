@@ -74,7 +74,7 @@ module Mappers =
       name = name
       description = description
       config = config
-      rootDirectory = configPath
+      migrondiConfigPath = configPath
     }
 
 module Database =

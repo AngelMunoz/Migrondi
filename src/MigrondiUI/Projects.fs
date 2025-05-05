@@ -17,6 +17,13 @@ module Projects =
 
     abstract member InsertVirtualProject: project: VirtualProject -> Task<unit>
 
+    /// <summary>
+    /// Inserts a local project into the database.
+    /// </summary>
+    /// <param name="name">The name of the project.</param>
+    /// <param name="configPath">The path to the project configuration file. (migrondi.json)</param>
+    /// <param name="description">An optional description of the project.</param>
+    /// <returns>The ID of the inserted project.</returns>
     abstract member InsertLocalProject:
       name: string * configPath: string * ?description: string -> Task<Guid>
 
