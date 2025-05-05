@@ -15,6 +15,7 @@ open MigrondiUI.Projects
 module LocalProjectDetails =
   open Microsoft.Extensions.Logging
   open Migrondi.Core
+  open System.IO
 
   type LocalProjectDetailsVM
     (
@@ -37,41 +38,40 @@ module LocalProjectDetails =
         Button().Content("Back").OnClickHandler(fun _ _ -> onNavigateBack())
       )
 
+  let configView(configPath: string, config: MigrondiConfig) : Control =
+    let migrationsDir =
+      option {
+        let! path = configPath |> Path.GetDirectoryName
+        return Path.Combine(path, config.migrations) |> Path.GetFullPath
+      }
+      |> Option.defaultValue "Unable to resolve the project's root directory"
+
+    Grid()
+      .RowDefinitions("*,Auto,Auto")
+      .ColumnDefinitions("10*,90*")
+      .Children(
+        LabeledField
+          .Horizontal("Connection String:", config.connection)
+          .Row(0)
+          .Column(0)
+          .ColumnSpan(2),
+        LabeledField.Horizontal("Driver:", $"{config.driver}").Row(1).Column(0),
+        LabeledField
+          .Horizontal("Migrations Directory:", migrationsDir)
+          .Row(1)
+          .Column(1)
+      )
+
   let localProjectView(project: LocalProject) : Control =
     let description = defaultArg project.description "No description"
 
     let config =
-      match project.config with
-      | Some config -> (Decoders.migrondiConfigEncoder config).ToJsonString()
-      | None ->
-        "No configuration found, the project might be missing from disk."
+      project.config |> Option.defaultWith(fun _ -> failwith "No config found")
 
-    StackPanel()
-      .Children(
-        TextBlock().Text($"Project: {project.name}"),
-        TextBlock().Text($"Description: {description}"),
-        TextBlock().Text($"Configuration: {config}")
-      )
-      .Spacing(5)
-      .Margin(5)
-      .OrientationVertical()
+    Expander()
+      .Header($"{project.name} - {description}")
+      .Content(configView(project.migrondiConfigPath, config))
 
-  let getProjectbyId
-    (logger: ILogger, projects: IProjectRepository, projectId: Guid)
-    =
-    async {
-      let! project = projects.GetProjectById projectId
-
-      match project with
-      | Some(Local project) -> return Some project
-      | _ ->
-        logger.LogWarning(
-          "We're not supposed to have a virtual project here. Project ID: {projectId}",
-          projectId
-        )
-
-        return None
-    }
 
   let View
     (logger: ILogger<LocalProjectDetailsVM>, projects: IProjectRepository)
@@ -79,6 +79,20 @@ module LocalProjectDetails =
     (nav: INavigable<Control>)
     : Async<Control> =
     async {
+      let getProjectbyId(projectId: Guid) = async {
+        let! project = projects.GetProjectById projectId
+
+        match project with
+        | Some(Local project) -> return Some project
+        | _ ->
+          logger.LogWarning(
+            "We're not supposed to have a virtual project here. Project ID: {projectId}",
+            projectId
+          )
+
+          return None
+      }
+
       let vm = asyncOption {
         let! projectId =
           context.getParam<Guid> "projectId" |> ValueOption.toOption
@@ -88,12 +102,13 @@ module LocalProjectDetails =
           projectId
         )
 
-        let! project = getProjectbyId(logger, projects, projectId)
+        let! project = getProjectbyId projectId
         logger.LogDebug("Project from repository: {project}", project)
 
         let! config = project.config
 
-        let migrondi = Migrondi.MigrondiFactory(config, project.rootDirectory)
+        let migrondi =
+          Migrondi.MigrondiFactory(config, project.migrondiConfigPath)
 
         return LocalProjectDetailsVM(logger, migrondi, project)
       }
@@ -110,20 +125,29 @@ module LocalProjectDetails =
 
       match! vm with
       | Some vm ->
-        let view = UserControl()
-
         return
-          view
+          UserControl()
             .Name("ProjectDetails")
             .Content(
-              DockPanel()
-                .LastChildFill(true)
+              Grid()
+                .RowDefinitions("5*,95*")
+                .ColumnDefinitions("Auto,*")
                 .Children(
-                  toolbar(onNavigateBack).DockTop(),
-                  localProjectView(vm.Project).DockTop()
+                  toolbar(onNavigateBack)
+                    .Row(0)
+                    .Column(0)
+                    .ColumnSpan(2)
+                    .HorizontalAlignmentStretch(),
+                  localProjectView(vm.Project)
+                    .Row(1)
+                    .Column(0)
+                    .ColumnSpan(2)
+                    .VerticalAlignmentTop()
+                    .HorizontalAlignmentStretch()
+                    .MarginY(8)
                 )
-                .Margin(10)
             )
+            .Margin(8)
           :> Control
       | None ->
         logger.LogWarning("Project ID not found in route parameters.")
