@@ -24,8 +24,12 @@ Log.Logger <-
 let loggerFactory = (new LoggerFactory()).AddSerilog(Log.Logger)
 
 let BuildMainWindow router =
-
-  Window().Content(RouterOutlet().router router).MinWidth(800).MinHeight(640)
+  let win =
+    Window().Content(RouterOutlet().router router).MinWidth(800).MinHeight(640)
+#if DEBUG
+  win.AttachDevTools()
+#endif
+  win
 
 let Orchestrate() =
 
