@@ -17,7 +17,8 @@ module Routes =
 
   let private projectDetailsViewWithVM(lf: ILoggerFactory, projects) =
     let logger = lf.CreateLogger<LocalProjectDetails.LocalProjectDetailsVM>()
-    LocalProjectDetails.View(logger, projects)
+    let mLogger = lf.CreateLogger<Migrondi.Core.IMigrondi>()
+    LocalProjectDetails.View(logger, mLogger, projects)
 
   let private vProjectDetailsViewWithVM() =
     fun (_: RouteContext) (_: INavigable<_>) ->

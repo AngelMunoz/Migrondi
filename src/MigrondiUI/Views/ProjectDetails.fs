@@ -44,9 +44,19 @@ module LocalProjectDetails =
 
       logger.LogDebug("Migrations listed: {migrations}", migrations.Count)
 
-      _migrations.setValue [| yield! migrations |]
+      migrations |> Seq.rev |> Seq.toArray |> _migrations.setValue
 
       return ()
+    }
+
+    member this.NewMigration(name: string) = async {
+      logger.LogDebug "Creating new migration"
+      let! token = Async.CancellationToken
+
+      logger.LogDebug("New migration name: {name}", name)
+      let! migration = migrondi.RunNewAsync(name, cancellationToken = token)
+      logger.LogDebug("New migration created: {migration}", migration)
+      return! this.ListMigrations()
     }
 
   let migrationView =
@@ -63,14 +73,19 @@ module LocalProjectDetails =
 
       let strDate =
         DateTimeOffset.FromUnixTimeMilliseconds migration.timestamp
-        |> _.ToString("R")
+        |> _.ToString("G")
 
       let migrationContent =
         Grid()
           .ColumnDefinitions("*,4,*")
           .Children(
             LabeledField.Vertical("Migrate Up", migration.upContent).Column(0),
-            GridSplitter().Column(1).ResizeDirectionColumns(),
+            GridSplitter()
+              .Column(1)
+              .ResizeDirectionColumns()
+              .Background("Black" |> SolidColorBrush.Parse)
+              .MarginX(8)
+              .CornerRadius(5),
             LabeledField
               .Vertical("Migrate Down", migration.downContent)
               .Column(2)
@@ -105,14 +120,53 @@ module LocalProjectDetails =
             .Spacing(8)
         )
         .HorizontalAlignmentStretch()
-        .VerticalAlignmentStretch())
+        .VerticalAlignmentStretch()
+        .MarginY(4))
 
-  let toolbar(onNavigateBack: unit -> unit) : Control =
+  let newMigrationForm(onNewMigration: string -> unit) : Control =
+    let isEnabled = cval false
+
+    let nameTextBox =
+      TextBox()
+        .Name("New Migration Name:")
+        .Watermark("Enter migration name")
+        .Width(200)
+        .AcceptsReturn(false)
+        .OnTextChangedHandler(fun txtBox _ ->
+          if String.IsNullOrWhiteSpace txtBox.Text |> not then
+
+            isEnabled.setValue true
+          else
+            ())
+
+    let createButton =
+      Button()
+        .Content("Create Migration")
+        .IsEnabled(isEnabled |> AVal.toBinding)
+        .OnClickHandler(fun _ _ ->
+          let text = (nameTextBox.Text |> nonNull).Trim().Replace(' ', '-')
+          onNewMigration text
+          nameTextBox.Text <- "")
+
+    StackPanel()
+      .OrientationHorizontal()
+      .Children(nameTextBox, createButton)
+      .Spacing(8)
+
+
+  let toolbar
+    (
+      onNavigateBack: unit -> unit,
+      onNewMigration: string -> unit,
+      onRefresh: unit -> unit
+    ) : Control =
     StackPanel()
       .OrientationHorizontal()
       .Spacing(10)
       .Children(
-        Button().Content("Back").OnClickHandler(fun _ _ -> onNavigateBack())
+        Button().Content("Back").OnClickHandler(fun _ _ -> onNavigateBack()),
+        Button().Content("Refresh").OnClickHandler(fun _ _ -> onRefresh()),
+        newMigrationForm(onNewMigration)
       )
 
   let configView(configPath: string, config: MigrondiConfig) : Control =
@@ -162,7 +216,11 @@ module LocalProjectDetails =
     ScrollViewer().Content(migrationListView |> AVal.toBinding)
 
   let View
-    (logger: ILogger<LocalProjectDetailsVM>, projects: IProjectRepository)
+    (
+      logger: ILogger<LocalProjectDetailsVM>,
+      mLogger: ILogger<IMigrondi>,
+      projects: IProjectRepository
+    )
     (context: RouteContext)
     (nav: INavigable<Control>)
     : Async<Control> =
@@ -198,7 +256,7 @@ module LocalProjectDetails =
         let projectRoot =
           Path.GetDirectoryName project.migrondiConfigPath |> nonNull
 
-        let migrondi = Migrondi.MigrondiFactory(config, projectRoot)
+        let migrondi = Migrondi.MigrondiFactory(config, projectRoot, mLogger)
 
         return LocalProjectDetailsVM(logger, migrondi, project)
       }
@@ -217,6 +275,12 @@ module LocalProjectDetails =
       | Some vm ->
         vm.ListMigrations() |> Async.StartImmediate
 
+        let onNewMigration name =
+          vm.NewMigration name |> Async.StartImmediate
+
+        let onRefresh() =
+          vm.ListMigrations() |> Async.StartImmediate
+
         return
           UserControl()
             .Name("ProjectDetails")
@@ -225,7 +289,7 @@ module LocalProjectDetails =
                 .RowDefinitions("Auto,Auto,*")
                 .ColumnDefinitions("Auto,*,*")
                 .Children(
-                  toolbar(onNavigateBack)
+                  toolbar(onNavigateBack, onNewMigration, onRefresh)
                     .Row(0)
                     .Column(0)
                     .ColumnSpan(2)
