@@ -1,8 +1,12 @@
 [<AutoOpen>]
 module Extensions
 
+open System.Runtime.CompilerServices
+
+open Avalonia
 open Avalonia.Controls
 open Avalonia.Controls.Primitives
+open Avalonia.Layout
 
 open NXUI.Extensions
 open Navs
@@ -41,6 +45,62 @@ type Grid with
 
   member inline this.ColumnDefinitions(defs: string) =
     this.ColumnDefinitions <- ColumnDefinitions.Parse(defs)
+    this
+
+[<Extension>]
+type LayoutableExtensions =
+  [<Extension>]
+  static member inline MarginTop<'T when 'T :> Layoutable>
+    (this: 'T, margin: float)
+    =
+    this.Margin <-
+      Thickness(this.Margin.Left, margin, this.Margin.Right, this.Margin.Bottom)
+
+    this
+
+  [<Extension>]
+  static member inline MarginBottom<'T when 'T :> Layoutable>
+    (this: 'T, margin: float)
+    =
+    this.Margin <-
+      Thickness(this.Margin.Left, this.Margin.Top, this.Margin.Right, margin)
+
+    this
+
+  [<Extension>]
+  static member inline MarginLeft<'T when 'T :> Layoutable>
+    (this: 'T, margin: float)
+    =
+    this.Margin <-
+      Thickness(margin, this.Margin.Top, this.Margin.Right, this.Margin.Bottom)
+
+    this
+
+  [<Extension>]
+  static member inline MarginRight<'T when 'T :> Layoutable>
+    (this: 'T, margin: float)
+    =
+    this.Margin <-
+      Thickness(this.Margin.Left, this.Margin.Top, margin, this.Margin.Bottom)
+
+    this
+
+  [<Extension>]
+  static member inline MarginX<'T when 'T :> Layoutable>
+    (this: 'T, margin: float)
+    =
+    this.Margin <-
+      Thickness(margin, this.Margin.Top, margin, this.Margin.Bottom)
+
+    this
+
+  [<Extension>]
+  static member inline MarginY<'T when 'T :> Layoutable>
+    (this: 'T, margin: float)
+    =
+    this.Margin <-
+      Thickness(this.Margin.Left, margin, this.Margin.Right, margin)
+
     this
 
 
