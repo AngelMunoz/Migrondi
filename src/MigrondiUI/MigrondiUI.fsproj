@@ -9,6 +9,7 @@
     <Compile Include="Types.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="Projects.fs" />
+    <Compile Include="Views/Shared.fs" />
     <Compile Include="Views/Landing.fs" />
     <Compile Include="Views/ProjectDetails.fs" />
     <Compile Include="Views/Routes.fs" />
@@ -23,15 +24,12 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.0.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.0.0" />
     <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.0.0" />
-
     <PackageReference Include="NXUI" Version="11.0.0" />
     <PackageReference Include="NXUI.Desktop" Version="11.0.0" />
     <PackageReference Include="NXUI.FSharp" Version="11.0.0" />
-
     <PackageReference Include="Donald" Version="10.1.0" />
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="4.18.0" />
-
     <PackageReference Include="JDeck" Version="1.0.0-beta-006" />
     <PackageReference Include="Migrondi.Core" Version="1.0.0-beta-011" />
     <PackageReference Include="Navs.Avalonia" Version="1.0.0-rc-005" />
