@@ -1,6 +1,8 @@
 namespace MigrondiUI.Views
 
 open System
+open System.IO
+open System.Text.Json
 
 open Microsoft.Extensions.Logging
 
@@ -14,9 +16,11 @@ open Avalonia.Platform.Storage
 open NXUI.Extensions
 
 open FSharp.Data.Adaptive
+open FsToolkit.ErrorHandling
 
 open Navs
 open Navs.Avalonia
+open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Projects
 
@@ -35,6 +39,7 @@ module Landing =
     projects: Project list aval
     handleProjectSelected: Project -> unit
     handleSelectLocalProject: unit -> unit
+    handleCreateNewLocalProject: unit -> unit
   }
 
   type LandingVM(logger: ILogger<LandingVM>, projects: IProjectRepository) =
@@ -104,6 +109,79 @@ module Landing =
           return ValueNone
     }
 
+    member _.CreateNewLocalProject(view) = async {
+      logger.LogDebug "Creating new local project"
+
+      match TopLevel.GetTopLevel view with
+      | null ->
+        logger.LogWarning "TopLevel is null"
+        return ValueNone
+      | topLevel ->
+        let! selectedDirectory = asyncOption {
+          let! directory =
+            topLevel.StorageProvider.OpenFolderPickerAsync(
+              FolderPickerOpenOptions(AllowMultiple = false)
+            )
+
+          let! selected = directory |> Seq.tryHead
+
+          return! selected.TryGetLocalPath() |> Option.ofNull
+        }
+
+        match selectedDirectory with
+        | None ->
+          logger.LogWarning "No directory selected"
+          return ValueNone
+        | Some directory ->
+          let config = MigrondiConfig.Default
+
+          logger.LogDebug("Selected directory: {Directory}", directory)
+
+          try
+            Directory.CreateDirectory(Path.Combine(directory, "migrations"))
+            |> ignore
+          with
+          | :? IOException
+          | :? UnauthorizedAccessException as ex ->
+
+            logger.LogWarning(
+              "Failed to create migrations directory: {Message}",
+              ex.Message
+            )
+
+          let configPath = Path.Combine(directory, "migrondi.json")
+          logger.LogDebug("Creating config file in {configfile}", configPath)
+
+          File.WriteAllText(
+            configPath,
+            Decoders
+              .migrondiConfigEncoder(config)
+              .ToJsonString(
+                JsonSerializerOptions(WriteIndented = true, IndentSize = 2)
+              )
+          )
+
+          let dirName = Path.GetFileNameWithoutExtension directory |> nonNull
+
+          logger.LogDebug("Inserting local project with name {Name}", dirName)
+
+          logger.LogDebug(
+            "Inserting local project with config path {Path}",
+            directory
+          )
+
+          logger.LogDebug(
+            "Inserting local project with config {Config}",
+            config
+          )
+
+          let! pid =
+            projects.InsertLocalProject(dirName, configPath = directory)
+
+          logger.LogDebug("Inserted local project with id {Id}", pid)
+          return ValueSome pid
+    }
+
   let inline emptyProjectsView() : Control =
     StackPanel()
       .Children(TextBlock().Text("No projects available"))
@@ -168,14 +246,29 @@ module Landing =
           )
       )
 
-  let importLocalProject(handleSelectLocalProject: unit -> unit) : Control =
-    Button()
-      .Content("Select Local Project")
-      .OnClickHandler(fun _ _ -> handleSelectLocalProject())
+  let importLocalProject
+    (
+      handleSelectLocalProject: (unit -> unit),
+      handleCreateNewLocalProject: unit -> unit
+    ) : Control =
+    let createNewLocalProject: Control =
+      Button()
+        .Content("Create New Local Project")
+        .OnClickHandler(fun _ _ -> handleCreateNewLocalProject())
+
+    let selectLocalProject: Control =
+      Button()
+        .Content("Select Local Project")
+        .OnClickHandler(fun _ _ -> handleSelectLocalProject())
+
+    StackPanel()
+      .Spacing(10)
+      .Children(createNewLocalProject, selectLocalProject)
+      .Margin(10)
 
   let createVirtualProject() : Control = UserControl()
 
-  let newProjectView(handleSelectLocalProject: unit -> unit) : Control =
+  let newProjectView events : Control =
     let projectType = cval "Local"
 
     let comboBox =
@@ -211,7 +304,7 @@ module Landing =
             projectType
             |> AVal.map(fun t ->
               match t with
-              | "Local" -> importLocalProject handleSelectLocalProject
+              | "Local" -> importLocalProject(events)
               | "Virtual" -> createVirtualProject()
               | _ -> TextBlock().Text "Unknown project type")
             |> AVal.toBinding
@@ -227,7 +320,11 @@ module Landing =
       props.viewState
       |> AVal.map(fun state ->
         match state with
-        | NewProject -> newProjectView props.handleSelectLocalProject
+        | NewProject ->
+          newProjectView(
+            props.handleSelectLocalProject,
+            props.handleCreateNewLocalProject
+          )
         | EditProjects ->
           TextBlock().Text("[Edit Projects Dialog Placeholder]")
         | RemoveProjects ->
@@ -265,10 +362,30 @@ module Landing =
 
         vm.LoadProjects() |> Async.StartImmediate
 
-        match! nav.Navigate $"/projects/%s{projectId.ToString()}" with
+        match! nav.Navigate $"/projects/local/%s{projectId.ToString()}" with
         | Ok _ -> ()
         | Error(e) ->
           logger.LogWarning("Navigation Failure: {error}", e.StringError())
+      }
+
+      let handleCreateNewLocalProject() = async {
+
+        let! projectId = vm.CreateNewLocalProject view
+
+        match projectId with
+        | ValueNone ->
+          logger.LogWarning "No project id returned"
+          return ()
+        | ValueSome projectId ->
+
+
+          match! nav.Navigate $"/projects/local/%s{projectId.ToString()}" with
+          | Ok _ -> ()
+          | Error(e) ->
+            logger.LogWarning("Navigation Failure: {error}", e.StringError())
+
+          vm.SetLandingState Empty
+          vm.LoadProjects() |> Async.StartImmediate
       }
 
       let viewContentProps = {
@@ -277,6 +394,8 @@ module Landing =
         handleProjectSelected = handleProjectSelected
         handleSelectLocalProject =
           fun () -> handleSelectLocalProject() |> Async.StartImmediate
+        handleCreateNewLocalProject =
+          fun () -> handleCreateNewLocalProject() |> Async.StartImmediate
       }
 
       return
