@@ -21,8 +21,19 @@ open Navs.Avalonia
 open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Projects
+open System.Threading.Tasks
 
+[<Struct>]
+type RunMigrationKind =
+  | Up
+  | Down
+  | DryUp
+  | DryDown
 
+[<Struct>]
+type CurrentShow =
+  | Migrations
+  | DryRun
 
 type LocalProjectDetailsVM
   (
@@ -32,6 +43,9 @@ type LocalProjectDetailsVM
   ) =
 
   let _migrations = cval [||]
+  let lastDryRun = cval [||]
+
+  let currentShow = cval Migrations
 
   do
     logger.LogDebug "LocalProjectDetailsVM created"
@@ -40,6 +54,10 @@ type LocalProjectDetailsVM
   member _.Project = project
 
   member _.Migrations: MigrationStatus[] aval = _migrations
+
+  member _.LastDryRun: Migration[] aval = lastDryRun
+
+  member _.CurrentShow: CurrentShow aval = currentShow
 
   member _.ListMigrations() = async {
     logger.LogDebug "Listing migrations"
@@ -50,6 +68,10 @@ type LocalProjectDetailsVM
 
     migrations |> Seq.rev |> Seq.toArray |> _migrations.setValue
 
+    lastDryRun.setValue [||]
+    logger.LogDebug "Last dry run set to empty array"
+
+    currentShow.setValue Migrations
     return ()
   }
 
@@ -61,6 +83,39 @@ type LocalProjectDetailsVM
     let! migration = migrondi.RunNewAsync(name, cancellationToken = token)
     logger.LogDebug("New migration created: {migration}", migration)
     return! this.ListMigrations()
+  }
+
+  member this.RunMigrations(kind: RunMigrationKind, steps: int) = async {
+    logger.LogDebug "Running migrations"
+    let! token = Async.CancellationToken
+    logger.LogDebug("Running migrations: {kind}, {steps}", kind, steps)
+
+    match kind with
+    | Up ->
+      do! migrondi.RunUpAsync(steps, cancellationToken = token) :> Task
+      do! this.ListMigrations()
+
+    | Down ->
+      do! migrondi.RunDownAsync(steps, cancellationToken = token) :> Task
+      do! this.ListMigrations()
+
+    | DryUp ->
+      let! run = migrondi.DryRunUpAsync(steps, cancellationToken = token)
+      run |> Seq.toArray |> lastDryRun.setValue
+      currentShow.setValue DryRun
+    | DryDown ->
+      let! run = migrondi.DryRunDownAsync(steps, cancellationToken = token)
+      run |> Seq.toArray |> lastDryRun.setValue
+      currentShow.setValue DryRun
+
+    logger.LogDebug("Migrations run completed: {result}", result)
+
+    logger.LogDebug(
+      "Current show set to: {currentShow}",
+      currentShow.getValue()
+    )
+
+    return ()
   }
 
 let migrationView =
@@ -158,19 +213,116 @@ let newMigrationForm(onNewMigration: string -> unit) : Control =
     .Spacing(8)
 
 
+let runMigrations
+  (onRunMigrationsRequested: RunMigrationKind * int -> unit)
+  : Control =
+  let dryRun = cval false
+  let steps = cval 1M
+
+  let getIntValue() =
+    try
+      let v = steps.getValue() |> int
+      if v < 0 then 1 else v
+    with :? OverflowException ->
+      1
+
+
+
+  let applyPendingButton =
+    let abutton =
+      dryRun
+      |> AVal.map(fun dryRun ->
+        if dryRun then
+          Button()
+            .Content("Apply Pending (Dry Run)")
+            .OnClickHandler(fun _ _ ->
+              onRunMigrationsRequested(DryUp, getIntValue()))
+          :> Control
+        else
+          SplitButton()
+            .Content("Apply Pending")
+            .Flyout(
+              Flyout()
+                .Content(
+                  Button()
+                    .Content("Confirm Apply")
+                    .OnClickHandler(fun _ _ ->
+                      onRunMigrationsRequested(Up, getIntValue()))
+                )
+            ))
+
+    UserControl().Name("ApplyPendingButton").Content(abutton |> AVal.toBinding)
+
+  let rollbackButton =
+    let rbutton =
+      dryRun
+      |> AVal.map(fun dryRun ->
+        if dryRun then
+          Button()
+            .Content("Rollback (Dry Run)")
+            .OnClickHandler(fun _ _ ->
+              onRunMigrationsRequested(DryDown, getIntValue()))
+          :> Control
+        else
+          SplitButton()
+            .Content("Rollback")
+            .Flyout(
+              Flyout()
+                .Content(
+                  Button()
+                    .Content("Confirm Rollback")
+                    .OnClickHandler(fun _ _ ->
+                      onRunMigrationsRequested(Down, getIntValue()))
+                )
+            ))
+
+    UserControl().Name("RollbackButton").Content(rbutton |> AVal.toBinding)
+
+  // Define the NumericUpDown
+  let numericUpDown =
+    NumericUpDown()
+      .Minimum(0)
+      .Value(steps |> AVal.toBinding)
+      .Watermark("Amount to run")
+      .OnValueChangedHandler(fun _ value ->
+        match value.NewValue |> ValueOption.ofNullable with
+        | ValueNone -> steps.setValue 1M
+        | ValueSome value -> steps.setValue value)
+
+  // Define the CheckBox
+  let checkBox =
+    CheckBox()
+      .Content("Dry Run")
+      .IsChecked(dryRun |> AVal.toBinding)
+      .OnIsCheckedChangedHandler(fun checkbox _ ->
+
+        let isChecked =
+          checkbox.IsChecked
+          |> ValueOption.ofNullable
+          |> ValueOption.defaultValue true
+
+        dryRun.setValue isChecked)
+
+  StackPanel()
+    .OrientationHorizontal()
+    .Spacing(8)
+    .Children(applyPendingButton, rollbackButton, checkBox, numericUpDown)
+
 let toolbar
   (
     onNavigateBack: unit -> unit,
     onNewMigration: string -> unit,
-    onRefresh: unit -> unit
+    onRefresh: unit -> unit,
+    onRunMigrationsRequested: RunMigrationKind * int -> unit
   ) : Control =
   StackPanel()
     .OrientationHorizontal()
-    .Spacing(10)
+    .Spacing(8)
     .Children(
       Button().Content("Back").OnClickHandler(fun _ _ -> onNavigateBack()),
       Button().Content("Refresh").OnClickHandler(fun _ _ -> onRefresh()),
-      newMigrationForm(onNewMigration)
+      newMigrationForm(onNewMigration),
+      runMigrations(onRunMigrationsRequested)
     )
 
 let configView(configPath: string, config: MigrondiConfig) : Control =
@@ -207,7 +359,12 @@ let localProjectView(project: LocalProject) : Control =
     .Header($"{project.name} - {description}")
     .Content(configView(project.migrondiConfigPath, config))
 
-let migrationsPanel(migrations: aval<MigrationStatus[]>) : Control =
+let migrationsPanel
+  (
+    currentShow: aval<CurrentShow>,
+    migrations: aval<MigrationStatus[]>,
+    lastDryRun: aval<Migration[]>
+  ) : Control =
 
   let migrationListView =
     migrations
@@ -217,6 +374,10 @@ let migrationsPanel(migrations: aval<MigrationStatus[]>) : Control =
       else
         ItemsControl().ItemsSource(migrations).ItemTemplate(migrationView))
 
+  //TODO: change view based on currentShow
+  // migrations should show when currentShow is Migrations
+  // lastDryRun should show when currentShow is DryRun
+  // lastDryRun will use a SelectableTextBox for the content
   ScrollViewer().Content(migrationListView |> AVal.toBinding)
 
 let View
@@ -285,6 +446,9 @@ let View
       let onRefresh() =
         vm.ListMigrations() |> Async.StartImmediate
 
+      let onRunMigrationsRequested(kind, steps) =
+        vm.RunMigrations(kind, steps) |> Async.StartImmediate
+
       return
         UserControl()
           .Name("ProjectDetails")
@@ -293,7 +457,12 @@ let View
               .RowDefinitions("Auto,Auto,*")
               .ColumnDefinitions("Auto,*,*")
               .Children(
-                toolbar(onNavigateBack, onNewMigration, onRefresh)
+                toolbar(
+                  onNavigateBack,
+                  onNewMigration,
+                  onRefresh,
+                  onRunMigrationsRequested
+                )
                   .Row(0)
                   .Column(0)
                   .ColumnSpan(2)
@@ -305,7 +474,7 @@ let View
                   .VerticalAlignmentTop()
                   .HorizontalAlignmentStretch()
                   .MarginY(8),
-                migrationsPanel(vm.Migrations)
+                migrationsPanel(vm.CurrentShow, vm.Migrations, vm.LastDryRun)
                   .Row(2)
                   .Column(0)
                   .ColumnSpan(3)
