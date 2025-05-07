@@ -1,16 +1,28 @@
 [<AutoOpen>]
 module Extensions
 
+open System
 open System.Runtime.CompilerServices
 
 open Avalonia
 open Avalonia.Controls
 open Avalonia.Controls.Primitives
+open Avalonia.Markup.Xaml.Styling
 open Avalonia.Layout
+open Avalonia.Styling
+
+open AvaloniaEdit
 
 open NXUI.Extensions
 open Navs
+open Avalonia.Data
+open System.Text
+open AvaloniaEdit.Document
+open AvaloniaEdit.Highlighting
 
+type Styles with
+  member inline this.Load(source: string) =
+    StyleInclude(baseUri = null, Source = Uri(source)) |> this.Add
 
 type ListBox with
   member inline this.SelectionMode(mode: SelectionMode) =
@@ -46,6 +58,51 @@ type Grid with
   member inline this.ColumnDefinitions(defs: string) =
     this.ColumnDefinitions <- ColumnDefinitions.Parse(defs)
     this
+
+
+[<Extension>]
+type TextEditorExtensions =
+  [<Extension>]
+  static member inline ShowLineNumbers<'Type when 'Type :> TextEditor>
+    (editor: 'Type, showLineNumbers: bool)
+    : 'Type =
+    editor.ShowLineNumbers <- showLineNumbers
+    editor
+
+  [<Extension>]
+  static member inline Options<'Type when 'Type :> TextEditor>
+    (editor: 'Type, options: TextEditorOptions)
+    : 'Type =
+    editor.Options <- options
+    editor
+
+  [<Extension>]
+  static member inline Encoding<'Type when 'Type :> TextEditor>
+    (editor: 'Type, encoding: Encoding)
+    : 'Type =
+    editor.Encoding <- encoding
+    editor
+
+  [<Extension>]
+  static member inline Document<'Type when 'Type :> TextEditor>
+    (editor: 'Type, document: TextDocument)
+    : 'Type =
+    editor.Document <- document
+    editor
+
+  [<Extension>]
+  static member inline SyntaxHighlighting<'Type when 'Type :> TextEditor>
+    (editor: 'Type, syntaxHighlighting: IHighlightingDefinition)
+    : 'Type =
+    editor.SyntaxHighlighting <- syntaxHighlighting
+    editor
+
+  [<Extension>]
+  static member inline IsReadOnly<'Type when 'Type :> TextEditor>
+    (editor: 'Type, isReadOnly: bool)
+    : 'Type =
+    editor.IsReadOnly <- isReadOnly
+    editor
 
 [<Extension>]
 type LayoutableExtensions =

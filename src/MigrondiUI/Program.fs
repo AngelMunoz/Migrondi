@@ -41,11 +41,18 @@ let Orchestrate() =
   |> Views.Routes.GetRouter loggerFactory
   |> BuildMainWindow
 
+
+type App() =
+  inherit Application()
+
+  override this.Initialize() =
+    this.Styles.Load("avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml")
+
 [<EntryPoint; STAThread>]
 let main argv =
 
   AppBuilder
-    .Configure<Application>()
+    .Configure<App>()
     .UsePlatformDetect()
     .UseFluentTheme(Styling.ThemeVariant.Default)
     .WithApplicationName("Migrondi UI")

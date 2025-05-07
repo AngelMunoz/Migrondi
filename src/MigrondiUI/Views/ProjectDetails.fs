@@ -22,6 +22,7 @@ open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Projects
 open System.Threading.Tasks
+open TextEditor
 
 [<Struct>]
 type RunMigrationKind =
@@ -138,15 +139,18 @@ let migrationView =
       Grid()
         .ColumnDefinitions("*,4,*")
         .Children(
-          LabeledField.Vertical("Migrate Up", migration.upContent).Column(0),
+          LabeledField
+            .Vertical("Migrate Up", TxtEditor.Readonly migration.upContent)
+            .Column(0),
           GridSplitter()
             .Column(1)
             .ResizeDirectionColumns()
+            .IsEnabled(false)
             .Background("Black" |> SolidColorBrush.Parse)
             .MarginX(8)
             .CornerRadius(5),
           LabeledField
-            .Vertical("Migrate Down", migration.downContent)
+            .Vertical("Migrate Down", TxtEditor.Readonly migration.downContent)
             .Column(2)
         )
 
@@ -174,7 +178,7 @@ let migrationView =
               "Manual Transaction:",
               $" %b{migration.manualTransaction}"
             ),
-            ScrollViewer().Content migrationContent
+            migrationContent
           )
           .Spacing(8)
       )
