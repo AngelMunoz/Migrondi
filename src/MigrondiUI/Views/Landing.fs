@@ -136,12 +136,7 @@ type LandingVM(logger: ILogger<LandingVM>, projects: IProjectRepository) =
         logger.LogDebug("Selected directory: {Directory}", directory)
 
         try
-          Directory.CreateDirectory(
-            Path.Combine(directory, "migrations"),
-            UnixFileMode.UserRead
-            ||| UnixFileMode.UserWrite
-            ||| UnixFileMode.UserExecute
-          )
+          Directory.CreateDirectory(Path.Combine(directory, "migrations"))
           |> ignore
         with
         | :? IOException

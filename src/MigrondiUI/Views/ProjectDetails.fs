@@ -34,7 +34,7 @@ type RunMigrationKind =
 [<Struct>]
 type CurrentShow =
   | Migrations
-  | DryRun
+  | DryRun of RunMigrationKind
 
 type LocalProjectDetailsVM
   (
@@ -67,7 +67,7 @@ type LocalProjectDetailsVM
 
     logger.LogDebug("Migrations listed: {migrations}", migrations.Count)
 
-    migrations |> Seq.rev |> Seq.toArray |> _migrations.setValue
+    migrations |> Seq.toArray |> _migrations.setValue
 
     lastDryRun.setValue [||]
     logger.LogDebug "Last dry run set to empty array"
@@ -93,30 +93,43 @@ type LocalProjectDetailsVM
 
     match kind with
     | Up ->
+      logger.LogDebug("Running migrations up}")
       do! migrondi.RunUpAsync(steps, cancellationToken = token) :> Task
       do! this.ListMigrations()
-
+      logger.LogDebug("Migrations up completed")
+      return ()
     | Down ->
+      logger.LogDebug("Running migrations down")
       do! migrondi.RunDownAsync(steps, cancellationToken = token) :> Task
       do! this.ListMigrations()
-
+      logger.LogDebug("Migrations down completed")
+      return ()
     | DryUp ->
+      logger.LogDebug("Running migrations dry up")
       let! run = migrondi.DryRunUpAsync(steps, cancellationToken = token)
+
+      logger.LogDebug(
+        "Dry run up completed and found {count} migrations",
+        run.Count
+      )
+
       run |> Seq.toArray |> lastDryRun.setValue
-      currentShow.setValue DryRun
+      currentShow.setValue(DryRun Up)
+      logger.LogDebug("Current show set to dry run up")
+      return ()
     | DryDown ->
+      logger.LogDebug("Running migrations dry down")
       let! run = migrondi.DryRunDownAsync(steps, cancellationToken = token)
+
+      logger.LogDebug(
+        "Dry run down completed and found {count} migrations",
+        run.Count
+      )
+
       run |> Seq.toArray |> lastDryRun.setValue
-      currentShow.setValue DryRun
-
-    logger.LogDebug("Migrations run completed: {result}", result)
-
-    logger.LogDebug(
-      "Current show set to: {currentShow}",
-      currentShow.getValue()
-    )
-
-    return ()
+      currentShow.setValue(DryRun Down)
+      logger.LogDebug("Current show set to dry run down")
+      return ()
   }
 
 let migrationView =
@@ -185,6 +198,26 @@ let migrationView =
       .HorizontalAlignmentStretch()
       .VerticalAlignmentStretch()
       .MarginY(4))
+
+let dryRunView show =
+
+  FuncDataTemplate<Migration>(fun (migration) _ ->
+
+    let content =
+      match show with
+      | Up
+      | DryUp -> migration.upContent
+      | Down
+      | DryDown -> migration.downContent
+
+    let content =
+      if migration.manualTransaction then
+        content
+      else
+        $"-- ----------START TRANSACTION----------\n{content}\n-- ----------COMMIT TRANSACTION----------"
+
+    TxtEditor.Readonly(content).Name("MigrationContent"))
+
 
 let newMigrationForm(onNewMigration: string -> unit) : Control =
   let isEnabled = cval false
@@ -370,19 +403,51 @@ let migrationsPanel
     lastDryRun: aval<Migration[]>
   ) : Control =
 
-  let migrationListView =
-    migrations
-    |> AVal.map(fun migrations ->
-      if migrations.Length = 0 then
-        TextBlock().Text "No migrations found." :> Control
-      else
-        ItemsControl().ItemsSource(migrations).ItemTemplate(migrationView))
 
-  //TODO: change view based on currentShow
-  // migrations should show when currentShow is Migrations
-  // lastDryRun should show when currentShow is DryRun
-  // lastDryRun will use a SelectableTextBox for the content
-  ScrollViewer().Content(migrationListView |> AVal.toBinding)
+  let migrationListView(migrations: MigrationStatus[]) : Control =
+    if migrations.Length = 0 then
+      TextBlock().Text "No migrations found." :> Control
+    else
+      ItemsControl().ItemsSource(migrations).ItemTemplate(migrationView)
+
+  let dryRunListView(migrations: Migration[]) : Control =
+    if migrations.Length = 0 then
+      TextBlock().Text "No dry run found."
+    else
+      match currentShow.getValue() with
+      | Migrations -> TextBlock().Text "No dry run found."
+      | DryRun kind ->
+        let direction =
+          match kind with
+          | Up
+          | DryUp -> "Apply Migrations"
+          | Down
+          | DryDown -> "Rollback Migrations"
+
+        StackPanel()
+          .Spacing(12)
+          .Children(
+            TextBlock()
+              .Classes("DryRunHeader")
+              .Text(
+                $"This is a simulation {direction}. The database will not be affected:"
+              ),
+            ItemsControl().ItemsSource(migrations).ItemTemplate(dryRunView kind),
+            TextBlock()
+              .Text(
+                "Simulation completed. No changes were made to the database."
+              )
+          )
+
+  let content =
+
+    (currentShow, migrations, lastDryRun)
+    |||> AVal.map3(fun show mStatus drMigrations ->
+      match show with
+      | Migrations -> migrationListView mStatus
+      | DryRun _ -> dryRunListView drMigrations)
+
+  ScrollViewer().Content(content |> AVal.toBinding)
 
 let View
   (
