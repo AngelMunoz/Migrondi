@@ -60,10 +60,23 @@ type LocalProjectDetailsVM
 
   member _.CurrentShow: CurrentShow aval = currentShow
 
+  member _.OpenFileExplorer() = async {
+    logger.LogDebug "Opening file explorer"
+
+    let migrationsDir =
+      project.migrondiConfigPath |> Path.GetDirectoryName |> nonNull
+
+    logger.LogDebug("Migrations directory: {migrationsDir}", migrationsDir)
+
+    do! OsOperations.OpenDirectory migrationsDir
+    logger.LogDebug "File explorer opened"
+  }
+
+
   member _.ListMigrations() = async {
     logger.LogDebug "Listing migrations"
     let! token = Async.CancellationToken
-    let! migrations = migrondi.MigrationsListAsync(token)
+    let! migrations = migrondi.MigrationsListAsync token
 
     logger.LogDebug("Migrations listed: {migrations}", migrations.Count)
 
@@ -87,13 +100,12 @@ type LocalProjectDetailsVM
   }
 
   member this.RunMigrations(kind: RunMigrationKind, steps: int) = async {
-    logger.LogDebug "Running migrations"
     let! token = Async.CancellationToken
     logger.LogDebug("Running migrations: {kind}, {steps}", kind, steps)
 
     match kind with
     | Up ->
-      logger.LogDebug("Running migrations up}")
+      logger.LogDebug("Running migrations up")
       do! migrondi.RunUpAsync(steps, cancellationToken = token) :> Task
       do! this.ListMigrations()
       logger.LogDebug("Migrations up completed")
@@ -219,7 +231,9 @@ let dryRunView show =
     TxtEditor.Readonly(content).Name("MigrationContent"))
 
 
-let newMigrationForm(onNewMigration: string -> unit) : Control =
+let newMigrationForm
+  (onNewMigration: string -> unit, onOpenInExplorer)
+  : Control =
   let isEnabled = cval false
 
   let nameTextBox =
@@ -244,9 +258,14 @@ let newMigrationForm(onNewMigration: string -> unit) : Control =
         onNewMigration text
         nameTextBox.Text <- "")
 
+  let openInExplorerButton =
+    Button()
+      .Content("Open in Explorer")
+      .OnClickHandler(fun _ _ -> onOpenInExplorer())
+
   StackPanel()
     .OrientationHorizontal()
-    .Children(nameTextBox, createButton)
+    .Children(nameTextBox, createButton, openInExplorerButton)
     .Spacing(8)
 
 
@@ -346,20 +365,15 @@ let runMigrations
     .Children(applyPendingButton, rollbackButton, checkBox, numericUpDown)
 
 let toolbar
-  (
-    onNavigateBack: unit -> unit,
-    onNewMigration: string -> unit,
-    onRefresh: unit -> unit,
-    onRunMigrationsRequested: RunMigrationKind * int -> unit
-  ) : Control =
+  (onNavigateBack, onNewMigration, onRefresh, onOpenInExplorer)
+  : Control =
   StackPanel()
     .OrientationHorizontal()
     .Spacing(8)
     .Children(
       Button().Content("Back").OnClickHandler(fun _ _ -> onNavigateBack()),
       Button().Content("Refresh").OnClickHandler(fun _ _ -> onRefresh()),
-      newMigrationForm(onNewMigration),
-      runMigrations(onRunMigrationsRequested)
+      newMigrationForm(onNewMigration, onOpenInExplorer)
     )
 
 let configView(configPath: string, config: MigrondiConfig) : Control =
@@ -386,14 +400,29 @@ let configView(configPath: string, config: MigrondiConfig) : Control =
         .Column(1)
     )
 
-let localProjectView(project: LocalProject) : Control =
+let localProjectView
+  (
+    project: LocalProject,
+    onRunMigrationsRequested: RunMigrationKind * int -> unit
+  ) : Control =
   let description = defaultArg project.description "No description"
 
   let config =
     project.config |> Option.defaultWith(fun _ -> failwith "No config found")
 
+
   Expander()
-    .Header($"{project.name} - {description}")
+    .Header(
+      StackPanel()
+        .Spacing(8)
+        .OrientationHorizontal()
+        .Children(
+          TextBlock()
+            .Text($"{project.name} - {description}")
+            .VerticalAlignmentCenter(),
+          runMigrations(onRunMigrationsRequested).VerticalAlignmentCenter()
+        )
+    )
     .Content(configView(project.migrondiConfigPath, config))
 
 let migrationsPanel
@@ -518,6 +547,9 @@ let View
       let onRunMigrationsRequested(kind, steps) =
         vm.RunMigrations(kind, steps) |> Async.StartImmediate
 
+      let onOpenInExplorer() =
+        vm.OpenFileExplorer() |> Async.StartImmediate
+
       return
         UserControl()
           .Name("ProjectDetails")
@@ -530,13 +562,13 @@ let View
                   onNavigateBack,
                   onNewMigration,
                   onRefresh,
-                  onRunMigrationsRequested
+                  onOpenInExplorer
                 )
                   .Row(0)
                   .Column(0)
                   .ColumnSpan(2)
                   .HorizontalAlignmentStretch(),
-                localProjectView(vm.Project)
+                localProjectView(vm.Project, onRunMigrationsRequested)
                   .Row(1)
                   .Column(0)
                   .ColumnSpan(3)

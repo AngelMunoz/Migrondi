@@ -9,6 +9,7 @@
     <Compile Include="Types.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="Projects.fs" />
+    <Compile Include="OsOperations.fs" />
     <Compile Include="Views/Shared.fs" />
     <Compile Include="Views/Landing.fs" />
     <Compile Include="Views/ProjectDetails.fs" />
@@ -24,6 +25,8 @@
     <PackageReference Include="Avalonia.Desktop" Version="11.0.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.0.0" />
     <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.0.0" />
+
+    <PackageReference Include="CLIWrap" Version="3.8.2" />
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
