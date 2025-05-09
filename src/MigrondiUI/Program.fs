@@ -25,7 +25,11 @@ let loggerFactory = (new LoggerFactory()).AddSerilog(Log.Logger)
 
 let BuildMainWindow router =
   let win =
-    Window().Content(RouterOutlet().router router).MinWidth(800).MinHeight(640)
+    Window()
+      .Content(RouterOutlet().router router)
+      .MinWidth(800)
+      .MinHeight(640)
+      .Title("MigrondiUI")
 #if DEBUG
   win.AttachDevTools()
 #endif
@@ -55,5 +59,4 @@ let main argv =
     .Configure<App>()
     .UsePlatformDetect()
     .UseFluentTheme(Styling.ThemeVariant.Default)
-    .WithApplicationName("Migrondi UI")
     .StartWithClassicDesktopLifetime(Orchestrate, argv)
