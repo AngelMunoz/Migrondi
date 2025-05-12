@@ -81,7 +81,48 @@ type IMigrondi =
     string * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationStatus>
 
-module private MigrondiserviceImpl =
+module internal MigrondiserviceImpl =
+
+  let internal getConnectionStr (rootPath: string) (config: MigrondiConfig) =
+    match config.driver with
+    | MigrondiDriver.Sqlite ->
+      let prefix = "Data Source="
+
+      let idx =
+        config.connection.IndexOf(prefix, StringComparison.OrdinalIgnoreCase)
+
+      if idx >= 0 then
+        let afterPrefix = config.connection.Substring(idx + prefix.Length)
+        let semiIdx = afterPrefix.IndexOf(';')
+
+        let dbPath, rest =
+          if semiIdx >= 0 then
+            afterPrefix.Substring(0, semiIdx), afterPrefix.Substring(semiIdx)
+          else
+            afterPrefix, ""
+
+        let dbPathTrimmed = dbPath.Trim()
+
+        let isWindowsRooted (path: string) =
+          path.Length >= 3
+          && System.Char.IsLetter(path.[0])
+          && path.[1] = ':'
+          && (path.[2] = '\\' || path.[2] = '/')
+
+        if
+          System.IO.Path.IsPathRooted(dbPathTrimmed)
+          || isWindowsRooted dbPathTrimmed
+        then
+          config.connection
+        else
+          let rootedPath = System.IO.Path.Combine(rootPath, dbPathTrimmed)
+
+          config.connection.Substring(0, idx + prefix.Length)
+          + rootedPath
+          + rest
+      else
+        config.connection
+    | _ -> config.connection
 
   let obtainPendingUp
     (migrations: IReadOnlyList<Migration>)
@@ -468,7 +509,14 @@ module private MigrondiserviceImpl =
   let defaultLoggerFactory =
     lazy
       (LoggerFactory.Create(fun builder ->
-        builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
+        builder
+#if DEBUG
+          .SetMinimumLevel(LogLevel.Debug)
+#else
+          .SetMinimumLevel(LogLevel.Information)
+#endif
+          .AddSimpleConsole()
+        |> ignore
       ))
 
 [<Class>]
@@ -495,12 +543,18 @@ type Migrondi
   }
 
   static member MigrondiFactory
-    (config: MigrondiConfig, rootDirectory: string, ?logger: ILogger<IMigrondi>) : IMigrondi =
+    (config: MigrondiConfig, rootDirectory: string, ?logger: ILogger<IMigrondi>)
+    : IMigrondi =
 
     let logger =
       defaultArg
         logger
         (MigrondiserviceImpl.defaultLoggerFactory.Value.CreateLogger<IMigrondi>())
+
+    let config = {
+      config with
+          connection = MigrondiserviceImpl.getConnectionStr rootDirectory config
+    }
 
     let database = new MiDatabaseHandler(logger, config)
     let serializer = new MigrondiSerializer()
@@ -530,6 +584,58 @@ type Migrondi
 
     Migrondi(config, database, fileSystem, logger)
 
+  static member MigrondiFactory
+    (
+      config: MigrondiConfig,
+      rootDirectory: string,
+      ?miFileSystem: IMiFileSystem,
+      ?logger: ILogger<IMigrondi>
+    ) : IMigrondi =
+    let logger =
+      defaultArg
+        logger
+        (MigrondiserviceImpl.defaultLoggerFactory.Value.CreateLogger<IMigrondi>())
+
+    let config = {
+      config with
+          connection = MigrondiserviceImpl.getConnectionStr rootDirectory config
+    }
+
+    let database = new MiDatabaseHandler(logger, config)
+    let serializer = new MigrondiSerializer()
+
+    let projectRoot =
+      let rootDirectory = IO.Path.GetFullPath(rootDirectory)
+
+      if IO.Path.EndsInDirectorySeparator rootDirectory then
+        Uri(rootDirectory, UriKind.Absolute)
+      else
+        Uri(
+          $"{rootDirectory}{IO.Path.DirectorySeparatorChar}",
+          UriKind.Absolute
+        )
+
+    let migrationsDir =
+      if IO.Path.EndsInDirectorySeparator config.migrations then
+        Uri(config.migrations, UriKind.Relative)
+      else
+        Uri(
+          $"{config.migrations}{IO.Path.DirectorySeparatorChar}",
+          UriKind.Relative
+        )
+
+    let fileSystem =
+      defaultArg
+        miFileSystem
+        (MiFileSystem(
+          logger,
+          serializer,
+          serializer,
+          projectRoot,
+          migrationsDir
+        ))
+
+    Migrondi(config, database, fileSystem, logger)
 
   interface IMigrondi with
 

@@ -158,6 +158,8 @@ type IMigrondi =
   abstract member ScriptStatusAsync:
     string * [<Optional>] ?cancellationToken: CancellationToken -> Task<MigrationStatus>
 
+module internal MigrondiserviceImpl =
+  val internal getConnectionStr: rootPath: string -> config: MigrondiConfig -> string
 
 [<Class>]
 type Migrondi =
@@ -178,5 +180,10 @@ type Migrondi =
 
   static member MigrondiFactory:
     config: MigrondiConfig * rootDirectory: string * ?logger: ILogger<IMigrondi> -> IMigrondi
+
+  [<Experimental "This API is under preview, and may change in the future">]
+  static member MigrondiFactory:
+    config: MigrondiConfig * rootDirectory: string * ?miFileSystem: IMiFileSystem * ?logger: ILogger<IMigrondi> ->
+      IMigrondi
 
   interface IMigrondi
