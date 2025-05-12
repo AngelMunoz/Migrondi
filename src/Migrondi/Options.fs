@@ -16,7 +16,8 @@ module Cli =
         | Path _ -> "Where should the migrondi.json should be created."
 
     static member GetOptions
-      (results: ParseResults<InitArgs>, ?noColor: bool, ?asJson: bool) : InitOptions =
+      (results: ParseResults<InitArgs>, ?noColor: bool, ?asJson: bool)
+      : InitOptions =
       let defaultPath = "./migrations/"
 
       {
@@ -36,7 +37,8 @@ module Cli =
         | Name _ -> "Friendly Name of the Migration you want to create."
 
     static member GetOptions
-      (results: ParseResults<NewArgs>, ?noColor: bool, ?asJson: bool) : NewOptions =
+      (results: ParseResults<NewArgs>, ?noColor: bool, ?asJson: bool)
+      : NewOptions =
       {
         name = results.GetResult(Name)
         noColor = defaultArg noColor false
@@ -79,7 +81,8 @@ module Cli =
           "Prints to the console what is going to be run against the database."
 
     static member GetOptions
-      (results: ParseResults<DownArgs>, ?noColor: bool, ?asJson: bool) : DownOptions =
+      (results: ParseResults<DownArgs>, ?noColor: bool, ?asJson: bool)
+      : DownOptions =
       {
         total = defaultArg (results.TryGetResult(Total) |> Option.flatten) 0
         dryRun =
@@ -101,7 +104,8 @@ module Cli =
         | Amount _ -> "Amount of migrations to get, defaults to 5."
 
     static member GetOptions
-      (results: ParseResults<ListArgs>, ?noColor: bool, ?asJson: bool) : ListOptions =
+      (results: ParseResults<ListArgs>, ?noColor: bool, ?asJson: bool)
+      : ListOptions =
       {
         amount = defaultArg (results.TryGetResult(Amount) |> Option.flatten) -1
         listKind =
@@ -121,7 +125,8 @@ module Cli =
         | Name _ -> "Name of the file to check against the database."
 
     static member GetOptions
-      (results: ParseResults<StatusArgs>, ?noColor: bool, ?asJson: bool) : StatusOptions =
+      (results: ParseResults<StatusArgs>, ?noColor: bool, ?asJson: bool)
+      : StatusOptions =
       {
         filename = results.GetResult(Name)
         noColor = defaultArg noColor false
