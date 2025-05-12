@@ -23,8 +23,8 @@ type CoreTests() =
     =
     match Migration.ExtractFromFilename filename with
     | Ok(name, timestamp) ->
-      Assert.AreEqual(expectedName, name)
-      Assert.AreEqual(expectedTimestamp, timestamp)
+      Assert.AreEqual<string>(expectedName, name)
+      Assert.AreEqual<int64>(expectedTimestamp, timestamp)
     | Error error ->
       let error = String.Join(Environment.NewLine, error)
       Assert.Fail(error)
@@ -44,8 +44,8 @@ type CoreTests() =
     =
     match Migration.ExtractFromPath filepath with
     | Ok(name, timestamp) ->
-      Assert.AreEqual(expectedName, name)
-      Assert.AreEqual(expectedTimestamp, timestamp)
+      Assert.AreEqual<string>(expectedName, name)
+      Assert.AreEqual<int64>(expectedTimestamp, timestamp)
     | Error error ->
       let error = String.Join(Environment.NewLine, error)
       Assert.Fail(error)

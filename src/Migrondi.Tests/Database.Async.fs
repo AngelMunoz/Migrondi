@@ -68,7 +68,7 @@ type DatabaseAsyncTests() =
       }
 
       match operation with
-      | Ok value -> Assert.AreEqual(config.tableName, value)
+      | Ok value -> Assert.AreEqual<string>(config.tableName, value)
       | Error err -> Assert.Fail($"Failed to Setup the Database: %s{err}")
 
     }
@@ -108,10 +108,10 @@ type DatabaseAsyncTests() =
 
       match operation with
       | Ok(one, two, three, four) ->
-        Assert.AreEqual("test_1", one.name)
-        Assert.AreEqual("test_2", two.name)
-        Assert.AreEqual("test_3", three.name)
-        Assert.AreEqual("test_4", four.name)
+        Assert.AreEqual<string>("test_1", one.name)
+        Assert.AreEqual<string>("test_2", two.name)
+        Assert.AreEqual<string>("test_3", three.name)
+        Assert.AreEqual<string>("test_4", four.name)
       | Error err -> Assert.Fail($"Failed to Find the Migration: %s{err}")
     }
     :> Task
@@ -167,7 +167,7 @@ type DatabaseAsyncTests() =
       }
 
       match operation with
-      | Ok value -> Assert.AreEqual("test_4", value.name)
+      | Ok value -> Assert.AreEqual<string>("test_4", value.name)
       | Error err ->
         Assert.Fail(
           $"A migration was not found though there should be one: %s{err}"
@@ -191,7 +191,7 @@ type DatabaseAsyncTests() =
       }
 
       match operation with
-      | Ok value -> Assert.AreEqual(0, value.Count)
+      | Ok value -> Assert.AreEqual<int>(0, value.Count)
       | Error err ->
         Assert.Fail(
           $"Migrations were found though there shouldn't be any: %s{err}"
@@ -227,11 +227,11 @@ type DatabaseAsyncTests() =
       // the test has to account for the order as well, not just the size of the list
       match operation with
       | Ok value ->
-        Assert.AreEqual(4, value.Count)
-        Assert.AreEqual("test_4", value[0].name)
-        Assert.AreEqual("test_3", value[1].name)
-        Assert.AreEqual("test_2", value[2].name)
-        Assert.AreEqual("test_1", value[3].name)
+        Assert.AreEqual<int>(4, value.Count)
+        Assert.AreEqual<string>("test_4", value[0].name)
+        Assert.AreEqual<string>("test_3", value[1].name)
+        Assert.AreEqual<string>("test_2", value[2].name)
+        Assert.AreEqual<string>("test_1", value[3].name)
       | Error err ->
         Assert.Fail(
           $"Migrations were not found though there should be some: %s{err}"
@@ -291,12 +291,12 @@ type DatabaseAsyncTests() =
 
       match operation with
       | Ok(migrations, lastApplied) ->
-        Assert.AreEqual(4, migrations.Count)
-        Assert.AreEqual("test_4", migrations[0].name)
-        Assert.AreEqual("test_3", migrations[1].name)
-        Assert.AreEqual("test_2", migrations[2].name)
-        Assert.AreEqual("test_1", migrations[3].name)
-        Assert.AreEqual("test_4", lastApplied.name)
+        Assert.AreEqual<int>(4, migrations.Count)
+        Assert.AreEqual<string>("test_4", migrations[0].name)
+        Assert.AreEqual<string>("test_3", migrations[1].name)
+        Assert.AreEqual<string>("test_2", migrations[2].name)
+        Assert.AreEqual<string>("test_1", migrations[3].name)
+        Assert.AreEqual<string>("test_4", lastApplied.name)
       | Error err ->
         Assert.Fail($"Failed to find the last applied migration: %s{err}")
     }
@@ -362,10 +362,10 @@ type DatabaseAsyncTests() =
 
       match operation with
       | Ok(migrations, lastApplied) ->
-        Assert.AreEqual(2, migrations.Count)
-        Assert.AreEqual("test_2", migrations[0].name)
-        Assert.AreEqual("test_1", migrations[1].name)
-        Assert.AreEqual("test_2", lastApplied.name)
+        Assert.AreEqual<int>(2, migrations.Count)
+        Assert.AreEqual<string>("test_2", migrations[0].name)
+        Assert.AreEqual<string>("test_1", migrations[1].name)
+        Assert.AreEqual<string>("test_2", lastApplied.name)
       | Error err ->
         Assert.Fail($"Failed to find the last applied migration: %s{err}")
     }
@@ -424,7 +424,7 @@ type DatabaseAsyncTests() =
       Assert.AreEqual(failingMigration, thrown.Migration)
 
       match! databaseEnv.FindLastAppliedAsync() with
-      | Some migration -> Assert.AreEqual("test_2", migration.name)
+      | Some migration -> Assert.AreEqual<string>("test_2", migration.name)
       | None -> Assert.Fail("Failed to find the last applied migration")
     }
     :> Task
@@ -487,7 +487,7 @@ type DatabaseAsyncTests() =
       Assert.AreEqual(failingMigration, thrown.Migration)
 
       match! databaseEnv.FindLastAppliedAsync() with
-      | Some migration -> Assert.AreEqual("test_3", migration.name)
+      | Some migration -> Assert.AreEqual<string>("test_3", migration.name)
       | None -> Assert.Fail("Failed to find the last applied migration")
     }
     :> Task
