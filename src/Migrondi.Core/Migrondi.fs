@@ -543,8 +543,11 @@ type Migrondi
   }
 
   static member MigrondiFactory
-    (config: MigrondiConfig, rootDirectory: string, ?logger: ILogger<IMigrondi>)
-    : IMigrondi =
+    (
+      config: MigrondiConfig,
+      rootDirectory: string,
+      [<Optional>] ?logger: ILogger<IMigrondi>
+    ) : IMigrondi =
 
     let logger =
       defaultArg
@@ -588,8 +591,8 @@ type Migrondi
     (
       config: MigrondiConfig,
       rootDirectory: string,
-      ?miFileSystem: IMiFileSystem,
-      ?logger: ILogger<IMigrondi>
+      [<Optional>] ?logger: ILogger<IMigrondi>,
+      [<Optional>] ?miFileSystem: IMiFileSystem
     ) : IMigrondi =
     let logger =
       defaultArg

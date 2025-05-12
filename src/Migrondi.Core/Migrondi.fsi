@@ -179,11 +179,14 @@ type Migrondi =
     config: MigrondiConfig * database: IMiDatabaseHandler * fileSystem: IMiFileSystem * logger: ILogger -> Migrondi
 
   static member MigrondiFactory:
-    config: MigrondiConfig * rootDirectory: string * ?logger: ILogger<IMigrondi> -> IMigrondi
+    config: MigrondiConfig * rootDirectory: string * [<Optional>] ?logger: ILogger<IMigrondi> -> IMigrondi
 
   [<Experimental "This API is under preview, and may change in the future">]
   static member MigrondiFactory:
-    config: MigrondiConfig * rootDirectory: string * ?miFileSystem: IMiFileSystem * ?logger: ILogger<IMigrondi> ->
+    config: MigrondiConfig *
+    rootDirectory: string *
+    [<Optional>] ?logger: ILogger<IMigrondi> *
+    [<Optional>] ?miFileSystem: IMiFileSystem ->
       IMigrondi
 
   interface IMigrondi
