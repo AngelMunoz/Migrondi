@@ -11,7 +11,7 @@ This example adds the most simple way to get started, the default migrondi behav
 To begin we need to add the Migrondi.Core package to the script, this can be done by adding the following line to the top of the script:
 
 *)
-#r "nuget: Migrondi.Core, 1.0.0-beta-010"
+#r "nuget: Migrondi.Core, 1.0.0-beta-012"
 
 open Migrondi.Core
 
@@ -26,7 +26,7 @@ let config = MigrondiConfig.Default
 // In this context "." means the current directory
 // But you can specify a Absolute Path here e.g. C:\Users\user\project\ or /home/user/project/
 // all of the relative files used in the configuration will be relative to this specified path
-let migrondi = Migrondi.MigrondiFactory(config, ".")
+let migrondi = Migrondi.MigrondiFactory(config, ".", ?logger = None)
 
 (**
 There are certain operations like creating a new migration, or initializing the directory with the migrondi files.

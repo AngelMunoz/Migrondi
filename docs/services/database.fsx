@@ -8,7 +8,7 @@ index: 3
 The database service requires a `MigrondiConfiguration` object, as we use the information from the driver and connection string to stablish a connection to the database.
 *)
 
-#r "nuget: Migrondi.Core, 1.0.0-beta-010"
+#r "nuget: Migrondi.Core, 1.0.0-beta-012"
 
 open Migrondi.Core
 open Migrondi.Core.Database

@@ -1,10 +1,10 @@
-#r "nuget: Migrondi.Core, 1.0.0-beta-010"
+#r "nuget: Migrondi.Core, 1.0.0-beta-012"
 
 open Migrondi.Core
 
 let config = MigrondiConfig.Default
 
-let migrondi = Migrondi.MigrondiFactory(config, ".")
+let migrondi = Migrondi.MigrondiFactory(config, ".", ?logger = None)
 // Before we can talk to the database we need to initialize the migrondi object
 // this will ensure that the migrations directory exists, and the required pieces
 // of information are available in the database to see if it is ready to accept migrations.

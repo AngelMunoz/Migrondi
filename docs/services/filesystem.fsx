@@ -10,7 +10,7 @@ The `IMiFileSystem` object is one of the most likely object to replace if you're
 
 *)
 
-#r "nuget: Migrondi.Core, 1.0.0-beta-010"
+#r "nuget: Migrondi.Core, 1.0.0-beta-012"
 
 open System
 open Migrondi.Core.FileSystem
