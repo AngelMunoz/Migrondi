@@ -89,7 +89,7 @@ module Operations =
   let buildBinaries (project: string) (runtime: string) =
     let cmd =
       let outdir = $"{outDir}/{runtime}"
-      let framework = "net8.0"
+      let framework = "net9.0"
       $"publish {project} -c Release -r {runtime} -f {framework} --self-contained -p:PublishSingleFile=true -p:Version={PackageVersion} -o {outdir}"
 
     dotnet cmd
@@ -161,13 +161,13 @@ module Steps =
   }
 
   let build = Step.create "build" {
-    do! Operations.dotnet "build src/Perla/Perla.fsproj --no-restore"
+    do! Operations.dotnet "build src/Migrondi/Migrondi.fsproj --no-restore"
   }
 
   let format = Step.create "format" { do! Operations.fantomas "format" }
 
   let test = Step.create "tests" {
-    do! Operations.dotnet "test tests/Perla.Tests --no-restore"
+    do! Operations.dotnet "test tests/Migrondi.Tests --no-restore"
   }
 
   let pushNugets = Step.create "nuget" {
