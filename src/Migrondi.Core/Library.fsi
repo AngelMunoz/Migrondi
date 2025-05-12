@@ -37,7 +37,7 @@ type MigrondiDriver =
   | Mysql
 
   /// Returns a string representation of the driver
-  member internal AsString: string
+  member AsString: string
 
   /// <summary>Takes a string and tries to convert it to a MigrondiDriver</summary>
   /// <param name="value">The string to convert</param>
@@ -49,7 +49,7 @@ type MigrondiDriver =
   /// if the string is not a valid driver then it will throw an exception
   /// with the name of the driver that was not found
   /// </remarks>
-  static member internal FromString: value: string -> MigrondiDriver
+  static member FromString: value: string -> MigrondiDriver
 
 /// Represents the configuration that will be used to run migrations
 type MigrondiConfig =

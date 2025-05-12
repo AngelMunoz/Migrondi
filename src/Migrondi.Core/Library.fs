@@ -54,14 +54,14 @@ type MigrondiDriver =
   | Postgresql
   | Mysql
 
-  member internal this.AsString =
+  member this.AsString =
     match this with
     | Mssql -> "mssql"
     | Sqlite -> "sqlite"
     | Postgresql -> "postgresql"
     | Mysql -> "mysql"
 
-  static member internal FromString(value: string) =
+  static member FromString(value: string) =
 
     match value.ToLowerInvariant() with
     | "mssql" -> Mssql
