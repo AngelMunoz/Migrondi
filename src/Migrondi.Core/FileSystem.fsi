@@ -17,7 +17,7 @@ open Migrondi.Core.Serialization
 /// It provides both sync and async methods to read and write migrondi specific files.
 /// </summary>
 [<Interface>]
-type internal IMiFileSystem =
+type IMiFileSystem =
 
   /// <summary>
   /// Take the path to a configuration source, reads and transforms it into a configuration object

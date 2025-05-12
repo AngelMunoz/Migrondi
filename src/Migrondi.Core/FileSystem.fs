@@ -32,7 +32,7 @@ open Units
 
 
 [<Interface>]
-type internal IMiFileSystem =
+type IMiFileSystem =
   abstract member ReadConfiguration: readFrom: string -> MigrondiConfig
 
   abstract member ReadConfigurationAsync:
