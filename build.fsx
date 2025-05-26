@@ -23,7 +23,7 @@ let libraries = [ "Migrondi.Core" ]
 let NugetApiKey = EnvVar.getOrFail "NUGET_DEPLOY_KEY"
 
 [<Literal>]
-let PackageVersion = "1.0.0-beta-013"
+let PackageVersion = "1.0.0-beta-014"
 
 let fsSources =
   Glob.create "*.fsx"
