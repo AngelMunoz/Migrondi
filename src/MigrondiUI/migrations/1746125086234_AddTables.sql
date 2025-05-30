@@ -25,8 +25,8 @@ create table if not exists "virtual_projects"(
     foreign key("project_id") references "projects"("id") on delete cascade
 );
 
-create table if not exists "migrations"(
-    "id" integer primary key,
+create table if not exists "virtual_migrations"(
+    "id" text primary key,
     "name" text not null,
     "timestamp" integer not null,
     "up_content" text not null,

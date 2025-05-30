@@ -16,9 +16,19 @@ type VirtualProject = {
   name: string
   description: string option
   connection: string
-  migrations: Guid
   tableName: string
   driver: MigrondiDriver
+  projectId: Guid
+}
+
+type VirtualMigration = {
+  id: Guid
+  name: string
+  timestamp: int64
+  upContent: string
+  downContent: string
+  projectId: Guid
+  manualTransaction: bool
 }
 
 type Project =
@@ -26,7 +36,7 @@ type Project =
   | Virtual of VirtualProject
 
 
-module Decoders =
+module Json =
   open JDeck
 
   let driverDecoder: Decoder<MigrondiDriver> =
@@ -104,10 +114,17 @@ module ProjectExtensions =
   type MigrondiConfig with
 
     member this.FromString config =
-      Decoding.fromString(config, Decoders.migrondiConfigDecoder)
-      |> Result.toOption
+      Decoding.fromString(config, Json.migrondiConfigDecoder) |> Result.toOption
 
 
+  type VirtualProject with
+
+    member this.ToMigrondiConfig() = {
+      connection = this.connection
+      migrations = this.id.ToString()
+      tableName = this.tableName
+      driver = this.driver
+    }
 // TODO: Add this.Migrations
 // TODO: Add this.Config
 // These have to be added later down where we are able to resolve the migrations whether they are local or virtual

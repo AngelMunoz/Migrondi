@@ -9,10 +9,14 @@
     <Compile Include="Types.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="Projects.fs" />
+    <Compile Include="VirtualFs.fs" />
+    <Compile Include="MigrondiExt.fs" />
     <Compile Include="OsOperations.fs" />
+    <Compile Include="Components/Toolbar.fs" />
     <Compile Include="Views/Shared.fs" />
     <Compile Include="Views/Landing.fs" />
-    <Compile Include="Views/ProjectDetails.fs" />
+    <Compile Include="Views/LocalProjectDetails.fs" />
+    <Compile Include="Views/VirtualProjectDetails.fs" />
     <Compile Include="Views/Routes.fs" />
     <Compile Include="Migrations.fs" />
     <Compile Include="Program.fs" />
@@ -22,30 +26,25 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.0.0" />
+    <PackageReference Include="Avalonia.Controls.ItemsRepeater" Version="11.0.0" />
     <PackageReference Include="Avalonia.Desktop" Version="11.0.0" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.0.0" />
     <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.0.0" />
-
     <PackageReference Include="CLIWrap" Version="3.8.2" />
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.1" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
     <PackageReference Include="AvaloniaEdit.TextMate" Version="11.3.0" />
     <PackageReference Include="TextMateSharp.Grammars" Version="1.0.66" />
-
     <PackageReference Include="NXUI" Version="11.0.0" />
     <PackageReference Include="NXUI.Desktop" Version="11.0.0" />
     <PackageReference Include="NXUI.FSharp" Version="11.0.0" />
-
     <PackageReference Include="Donald" Version="10.1.0" />
-
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
     <PackageReference Include="FsToolkit.ErrorHandling" Version="4.18.0" />
-
     <PackageReference Include="JDeck" Version="1.0.0-beta-006" />
-    <PackageReference Include="Migrondi.Core" Version="1.0.0-beta-011" />
+    <PackageReference Include="Migrondi.Core" Version="1.0.0-beta-013" />
     <PackageReference Include="Navs.Avalonia" Version="1.0.0-rc-005" />
   </ItemGroup>
 </Project>

@@ -19,6 +19,7 @@ open Avalonia.Data
 open System.Text
 open AvaloniaEdit.Document
 open AvaloniaEdit.Highlighting
+open Avalonia.Controls.Templates
 
 type Styles with
   member inline this.Load(source: string) =
@@ -49,6 +50,41 @@ type SelectingItemsControl with
         (args.AddedItems |> Seq.cast<'T>, args.RemovedItems |> Seq.cast<'T>),
         this
       ))
+
+type ItemsRepeater with
+  member inline this.ItemsSource(source: IBinding) =
+    let descriptor =
+      ItemsRepeater.ItemsSourceProperty
+        .Bind()
+        .WithMode(BindingMode.OneWay)
+        .WithPriority(BindingPriority.LocalValue)
+
+    this[descriptor] <- source
+    this
+
+  member inline this.ItemsSource(source: Control seq) =
+    this.ItemsSource <- source
+    this
+
+  member inline this.ItemTemplate(template: IDataTemplate) =
+    this.ItemTemplate <- template
+    this
+
+  member inline this.Layout(layout: AttachedLayout) =
+    this.Layout <- layout
+    this
+
+  member inline this.HorizontalStack(?spacing: float) =
+    let layout = StackLayout(Orientation = Orientation.Horizontal)
+    spacing |> Option.iter(fun s -> layout.Spacing <- s)
+    this.Layout <- layout
+    this
+
+  member inline this.VerticalStack(?spacing: float) =
+    let layout = StackLayout(Orientation = Orientation.Vertical)
+    spacing |> Option.iter(fun s -> layout.Spacing <- s)
+    this.Layout <- layout
+    this
 
 type Grid with
   member inline this.RowDefinitions(defs: string) =
