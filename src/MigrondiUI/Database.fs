@@ -2,7 +2,6 @@ namespace MigrondiUI
 
 open System
 open System.Data
-open System.Threading
 open Donald
 open IcedTasks
 
