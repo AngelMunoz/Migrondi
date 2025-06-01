@@ -2,24 +2,25 @@
 module Extensions
 
 open System
+open System.Text
 open System.Runtime.CompilerServices
 
 open Avalonia
 open Avalonia.Controls
+open Avalonia.Controls.Templates
 open Avalonia.Controls.Primitives
+open Avalonia.Data
 open Avalonia.Markup.Xaml.Styling
 open Avalonia.Layout
 open Avalonia.Styling
 
 open AvaloniaEdit
+open AvaloniaEdit.Document
+open AvaloniaEdit.Highlighting
 
 open NXUI.Extensions
 open Navs
-open Avalonia.Data
-open System.Text
-open AvaloniaEdit.Document
-open AvaloniaEdit.Highlighting
-open Avalonia.Controls.Templates
+open Migrondi.Core
 
 type Styles with
   member inline this.Load(source: string) =
@@ -96,7 +97,6 @@ type Grid with
     this
 
 
-[<Extension>]
 type TextEditorExtensions =
   [<Extension>]
   static member inline ShowLineNumbers<'Type when 'Type :> TextEditor>
@@ -140,7 +140,6 @@ type TextEditorExtensions =
     editor.IsReadOnly <- isReadOnly
     editor
 
-[<Extension>]
 type LayoutableExtensions =
   [<Extension>]
   static member inline MarginTop<'T when 'T :> Layoutable>
@@ -208,3 +207,10 @@ type NavigationError<'View> with
       $"Can't deactivate route: {deactivatedRoute}"
     | CantActivate(activatedRoute) -> $"Can't activate route: {activatedRoute}"
     | GuardRedirect(redirectTo) -> $"Guard redirect to: {redirectTo}"
+
+type MigrationStatus with
+
+  member this.Migration =
+      match this with
+      | Applied m -> m
+      | Pending m -> m

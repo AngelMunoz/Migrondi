@@ -2,6 +2,7 @@ module MigrondiUI.Views.LocalProjectDetails
 
 open System
 open System.IO
+open System.Threading.Tasks
 
 open Microsoft.Extensions.Logging
 
@@ -10,17 +11,17 @@ open Avalonia.Controls
 open NXUI.Extensions
 
 open IcedTasks
-open IcedTasks.Polyfill.Async.PolyfillBuilders
 open FsToolkit.ErrorHandling
 open FSharp.Data.Adaptive
 
 open Navs
 open Navs.Avalonia
 open Migrondi.Core
+
 open MigrondiUI
 open MigrondiUI.Projects
-open MigrondiUI.Views.Components
-open System.Threading.Tasks
+open MigrondiUI.Components
+open MigrondiUI.Components.Fields
 
 type LocalProjectDetailsVM
   (
@@ -34,7 +35,7 @@ type LocalProjectDetailsVM
 
   let currentShow = cval ProjectDetails.CurrentShow.Migrations
 
-  let handleException(work: Async<unit>) = async {
+  let handleException(work: Async<unit>) = asyncEx {
     let! result = work |> Async.Catch
 
     match result with
@@ -57,7 +58,7 @@ type LocalProjectDetailsVM
 
   member _.CurrentShow: ProjectDetails.CurrentShow aval = currentShow
 
-  member _.OpenFileExplorer() = async {
+  member _.OpenFileExplorer() = asyncEx {
     logger.LogDebug "Opening file explorer"
 
     let migrationsDir =
@@ -69,7 +70,7 @@ type LocalProjectDetailsVM
     logger.LogDebug "File explorer opened"
   }
 
-  member _.ListMigrations() = async {
+  member _.ListMigrations() = asyncEx {
     logger.LogDebug "Listing migrations"
     let! token = Async.CancellationToken
     let! migrations = migrondi.MigrationsListAsync token
@@ -86,7 +87,7 @@ type LocalProjectDetailsVM
   }
 
   member this.NewMigration(name: string) =
-    async {
+    asyncEx {
       logger.LogDebug "Creating new migration"
       let! token = Async.CancellationToken
 
@@ -98,7 +99,7 @@ type LocalProjectDetailsVM
     |> handleException
 
   member this.RunMigrations(kind: ProjectDetails.RunMigrationKind, steps: int) =
-    async {
+    asyncEx {
       let! token = Async.CancellationToken
       logger.LogDebug("Running migrations: {kind}, {steps}", kind, steps)
 
@@ -357,8 +358,8 @@ let View
   (context: RouteContext)
   (nav: INavigable<Control>)
   : Async<Control> =
-  async {
-    let getProjectbyId(projectId: Guid) = async {
+  asyncEx {
+    let getProjectbyId(projectId: Guid) = asyncEx {
       let! project = projects.GetProjectById projectId
 
       match project with
@@ -395,7 +396,7 @@ let View
     }
 
     let onNavigateBack() =
-      async {
+      asyncEx {
         match! nav.NavigateByName("landing") with
         | Ok _ -> ()
         | Error(e) ->

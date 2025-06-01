@@ -1,12 +1,10 @@
-namespace MigrondiUI.Views.Components
+namespace MigrondiUI.Components
 
 open System
 open System.Runtime.CompilerServices
 
 open Avalonia.Controls
-open Avalonia.Data
 open Avalonia.Controls.Templates
-open NXUI.Extensions
 
 open FSharp.Data.Adaptive
 open Navs.Avalonia

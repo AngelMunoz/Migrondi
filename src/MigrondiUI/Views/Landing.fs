@@ -12,6 +12,7 @@ open Avalonia.Controls
 open Avalonia.Controls.Templates
 open Avalonia.Platform.Storage
 
+open MigrondiUI.Components.Fields
 open NXUI.Extensions
 
 open FSharp.Data.Adaptive
@@ -22,7 +23,6 @@ open Navs.Avalonia
 open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Projects
-open MigrondiUI.Views.Components
 
 
 type LandingViewState =
@@ -38,7 +38,7 @@ type ViewContentProps = {
   handleProjectSelected: Project -> unit
   handleSelectLocalProject: unit -> unit
   handleCreateNewLocalProject: unit -> unit
-  handleCreateVirtualProject: Projects.NewVirtualProjectArgs -> unit
+  handleCreateVirtualProject: NewVirtualProjectArgs -> unit
 }
 
 type LandingVM
@@ -190,7 +190,7 @@ type LandingVM
         return ValueSome pid
   }
 
-  member _.CreateNewVirtualProject(args: Projects.NewVirtualProjectArgs) = asyncEx {
+  member _.CreateNewVirtualProject(args: NewVirtualProjectArgs) = asyncEx {
     logger.LogDebug "Creating new virtual project"
     let! pid = vProjects.InsertProject(args)
     logger.LogDebug("Inserted virtual project with id {Id}", pid)
@@ -288,7 +288,7 @@ let importLocalProject
     .Margin(10)
 
 let createVirtualProject
-  (onCreateVirtualProject: Projects.NewVirtualProjectArgs -> unit)
+  (onCreateVirtualProject: NewVirtualProjectArgs -> unit)
   : Control =
   // State for form fields
   let name = cval ""
