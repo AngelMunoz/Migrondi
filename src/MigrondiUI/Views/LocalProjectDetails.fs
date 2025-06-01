@@ -21,6 +21,7 @@ open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Projects
 open MigrondiUI.Components
+open MigrondiUI.Components.MigrationRunnerToolbar
 open MigrondiUI.Components.Fields
 
 type LocalProjectDetailsVM
@@ -153,108 +154,7 @@ type LocalProjectDetailsVM
     }
     |> handleException
 
-let runMigrations
-  (onRunMigrationsRequested: ProjectDetails.RunMigrationKind * int -> unit)
-  : Control =
-  let dryRun = cval false
-  let steps = cval 1M
-
-  let getIntValue() =
-    try
-      let v = steps.getValue() |> int
-      if v < 0 then 1 else v
-    with :? OverflowException ->
-      1
-
-  let applyPendingButton =
-    let abutton =
-      dryRun
-      |> AVal.map(fun dryRun ->
-        if dryRun then
-          Button()
-            .Content("Apply Pending (Dry Run)")
-            .OnClickHandler(fun _ _ ->
-              onRunMigrationsRequested(
-                ProjectDetails.RunMigrationKind.DryUp,
-                getIntValue()
-              ))
-          :> Control
-        else
-          SplitButton()
-            .Content("Apply Pending")
-            .Flyout(
-              Flyout()
-                .Content(
-                  Button()
-                    .Content("Confirm Apply")
-                    .OnClickHandler(fun _ _ ->
-                      onRunMigrationsRequested(
-                        ProjectDetails.RunMigrationKind.Up,
-                        getIntValue()
-                      ))
-                )
-            ))
-
-    UserControl().Name("ApplyPendingButton").Content(abutton |> AVal.toBinding)
-
-  let rollbackButton =
-    let rbutton =
-      dryRun
-      |> AVal.map(fun dryRun ->
-        if dryRun then
-          Button()
-            .Content("Rollback (Dry Run)")
-            .OnClickHandler(fun _ _ ->
-              onRunMigrationsRequested(
-                ProjectDetails.RunMigrationKind.DryDown,
-                getIntValue()
-              ))
-          :> Control
-        else
-          SplitButton()
-            .Content("Rollback")
-            .Flyout(
-              Flyout()
-                .Content(
-                  Button()
-                    .Content("Confirm Rollback")
-                    .OnClickHandler(fun _ _ ->
-                      onRunMigrationsRequested(
-                        ProjectDetails.RunMigrationKind.Down,
-                        getIntValue()
-                      ))
-                )
-            ))
-
-    UserControl().Name("RollbackButton").Content(rbutton |> AVal.toBinding)
-
-  let numericUpDown =
-    NumericUpDown()
-      .Minimum(0)
-      .Value(steps |> AVal.toBinding)
-      .Watermark("Amount to run")
-      .OnValueChangedHandler(fun _ value ->
-        match value.NewValue |> ValueOption.ofNullable with
-        | ValueNone -> steps.setValue 1M
-        | ValueSome value -> steps.setValue value)
-
-  let checkBox =
-    CheckBox()
-      .Content("Dry Run")
-      .IsChecked(dryRun |> AVal.toBinding)
-      .OnIsCheckedChangedHandler(fun checkbox _ ->
-
-        let isChecked =
-          checkbox.IsChecked
-          |> ValueOption.ofNullable
-          |> ValueOption.defaultValue true
-
-        dryRun.setValue isChecked)
-
-  StackPanel()
-    .OrientationHorizontal()
-    .Spacing(8)
-    .Children(applyPendingButton, rollbackButton, checkBox, numericUpDown)
+  // Reusing shared component from SharedComponents module
 
 let localProjectView
   (
@@ -299,7 +199,7 @@ let localProjectView
           TextBlock()
             .Text($"{project.name} - {description}")
             .VerticalAlignmentCenter(),
-          runMigrations(onRunMigrationsRequested).VerticalAlignmentCenter()
+          MigrationsRunnerToolbar(onRunMigrationsRequested).VerticalAlignmentCenter()
         )
     )
     .Content(configView(project.migrondiConfigPath, config))

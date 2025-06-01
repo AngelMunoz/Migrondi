@@ -20,6 +20,7 @@ open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Projects
 open MigrondiUI.Components
+open MigrondiUI.Components.MigrationRunnerToolbar
 
 open MigrondiUI.MigrondiExt
 
@@ -116,6 +117,92 @@ type VirtualProjectDetailsVM
       logger.LogError("Unable to delete the migration due: {error}", ex)
       return false
   }
+
+  member this.RunMigrations(kind: ProjectDetails.RunMigrationKind, steps: int) =
+    asyncEx {
+      let! token = Async.CancellationToken
+      logger.LogDebug("Running migrations: {kind}, {steps}", kind, steps)
+
+      match kind with
+      | ProjectDetails.RunMigrationKind.Up ->
+        logger.LogDebug("Running migrations up")
+        do! migrondi.RunUpAsync(steps, cancellationToken = token) :> Task
+        do! this.ListMigrations()
+        logger.LogDebug("Migrations up completed")
+        return ()
+      | ProjectDetails.RunMigrationKind.Down ->
+        logger.LogDebug("Running migrations down")
+        do! migrondi.RunDownAsync(steps, cancellationToken = token) :> Task
+        do! this.ListMigrations()
+        logger.LogDebug("Migrations down completed")
+        return ()
+      | ProjectDetails.RunMigrationKind.DryUp ->
+        logger.LogDebug("Running migrations dry up")
+        let! run = migrondi.DryRunUpAsync(steps, cancellationToken = token)
+
+        logger.LogDebug(
+          "Dry run up completed and found {count} migrations",
+          run.Count
+        )
+
+        run |> Seq.toArray |> lastDryRun.setValue
+
+        currentShow.setValue(
+          ProjectDetails.CurrentShow.DryRun ProjectDetails.RunMigrationKind.Up
+        )
+
+        logger.LogDebug("Current show set to dry run up")
+        return ()
+      | ProjectDetails.RunMigrationKind.DryDown ->
+        logger.LogDebug("Running migrations dry down")
+        let! run = migrondi.DryRunDownAsync(steps, cancellationToken = token)
+
+        logger.LogDebug(
+          "Dry run down completed and found {count} migrations",
+          run.Count
+        )
+
+        run |> Seq.toArray |> lastDryRun.setValue
+
+        currentShow.setValue(
+          ProjectDetails.CurrentShow.DryRun ProjectDetails.RunMigrationKind.Down
+        )
+
+        logger.LogDebug("Current show set to dry run down")
+        return ()
+    }
+    |> handleError
+
+  member _.UpdateProject(project: VirtualProject) = asyncEx {
+    logger.LogDebug("Updating project: {project}", project.name)
+    try
+      do! vprojects.UpdateProject project
+      return ()
+    with ex ->
+      logger.LogError("Unable to update the project due: {error}", ex)
+      return ()
+  }
+
+let virtualProjectView
+  (project: VirtualProject,
+   onRunMigrationsRequested: ProjectDetails.RunMigrationKind * int -> unit,
+   onSave: VirtualProject -> Async<unit>) : Control =
+
+  Expander()
+    .Header(
+      StackPanel()
+        .Spacing(8)
+        .OrientationHorizontal()
+        .Children(
+          TextBlock()
+            .Text("Project Details")
+            .VerticalAlignmentCenter(),
+          MigrationsRunnerToolbar(onRunMigrationsRequested).VerticalAlignmentCenter()
+        )
+    )
+    .Content(VirtualProjectForm.VirtualProjectForm(project, onSave))
+    .HorizontalAlignmentStretch()
+    .VerticalAlignmentTop()
 
 let toolbar
   (
@@ -266,12 +353,18 @@ let View
             onRemoveRequested migrationStatus.Migration
           ))
 
+      let onRunMigrationsRequested args =
+        vm.RunMigrations args |> Async.StartImmediate
+
+      let onSaveProject project =
+        vm.UpdateProject project
+
       return
         UserControl()
           .Name("VirtualProjectDetails")
           .Content(
             Grid()
-              .RowDefinitions("Auto,*")
+              .RowDefinitions("Auto,Auto,Auto,*")
               .ColumnDefinitions("Auto,*,*")
               .Children(
                 toolbar(onNavigateBack, onNewMigration, onRefresh)
@@ -279,6 +372,13 @@ let View
                   .Column(0)
                   .ColumnSpan(2)
                   .HorizontalAlignmentStretch(),
+                virtualProjectView(vm.Project, onRunMigrationsRequested, onSaveProject)
+                  .Row(1)
+                  .Column(0)
+                  .ColumnSpan(3)
+                  .VerticalAlignmentTop()
+                  .HorizontalAlignmentStretch()
+                  .MarginY(8),
                 ProjectDetails
                   .MigrationsPanel(
                     currentShow = vm.CurrentShow,
@@ -289,7 +389,7 @@ let View
                         migrationsViewTemplate,
                     dryRunView = ProjectDetails.dryRunListView
                   )
-                  .Row(1)
+                  .Row(2)
                   .Column(0)
                   .ColumnSpan(3)
                   .VerticalAlignmentStretch()
