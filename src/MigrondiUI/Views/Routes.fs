@@ -2,9 +2,6 @@ module MigrondiUI.Views.Routes
 
 
 open Microsoft.Extensions.Logging
-open Avalonia.Controls
-
-open NXUI.Extensions
 
 open Navs
 open Navs.Avalonia

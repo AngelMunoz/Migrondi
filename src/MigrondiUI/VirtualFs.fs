@@ -187,11 +187,6 @@ let getVirtualFs
 
           logger.LogDebug("Looking for project with id {guid}", projectId)
 
-          logger.LogDebug(
-            "Project with id {guid} not found, creating new migration",
-            projectId
-          )
-
           let virtualMigration: VirtualMigration = {
             id = Guid.NewGuid()
             name = name
