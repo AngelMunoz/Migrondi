@@ -26,7 +26,7 @@ let (|HasGroup|_|) (name: string) (groups: Match) =
     | group when group.Length = 0 -> ValueNone
     | group -> ValueSome group.Value
 
-let mnRegex = lazy (Regex(MigrationNameSchema))
+let mnRegex = lazy Regex(MigrationNameSchema)
 
 let extractTimestampAndName(name: string) =
   let groups = mnRegex.Value.Match(name)
@@ -37,10 +37,10 @@ let extractTimestampAndName(name: string) =
     let name = name.Trim()
 
     if String.IsNullOrWhiteSpace name then
-      failwithf "Invalid migration name %s" name
+      failwith $"Invalid migration name %s{name}"
 
     struct (timestamp, name)
-  | _ -> failwithf "Invalid migration name %s" name
+  | _ -> failwith $"Invalid migration name %s{name}"
 
 type MigrondiUIFs =
   inherit IMiFileSystem
@@ -103,7 +103,7 @@ let getVirtualFs
         let! config = vpr.GetProjectById guid ct
 
         match config with
-        | None -> return failwithf "Project with id %s not found" readFrom
+        | None -> return failwith $"Project with id %s{readFrom} not found"
         | Some config ->
           return {
             connection = config.connection
@@ -122,7 +122,7 @@ let getVirtualFs
 
         match migration with
         | None ->
-          return failwithf "Migration with name %s not found" migrationName
+          return failwith $"Migration with name %s{migrationName} not found"
         | Some migration ->
           logger.LogDebug(
             "Found migration with name {migrationName}",
@@ -145,7 +145,7 @@ let getVirtualFs
         let! project = vpr.GetProjectById guid ct
 
         match project with
-        | None -> return failwithf "Project with id %s not found" writeTo
+        | None -> return failwith $"Project with id %s{writeTo} not found"
         | Some project ->
           let updatedProject = {
             project with

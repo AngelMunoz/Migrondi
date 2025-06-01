@@ -105,7 +105,7 @@ let getMigrondiUI(lf: ILoggerFactory, vpr: Projects.IVirtualProjectRepository) =
           (migration: VirtualMigration, ?cancellationToken)
           : Task =
           let ct = defaultArg cancellationToken CancellationToken.None
-          vpr.UpdateMigration (migration) ct
+          vpr.UpdateMigration migration ct
 
         member _.ScriptStatus(migrationPath: string) : MigrationStatus =
           migrondi.ScriptStatus(migrationPath)
