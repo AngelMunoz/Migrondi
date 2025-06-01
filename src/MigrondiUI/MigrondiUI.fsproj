@@ -13,7 +13,10 @@
     <Compile Include="MigrondiExt.fs" />
     <Compile Include="OsOperations.fs" />
     <Compile Include="Components/Toolbar.fs" />
-    <Compile Include="Views/Shared.fs" />
+    <Compile Include="Components/Fields.fs" />
+    <Compile Include="Components/TextEditor.fs" />
+    <Compile Include="Components/ProjectDetails.fs" />
+    <Compile Include="Components/EditableMigration.fs" />
     <Compile Include="Views/Landing.fs" />
     <Compile Include="Views/LocalProjectDetails.fs" />
     <Compile Include="Views/VirtualProjectDetails.fs" />
