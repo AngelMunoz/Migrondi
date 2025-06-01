@@ -16,7 +16,9 @@
     <Compile Include="Components/Fields.fs" />
     <Compile Include="Components/TextEditor.fs" />
     <Compile Include="Components/ProjectDetails.fs" />
+    <Compile Include="Components/MigrationRunnerToolbar.fs" />
     <Compile Include="Components/EditableMigration.fs" />
+    <Compile Include="Components/VirtualProjectForm.fs" />
     <Compile Include="Views/Landing.fs" />
     <Compile Include="Views/LocalProjectDetails.fs" />
     <Compile Include="Views/VirtualProjectDetails.fs" />
