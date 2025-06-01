@@ -2,16 +2,15 @@ module MigrondiUI.Views.VirtualProjectDetails
 
 open System
 open System.IO
+open System.Threading.Tasks
 
-open Avalonia.Controls.Templates
-open Avalonia.Media
 open Microsoft.Extensions.Logging
 
 open Avalonia.Controls
+open Avalonia.Controls.Templates
 open NXUI.Extensions
 
 open IcedTasks
-open IcedTasks.Polyfill.Async.PolyfillBuilders
 open FsToolkit.ErrorHandling
 open FSharp.Data.Adaptive
 
@@ -20,22 +19,22 @@ open Navs.Avalonia
 open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Projects
-open MigrondiUI.Views.Components
+open MigrondiUI.Components
 
 open MigrondiUI.MigrondiExt
-open System.Threading.Tasks
 
 type VirtualProjectDetailsVM
   (
     logger: ILogger<VirtualProjectDetailsVM>,
     migrondi: IMigrondiUI,
+    vprojects: IVirtualProjectRepository,
     project: VirtualProject
   ) =
   let _migrations = cval [||]
   let lastDryRun = cval [||]
   let currentShow = cval ProjectDetails.CurrentShow.Migrations
 
-  let handleError(work: Async<unit>) = async {
+  let handleError(work: Async<unit>) = asyncEx {
     let! result = work |> Async.Catch
 
     match result with
@@ -58,7 +57,7 @@ type VirtualProjectDetailsVM
 
   member _.CurrentShow: ProjectDetails.CurrentShow aval = currentShow
 
-  member _.ListMigrations() = async {
+  member _.ListMigrations() = asyncEx {
     logger.LogDebug "Listing migrations"
     let! token = Async.CancellationToken
     let! migrations = migrondi.MigrationsListAsync token
@@ -75,7 +74,7 @@ type VirtualProjectDetailsVM
   }
 
   member this.CreateNewMigration(name: string) =
-    async {
+    asyncEx {
       logger.LogDebug("Creating new migration with name: {name}", name)
 
       let! token = Async.CancellationToken
@@ -84,11 +83,45 @@ type VirtualProjectDetailsVM
     }
     |> handleError
 
+  member _.SaveMigration(migration: Migration) = asyncEx {
+    logger.LogDebug("Saving migration: {migration}", migration.name)
+    let! virtualMigration = vprojects.GetMigrationByName(migration.name)
+
+    match virtualMigration with
+    | None -> return false
+    | Some virtualMigration ->
+      logger.LogDebug("Migration found: {migration}", virtualMigration.id)
+
+      try
+        do!
+          vprojects.UpdateMigration {
+            virtualMigration with
+                upContent = migration.upContent
+                downContent = migration.downContent
+          }
+
+        return true
+      with ex ->
+        logger.LogError("Unable to save the migration due: {error}", ex)
+        return false
+  }
+
+  member _.DeleteMigration(migration: Migration) = asyncEx {
+    logger.LogDebug("Deleting migration: {migration}", migration.name)
+
+    try
+      do! vprojects.RemoveMigrationByName migration.name
+      return true
+    with ex ->
+      logger.LogError("Unable to delete the migration due: {error}", ex)
+      return false
+  }
+
 let toolbar
   (
-    (onNavigateBack: unit -> unit),
-    (onNewMigration: string -> unit),
-    (onRefresh: unit -> unit)
+    onNavigateBack: unit -> unit,
+    onNewMigration: string -> unit,
+    onRefresh: unit -> unit
   ) =
   let isEnabled = cval false
 
@@ -121,134 +154,7 @@ let toolbar
       nameTextBox,
       createButton
     )
-
-module EditableMigration =
-
-  type EditableMigrationView
-    (migrationStatus: MigrationStatus, onSaveRequested: Migration -> Task<bool>)
-    =
-    inherit UserControl()
-
-    let migration, upContent, downContent, readonly =
-      match migrationStatus with
-      | Applied m -> cval m, (cval m.upContent), (cval m.downContent), true
-      | Pending m -> cval m, (cval m.upContent), (cval m.downContent), false
-
-    let isDirty =
-      (migration, upContent, downContent)
-      |||> AVal.map3(fun migration up down ->
-        up <> migration.upContent || down <> migration.downContent)
-
-    let status =
-      match migrationStatus with
-      | Applied _ -> AVal.constant "Applied"
-      | Pending _ ->
-        isDirty
-        |> AVal.map(fun isDirty ->
-          if isDirty then "Pending (Unsaved Changes)" else "Pending")
-
-    let strDate =
-      DateTimeOffset.FromUnixTimeMilliseconds(
-        AVal.force migration |> _.timestamp
-      )
-      |> _.ToString("G")
-
-    let migrationName = AVal.force migration |> _.name
-    let manualTransaction = AVal.force migration |> _.manualTransaction
-
-    let migrationContent =
-      Grid()
-        .ColumnDefinitions("*,4,*")
-        .Children(
-          LabeledField
-            .Vertical(
-              "Migrate Up",
-              TextEditor.TxtEditor.ReadWrite(upContent, readonly)
-            )
-            .Column(0),
-          GridSplitter()
-            .Column(1)
-            .ResizeDirectionColumns()
-            .IsEnabled(false)
-            .Background("Black" |> SolidColorBrush.Parse)
-            .MarginX(8)
-            .CornerRadius(5),
-          LabeledField
-            .Vertical(
-              "Migrate Down",
-              TextEditor.TxtEditor.ReadWrite(downContent, readonly)
-            )
-            .Column(2)
-        )
-
-    let saveBtn =
-      UserControl()
-        .Content(
-          isDirty
-          |> AVal.map (function
-            | true ->
-              let enable = cval true
-
-              Button()
-                .Content("Save")
-                .IsEnabled(enable |> AVal.toBinding)
-                .OnClickHandler(fun _ _ ->
-                  async {
-                    enable.setValue false
-                    let upContent = AVal.force upContent
-                    let downContent = AVal.force downContent
-                    let _migration = AVal.force migration
-
-                    let m = {
-                      _migration with
-                          upContent = upContent
-                          downContent = downContent
-                    }
-
-                    let! saved = onSaveRequested m
-
-                    if saved then migration.setValue m else ()
-                    enable.setValue true
-                  }
-                  |> Async.StartImmediate)
-            | false -> null)
-          |> AVal.toBinding
-        )
-
-    do
-      base.Content <-
-        Expander()
-          .Header(
-            StackPanel()
-              .Children(
-                TextBlock().Text(migrationName),
-                TextBlock()
-                  .Text($" [{status}]")
-                  .Foreground(
-                    match migrationStatus with
-                    | Applied _ -> "Green"
-                    | Pending _ -> "OrangeRed"
-                    |> SolidColorBrush.Parse
-                  ),
-                TextBlock().Text($" - {strDate}"),
-                saveBtn
-              )
-              .OrientationHorizontal()
-          )
-          .Content(
-            StackPanel()
-              .Children(
-                LabeledField.Horizontal(
-                  "Manual Transaction:",
-                  $" %b{manualTransaction}"
-                ),
-                migrationContent
-              )
-              .Spacing(8)
-          )
-          .HorizontalAlignmentStretch()
-          .VerticalAlignmentStretch()
-          .MarginY(4)
+    .HorizontalAlignmentStretch()
 
 let View
   (
@@ -308,11 +214,11 @@ let View
 
         vMigrondiFactory(project.ToMigrondiConfig(), projectRoot, project.id)
 
-      return VirtualProjectDetailsVM(logger, migrondi, project)
+      return VirtualProjectDetailsVM(logger, migrondi, projects, project)
     }
 
     let onNavigateBack() =
-      async {
+      asyncEx {
         match! nav.NavigateByName("landing") with
         | Ok _ -> ()
         | Error(e) ->
@@ -325,7 +231,7 @@ let View
       vm.ListMigrations() |> Async.StartImmediate
 
       let onNewMigration(name: string) =
-        async {
+        asyncEx {
           logger.LogDebug("Creating new migration with name: {name}", name)
           do! vm.CreateNewMigration name
           logger.LogDebug("New migration created and migrations listed")
@@ -335,19 +241,29 @@ let View
       let onRefresh() =
         vm.ListMigrations() |> Async.StartImmediate
 
-      let onSaveRequested(migration: Migration) =
-        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync<bool>(fun () -> task {
-          logger.LogDebug("Saving migration: {migration}", migration)
+      let onSaveRequested(migration: Migration) = asyncEx {
+        logger.LogDebug("Saving migration: {migration}", migration)
+        let! result = vm.SaveMigration(migration)
+        logger.LogDebug("Migrations listed")
+        return result
+      }
 
-          logger.LogDebug("Migrations listed")
-          return true
-        })
+      let onRemoveRequested migration () = asyncEx {
+        logger.LogDebug("Removing migration")
+        let! result = vm.DeleteMigration migration
+
+        if result then
+          do! vm.ListMigrations()
+
+        return ()
+      }
 
       let migrationsViewTemplate =
         FuncDataTemplate<MigrationStatus>(fun migrationStatus _ ->
           EditableMigration.EditableMigrationView(
             migrationStatus,
-            onSaveRequested
+            onSaveRequested,
+            onRemoveRequested migrationStatus.Migration
           ))
 
       return
