@@ -3,6 +3,8 @@ module MigrondiUI.Views.VirtualProjectDetails
 open System
 open System.IO
 
+open Avalonia.Controls.Templates
+open Avalonia.Media
 open Microsoft.Extensions.Logging
 
 open Avalonia.Controls
@@ -120,6 +122,134 @@ let toolbar
       createButton
     )
 
+module EditableMigration =
+
+  type EditableMigrationView
+    (migrationStatus: MigrationStatus, onSaveRequested: Migration -> Task<bool>)
+    =
+    inherit UserControl()
+
+    let migration, upContent, downContent, readonly =
+      match migrationStatus with
+      | Applied m -> cval m, (cval m.upContent), (cval m.downContent), true
+      | Pending m -> cval m, (cval m.upContent), (cval m.downContent), false
+
+    let isDirty =
+      (migration, upContent, downContent)
+      |||> AVal.map3(fun migration up down ->
+        up <> migration.upContent || down <> migration.downContent)
+
+    let status =
+      match migrationStatus with
+      | Applied _ -> AVal.constant "Applied"
+      | Pending _ ->
+        isDirty
+        |> AVal.map(fun isDirty ->
+          if isDirty then "Pending (Unsaved Changes)" else "Pending")
+
+    let strDate =
+      DateTimeOffset.FromUnixTimeMilliseconds(
+        AVal.force migration |> _.timestamp
+      )
+      |> _.ToString("G")
+
+    let migrationName = AVal.force migration |> _.name
+    let manualTransaction = AVal.force migration |> _.manualTransaction
+
+    let migrationContent =
+      Grid()
+        .ColumnDefinitions("*,4,*")
+        .Children(
+          LabeledField
+            .Vertical(
+              "Migrate Up",
+              TextEditor.TxtEditor.ReadWrite(upContent, readonly)
+            )
+            .Column(0),
+          GridSplitter()
+            .Column(1)
+            .ResizeDirectionColumns()
+            .IsEnabled(false)
+            .Background("Black" |> SolidColorBrush.Parse)
+            .MarginX(8)
+            .CornerRadius(5),
+          LabeledField
+            .Vertical(
+              "Migrate Down",
+              TextEditor.TxtEditor.ReadWrite(downContent, readonly)
+            )
+            .Column(2)
+        )
+
+    let saveBtn =
+      UserControl()
+        .Content(
+          isDirty
+          |> AVal.map (function
+            | true ->
+              let enable = cval true
+
+              Button()
+                .Content("Save")
+                .IsEnabled(enable |> AVal.toBinding)
+                .OnClickHandler(fun _ _ ->
+                  async {
+                    enable.setValue false
+                    let upContent = AVal.force upContent
+                    let downContent = AVal.force downContent
+                    let _migration = AVal.force migration
+
+                    let m = {
+                      _migration with
+                          upContent = upContent
+                          downContent = downContent
+                    }
+
+                    let! saved = onSaveRequested m
+
+                    if saved then migration.setValue m else ()
+                    enable.setValue true
+                  }
+                  |> Async.StartImmediate)
+            | false -> null)
+          |> AVal.toBinding
+        )
+
+    do
+      base.Content <-
+        Expander()
+          .Header(
+            StackPanel()
+              .Children(
+                TextBlock().Text(migrationName),
+                TextBlock()
+                  .Text($" [{status}]")
+                  .Foreground(
+                    match migrationStatus with
+                    | Applied _ -> "Green"
+                    | Pending _ -> "OrangeRed"
+                    |> SolidColorBrush.Parse
+                  ),
+                TextBlock().Text($" - {strDate}"),
+                saveBtn
+              )
+              .OrientationHorizontal()
+          )
+          .Content(
+            StackPanel()
+              .Children(
+                LabeledField.Horizontal(
+                  "Manual Transaction:",
+                  $" %b{manualTransaction}"
+                ),
+                migrationContent
+              )
+              .Spacing(8)
+          )
+          .HorizontalAlignmentStretch()
+          .VerticalAlignmentStretch()
+          .MarginY(4)
+
 let View
   (
     logger: ILogger<VirtualProjectDetailsVM>,
@@ -205,6 +335,21 @@ let View
       let onRefresh() =
         vm.ListMigrations() |> Async.StartImmediate
 
+      let onSaveRequested(migration: Migration) =
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync<bool>(fun () -> task {
+          logger.LogDebug("Saving migration: {migration}", migration)
+
+          logger.LogDebug("Migrations listed")
+          return true
+        })
+
+      let migrationsViewTemplate =
+        FuncDataTemplate<MigrationStatus>(fun migrationStatus _ ->
+          EditableMigration.EditableMigrationView(
+            migrationStatus,
+            onSaveRequested
+          ))
+
       return
         UserControl()
           .Name("VirtualProjectDetails")
@@ -223,7 +368,9 @@ let View
                     currentShow = vm.CurrentShow,
                     migrations = vm.Migrations,
                     lastDryRun = vm.LastDryRun,
-                    migrationsView = ProjectDetails.migrationListView,
+                    migrationsView =
+                      ProjectDetails.templatedMigrationListView
+                        migrationsViewTemplate,
                     dryRunView = ProjectDetails.dryRunListView
                   )
                   .Row(1)

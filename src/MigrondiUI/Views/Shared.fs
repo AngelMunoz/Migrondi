@@ -131,6 +131,17 @@ module TextEditor =
       text.AddCallback(fun text -> editor.Document.Text <- text) |> ignore
       editor
 
+    static member ReadWrite(text: string cval, ?readonly: bool) =
+      let editor = get()
+      // set initial text
+      editor.Document.Text <- AVal.force text
+      readonly |> Option.iter(fun r -> editor.IsReadOnly <- r)
+      // only update the text when the value changes from the editor
+      editor.Document.UpdateFinished
+      |> Observable.add(fun _ -> text.setValue editor.Document.Text)
+
+      editor
+
 module ProjectDetails =
   open System
 
@@ -256,6 +267,15 @@ module ProjectDetails =
           FuncDataTemplate<MigrationStatus>(fun migrationStatus _ ->
             MigrationStatusView migrationStatus)
         )
+
+  let templatedMigrationListView
+    (tpl: IDataTemplate)
+    (migrations: MigrationStatus[])
+    : Control =
+    if migrations.Length = 0 then
+      TextBlock().Text "No migrations found." :> Control
+    else
+      ItemsControl().ItemsSource(migrations).ItemTemplate(tpl)
 
   let dryRunListView(currentShow, migrations: Migration[]) : Control =
     if migrations.Length = 0 then
