@@ -103,7 +103,7 @@ module Queries =
       connection = coalesce(@connection, connection),
       table_name = coalesce(@table_name, table_name),
       driver = coalesce(@driver, driver)
-    where project_id = @project_id;
+    where id = @id;
     """
 
   [<Literal>]
@@ -246,7 +246,7 @@ module Database =
 
   [<Struct>]
   type UpdateVirtualProjectArgs = {
-    projectId: Guid
+    id: Guid
     connection: string
     tableName: string
     driver: string
@@ -465,7 +465,7 @@ module Database =
         |> Db.newCommand Queries.UpdateVirtualProjectQuery
         |> Db.setCancellationToken ct
         |> Db.setParams [
-          "project_id", sqlString args.projectId
+          "id", sqlString args.id
           "connection", sqlString args.connection
           "table_name", sqlString args.tableName
           "driver", sqlString args.driver

@@ -146,14 +146,14 @@ let GetVirtualProjectRepository createDbConnection =
         // First update the base project information
         do!
           updateProject {
-            id = project.id
+            id = project.projectId
             name = project.name
             description = project.description
           }
 
         return!
           updateVirtualProject {
-            projectId = project.id
+            id = project.id
             connection = project.connection
             tableName = project.tableName
             driver = project.driver.AsString
