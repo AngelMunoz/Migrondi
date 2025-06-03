@@ -35,6 +35,8 @@ type VirtualProjectDetailsVM
   let lastDryRun = cval [||]
   let currentShow = cval ProjectDetails.CurrentShow.Migrations
 
+  let _project = cval project
+
   let handleError(work: Async<unit>) = asyncEx {
     let! result = work |> Async.Catch
 
@@ -50,7 +52,7 @@ type VirtualProjectDetailsVM
     logger.LogDebug "VirtualProjectDetailsVM created"
     migrondi.Initialize()
 
-  member _.Project = project
+  member _.Project: VirtualProject aval = _project
 
   member _.Migrations: MigrationStatus[] aval = _migrations
 
@@ -175,8 +177,10 @@ type VirtualProjectDetailsVM
 
   member _.UpdateProject(project: VirtualProject) = asyncEx {
     logger.LogDebug("Updating project: {project}", project.name)
+
     try
       do! vprojects.UpdateProject project
+      _project.setValue project
       return ()
     with ex ->
       logger.LogError("Unable to update the project due: {error}", ex)
@@ -184,9 +188,23 @@ type VirtualProjectDetailsVM
   }
 
 let virtualProjectView
-  (project: VirtualProject,
-   onRunMigrationsRequested: ProjectDetails.RunMigrationKind * int -> unit,
-   onSave: VirtualProject -> Async<unit>) : Control =
+  (
+    project: VirtualProject aval,
+    onRunMigrationsRequested: ProjectDetails.RunMigrationKind * int -> unit,
+    onSave: VirtualProject -> Async<unit>
+  ) : Control =
+  let projectDescription =
+    project
+    |> AVal.map(fun p ->
+      let description = defaultArg p.description "No description provided."
+      // truncate the description if it is longer than "No description provided."
+      let description =
+        if description.Length > 24 then
+          $"{description.Substring(0, 24)}..."
+        else
+          description
+
+      $"{p.name} - {description}")
 
   Expander()
     .Header(
@@ -195,9 +213,10 @@ let virtualProjectView
         .OrientationHorizontal()
         .Children(
           TextBlock()
-            .Text("Project Details")
+            .Text(projectDescription |> AVal.toBinding)
             .VerticalAlignmentCenter(),
-          MigrationsRunnerToolbar(onRunMigrationsRequested).VerticalAlignmentCenter()
+          MigrationsRunnerToolbar(onRunMigrationsRequested)
+            .VerticalAlignmentCenter()
         )
     )
     .Content(VirtualProjectForm.VirtualProjectForm(project, onSave))
@@ -243,6 +262,144 @@ let toolbar
     )
     .HorizontalAlignmentStretch()
 
+type VProjectDetailsView
+  (logger: ILogger, vm: VirtualProjectDetailsVM, onNavigateBack) =
+  inherit UserControl()
+
+  let onNewMigration(name: string) =
+    asyncEx {
+      logger.LogDebug("Creating new migration with name: {name}", name)
+      do! vm.CreateNewMigration name
+      logger.LogDebug("New migration created and migrations listed")
+    }
+    |> Async.StartImmediate
+
+  let onRefresh() =
+    vm.ListMigrations() |> Async.StartImmediate
+
+  let onSaveRequested(migration: Migration) = asyncEx {
+    logger.LogDebug("Saving migration: {migration}", migration)
+    let! result = vm.SaveMigration(migration)
+    logger.LogDebug("Migrations listed")
+    return result
+  }
+
+  let onRemoveRequested migration () = asyncEx {
+    logger.LogDebug("Removing migration")
+    let! result = vm.DeleteMigration migration
+
+    if result then
+      do! vm.ListMigrations()
+
+    return ()
+  }
+
+  let migrationsViewTemplate =
+    FuncDataTemplate<MigrationStatus>(fun migrationStatus _ ->
+      EditableMigration.EditableMigrationView(
+        migrationStatus,
+        onSaveRequested,
+        onRemoveRequested migrationStatus.Migration
+      ))
+
+  let onRunMigrationsRequested args =
+    vm.RunMigrations args |> Async.StartImmediate
+
+  let onSaveProject project = vm.UpdateProject project
+
+  do
+    vm.ListMigrations() |> Async.StartImmediate
+
+    base.Name <- "VirtualProjectDetails"
+
+    base.Content <-
+      Grid()
+        .RowDefinitions("Auto,Auto,Auto,*")
+        .ColumnDefinitions("Auto,*,*")
+        .Children(
+          toolbar(onNavigateBack, onNewMigration, onRefresh)
+            .Row(0)
+            .Column(0)
+            .ColumnSpan(3)
+            .HorizontalAlignmentStretch(),
+          virtualProjectView(
+            vm.Project,
+            onRunMigrationsRequested,
+            onSaveProject
+          )
+            .Row(1)
+            .Column(0)
+            .ColumnSpan(3)
+            .VerticalAlignmentTop()
+            .HorizontalAlignmentStretch()
+            .MarginY(8),
+          ProjectDetails
+            .MigrationsPanel(
+              currentShow = vm.CurrentShow,
+              migrations = vm.Migrations,
+              lastDryRun = vm.LastDryRun,
+              migrationsView =
+                ProjectDetails.templatedMigrationListView migrationsViewTemplate,
+              dryRunView = ProjectDetails.dryRunListView
+            )
+            .Row(2)
+            .Column(0)
+            .ColumnSpan(3)
+            .VerticalAlignmentStretch()
+            .HorizontalAlignmentStretch()
+            .MarginY(8)
+        )
+
+let buildDetailsView
+  (
+    projectId: Guid,
+    logger: ILogger<VirtualProjectDetailsVM>,
+    projects: IVirtualProjectRepository,
+    vMigrondiFactory: MigrondiConfig * string * Guid -> IMigrondiUI,
+    onNavigateBack: unit -> unit
+  ) =
+  asyncOption {
+    let! cancellationToken = Async.CancellationToken
+    logger.LogDebug("Project ID from route parameters: {projectId}", projectId)
+
+    let! project = projects.GetProjectById projectId cancellationToken
+    logger.LogDebug("Project from repository: {project}", project)
+
+    let migrondi =
+      let projectRoot =
+        let rootPath = Path.Combine(Path.GetTempPath(), project.id.ToString())
+
+        try
+          Directory.CreateDirectory(rootPath).FullName
+        with ex ->
+          logger.LogWarning(
+            "Exception thrown while creating project root directory: {error}",
+            ex
+          )
+
+          Path.GetFullPath rootPath
+
+      logger.LogDebug(
+        "Using project root directory: {projectRoot}",
+        projectRoot
+      )
+
+      vMigrondiFactory(project.ToMigrondiConfig(), projectRoot, project.id)
+
+    let vm = VirtualProjectDetailsVM(logger, migrondi, projects, project)
+    return VProjectDetailsView(logger, vm, onNavigateBack) :> Control
+  }
+
+let buildProjectNotFound(id: Guid) : Control =
+  UserControl()
+    .Name("VirtualProjectDetails")
+    .Content(TextBlock().Text($"Project with the given id {id} was not found."))
+
+let buildLoading(id: Guid) : Control =
+  UserControl()
+    .Name("VirtualProjectDetails")
+    .Content(TextBlock().Text($"Loading project with the given id {id}..."))
+
 let View
   (
     logger: ILogger<VirtualProjectDetailsVM>,
@@ -251,155 +408,43 @@ let View
   )
   (context: RouteContext)
   (nav: INavigable<Control>)
-  : Async<Control> =
-  asyncEx {
-    let getProjectById(projectId: Guid) = asyncEx {
-      let! project = projects.GetProjectById projectId
+  : Control =
 
-      match project with
-      | Some project -> return Some project
-      | _ ->
-        logger.LogWarning(
-          "Virtual project not found. Project ID: {projectId}",
-          projectId
-        )
+  let projectId = context.getParam<Guid> "projectId" |> ValueOption.toOption
 
-        return None
+  let view =
+    let projectId = defaultArg projectId Guid.Empty
+    cval(buildLoading projectId)
+
+  let onNavigateBack() =
+    asyncEx {
+      match! nav.NavigateByName("landing") with
+      | Ok _ -> ()
+      | Error(e) ->
+        logger.LogWarning("Navigation failed: {error}", e.StringError())
     }
+    |> Async.StartImmediate
 
-    let vm = asyncOption {
-      let! projectId =
-        context.getParam<Guid> "projectId" |> ValueOption.toOption
+  match projectId with
+  | Some projectId ->
+    logger.LogDebug("Project ID from route parameters: {projectId}", projectId)
 
-      logger.LogDebug(
-        "Project ID from route parameters: {projectId}",
-        projectId
-      )
-
-      let! project = getProjectById projectId
-      logger.LogDebug("Project from repository: {project}", project)
-
-      let migrondi =
-
-        let projectRoot =
-          let rootPath = Path.Combine(Path.GetTempPath(), project.id.ToString())
-
-          try
-            Directory.CreateDirectory(rootPath).FullName
-          with ex ->
-            logger.LogWarning(
-              "Exception thrown while creating project root directory: {error}",
-              ex
-            )
-
-            Path.GetFullPath rootPath
-
-        logger.LogDebug(
-          "Using project root directory: {projectRoot}",
-          projectRoot
+    asyncEx {
+      match!
+        buildDetailsView(
+          projectId,
+          logger,
+          projects,
+          vMigrondiFactory,
+          onNavigateBack
         )
-
-        vMigrondiFactory(project.ToMigrondiConfig(), projectRoot, project.id)
-
-      return VirtualProjectDetailsVM(logger, migrondi, projects, project)
+      with
+      | Some(builtView) -> view.setValue(builtView)
+      | None -> view.setValue(buildProjectNotFound projectId)
     }
+    |> Async.StartImmediate
+  | None ->
+    logger.LogDebug("No project ID found in route parameters")
+    view.setValue(buildProjectNotFound Guid.Empty)
 
-    let onNavigateBack() =
-      asyncEx {
-        match! nav.NavigateByName("landing") with
-        | Ok _ -> ()
-        | Error(e) ->
-          logger.LogWarning("Navigation failed: {error}", e.StringError())
-      }
-      |> Async.StartImmediate
-
-    match! vm with
-    | Some vm ->
-      vm.ListMigrations() |> Async.StartImmediate
-
-      let onNewMigration(name: string) =
-        asyncEx {
-          logger.LogDebug("Creating new migration with name: {name}", name)
-          do! vm.CreateNewMigration name
-          logger.LogDebug("New migration created and migrations listed")
-        }
-        |> Async.StartImmediate
-
-      let onRefresh() =
-        vm.ListMigrations() |> Async.StartImmediate
-
-      let onSaveRequested(migration: Migration) = asyncEx {
-        logger.LogDebug("Saving migration: {migration}", migration)
-        let! result = vm.SaveMigration(migration)
-        logger.LogDebug("Migrations listed")
-        return result
-      }
-
-      let onRemoveRequested migration () = asyncEx {
-        logger.LogDebug("Removing migration")
-        let! result = vm.DeleteMigration migration
-
-        if result then
-          do! vm.ListMigrations()
-
-        return ()
-      }
-
-      let migrationsViewTemplate =
-        FuncDataTemplate<MigrationStatus>(fun migrationStatus _ ->
-          EditableMigration.EditableMigrationView(
-            migrationStatus,
-            onSaveRequested,
-            onRemoveRequested migrationStatus.Migration
-          ))
-
-      let onRunMigrationsRequested args =
-        vm.RunMigrations args |> Async.StartImmediate
-
-      let onSaveProject project =
-        vm.UpdateProject project
-
-      return
-        UserControl()
-          .Name("VirtualProjectDetails")
-          .Content(
-            Grid()
-              .RowDefinitions("Auto,Auto,Auto,*")
-              .ColumnDefinitions("Auto,*,*")
-              .Children(
-                toolbar(onNavigateBack, onNewMigration, onRefresh)
-                  .Row(0)
-                  .Column(0)
-                  .ColumnSpan(2)
-                  .HorizontalAlignmentStretch(),
-                virtualProjectView(vm.Project, onRunMigrationsRequested, onSaveProject)
-                  .Row(1)
-                  .Column(0)
-                  .ColumnSpan(3)
-                  .VerticalAlignmentTop()
-                  .HorizontalAlignmentStretch()
-                  .MarginY(8),
-                ProjectDetails
-                  .MigrationsPanel(
-                    currentShow = vm.CurrentShow,
-                    migrations = vm.Migrations,
-                    lastDryRun = vm.LastDryRun,
-                    migrationsView =
-                      ProjectDetails.templatedMigrationListView
-                        migrationsViewTemplate,
-                    dryRunView = ProjectDetails.dryRunListView
-                  )
-                  .Row(2)
-                  .Column(0)
-                  .ColumnSpan(3)
-                  .VerticalAlignmentStretch()
-                  .HorizontalAlignmentStretch()
-                  .MarginY(8)
-              )
-          )
-          .Margin(8)
-        :> Control
-    | None ->
-      logger.LogWarning("Project ID not found in route parameters.")
-      return TextBlock().Text("Project ID not found.")
-  }
+  UserControl().Content(view |> AVal.toBinding).Margin(8) :> Control

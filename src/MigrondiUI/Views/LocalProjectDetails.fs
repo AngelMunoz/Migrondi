@@ -154,7 +154,7 @@ type LocalProjectDetailsVM
     }
     |> handleException
 
-  // Reusing shared component from SharedComponents module
+// Reusing shared component from SharedComponents module
 
 let localProjectView
   (
@@ -199,7 +199,8 @@ let localProjectView
           TextBlock()
             .Text($"{project.name} - {description}")
             .VerticalAlignmentCenter(),
-          MigrationsRunnerToolbar(onRunMigrationsRequested).VerticalAlignmentCenter()
+          MigrationsRunnerToolbar(onRunMigrationsRequested)
+            .VerticalAlignmentCenter()
         )
     )
     .Content(configView(project.migrondiConfigPath, config))
@@ -249,6 +250,96 @@ let toolbar
       openInExplorerButton
     )
 
+
+type LProjectDetailsView
+  (logger: ILogger, vm: LocalProjectDetailsVM, onNavigateBack) =
+  inherit UserControl()
+
+  let onNewMigration(name: string) =
+    vm.NewMigration name |> Async.StartImmediate
+
+  let onRefresh() =
+    vm.ListMigrations() |> Async.StartImmediate
+
+  let onOpenInExplorer() =
+    vm.OpenFileExplorer() |> Async.StartImmediate
+
+  let onRunMigrationsRequested args =
+    vm.RunMigrations args |> Async.StartImmediate
+
+  do
+    vm.ListMigrations() |> Async.StartImmediate
+
+    base.Name <- "ProjectDetails"
+
+    base.Content <-
+      Grid()
+        .RowDefinitions("Auto,Auto,*")
+        .ColumnDefinitions("Auto,*,*")
+        .Children(
+          toolbar(onNavigateBack, onNewMigration, onRefresh, onOpenInExplorer)
+            .Row(0)
+            .Column(0)
+            .ColumnSpan(2)
+            .HorizontalAlignmentStretch(),
+          localProjectView(vm.Project, onRunMigrationsRequested)
+            .Row(1)
+            .Column(0)
+            .ColumnSpan(3)
+            .VerticalAlignmentTop()
+            .HorizontalAlignmentStretch()
+            .MarginY(8),
+          ProjectDetails
+            .MigrationsPanel(
+              currentShow = vm.CurrentShow,
+              migrations = vm.Migrations,
+              lastDryRun = vm.LastDryRun,
+              migrationsView = ProjectDetails.migrationListView,
+              dryRunView = ProjectDetails.dryRunListView
+            )
+            .Row(2)
+            .Column(0)
+            .ColumnSpan(3)
+            .VerticalAlignmentStretch()
+            .HorizontalAlignmentStretch()
+            .MarginY(8)
+        )
+
+let buildDetailsView
+  (
+    projectId: Guid,
+    logger: ILogger<LocalProjectDetailsVM>,
+    mLogger: ILogger<IMigrondi>,
+    projects: ILocalProjectRepository,
+    onNavigateBack: unit -> unit
+  ) =
+  asyncOption {
+    let! cancellationToken = Async.CancellationToken
+    let! project = projects.GetProjectById projectId cancellationToken
+
+    logger.LogDebug("Project from repository: {project}", project)
+
+    let! config = project.config
+
+    let projectRoot =
+      Path.GetDirectoryName project.migrondiConfigPath |> nonNull
+
+    let migrondi = Migrondi.MigrondiFactory(config, projectRoot, mLogger)
+
+    let vm = LocalProjectDetailsVM(logger, migrondi, project)
+    return LProjectDetailsView(logger, vm, onNavigateBack) :> Control
+  }
+
+let buildProjectNotFound(id: Guid) : Control =
+  UserControl()
+    .Name("ProjectDetails")
+    .Content(TextBlock().Text($"Project with ID {id} was not found."))
+
+let buildLoading(id: Guid) : Control =
+  UserControl()
+    .Name("ProjectDetails")
+    .Content(TextBlock().Text($"Loading project with ID {id}..."))
+
 let View
   (
     logger: ILogger<LocalProjectDetailsVM>,
@@ -257,113 +348,36 @@ let View
   )
   (context: RouteContext)
   (nav: INavigable<Control>)
-  : Async<Control> =
-  asyncEx {
-    let getProjectbyId(projectId: Guid) = asyncEx {
-      let! project = projects.GetProjectById projectId
+  : Control =
+  let projectId = context.getParam<Guid> "projectId" |> ValueOption.toOption
 
-      match project with
-      | Some project -> return Some project
-      | _ ->
-        logger.LogWarning(
-          "We're not supposed to have a virtual project here. Project ID: {projectId}",
-          projectId
-        )
+  let view =
+    let projectId = defaultArg projectId Guid.Empty
+    cval(buildLoading projectId)
 
-        return None
+  let onNavigateBack() =
+    asyncEx {
+      match! nav.NavigateByName("landing") with
+      | Ok _ -> ()
+      | Error(e) ->
+        logger.LogWarning("Navigation failed: {error}", e.StringError())
     }
+    |> Async.StartImmediate
 
-    let vm = asyncOption {
-      let! projectId =
-        context.getParam<Guid> "projectId" |> ValueOption.toOption
+  match projectId with
+  | Some projectId ->
+    logger.LogDebug("Project ID from route parameters: {projectId}", projectId)
 
-      logger.LogDebug(
-        "Project ID from route parameters: {projectId}",
-        projectId
-      )
-
-      let! project = getProjectbyId projectId
-      logger.LogDebug("Project from repository: {project}", project)
-
-      let! config = project.config
-
-      let projectRoot =
-        Path.GetDirectoryName project.migrondiConfigPath |> nonNull
-
-      let migrondi = Migrondi.MigrondiFactory(config, projectRoot, mLogger)
-
-      return LocalProjectDetailsVM(logger, migrondi, project)
+    asyncEx {
+      match!
+        buildDetailsView(projectId, logger, mLogger, projects, onNavigateBack)
+      with
+      | Some builtView -> view.setValue(builtView)
+      | None -> view.setValue(buildProjectNotFound projectId)
     }
+    |> Async.StartImmediate
+  | None ->
+    logger.LogDebug("No project ID found in route parameters")
+    view.setValue(buildProjectNotFound Guid.Empty)
 
-    let onNavigateBack() =
-      asyncEx {
-        match! nav.NavigateByName("landing") with
-        | Ok _ -> ()
-        | Error(e) ->
-          logger.LogWarning("Navigation failed: {error}", e.StringError())
-      }
-      |> Async.StartImmediate
-
-    match! vm with
-    | Some vm ->
-      vm.ListMigrations() |> Async.StartImmediate
-
-      let onNewMigration name =
-        vm.NewMigration name |> Async.StartImmediate
-
-      let onRefresh() =
-        vm.ListMigrations() |> Async.StartImmediate
-
-      let onOpenInExplorer() =
-        vm.OpenFileExplorer() |> Async.StartImmediate
-
-      let onRunMigrationsRequested args =
-        vm.RunMigrations args |> Async.StartImmediate
-
-      return
-        UserControl()
-          .Name("ProjectDetails")
-          .Content(
-            Grid()
-              .RowDefinitions("Auto,Auto,*")
-              .ColumnDefinitions("Auto,*,*")
-              .Children(
-                toolbar(
-                  onNavigateBack,
-                  onNewMigration,
-                  onRefresh,
-                  onOpenInExplorer
-                )
-                  .Row(0)
-                  .Column(0)
-                  .ColumnSpan(2)
-                  .HorizontalAlignmentStretch(),
-                localProjectView(vm.Project, onRunMigrationsRequested)
-                  .Row(1)
-                  .Column(0)
-                  .ColumnSpan(3)
-                  .VerticalAlignmentTop()
-                  .HorizontalAlignmentStretch()
-                  .MarginY(8),
-                ProjectDetails
-                  .MigrationsPanel(
-                    currentShow = vm.CurrentShow,
-                    migrations = vm.Migrations,
-                    lastDryRun = vm.LastDryRun,
-                    migrationsView = ProjectDetails.migrationListView,
-                    dryRunView = ProjectDetails.dryRunListView
-                  )
-                  .Row(2)
-                  .Column(0)
-                  .ColumnSpan(3)
-                  .VerticalAlignmentStretch()
-                  .HorizontalAlignmentStretch()
-                  .MarginY(8)
-              )
-          )
-          .Margin(8)
-        :> Control
-    | None ->
-      logger.LogWarning("Project ID not found in route parameters.")
-      return TextBlock().Text("Project ID not found.")
-  }
+  UserControl().Content(view |> AVal.toBinding).Margin(8) :> Control
