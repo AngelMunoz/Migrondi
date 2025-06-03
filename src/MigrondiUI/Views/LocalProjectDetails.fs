@@ -252,7 +252,7 @@ let toolbar
 
 
 type LProjectDetailsView
-  (logger: ILogger, vm: LocalProjectDetailsVM, onNavigateBack) =
+  (vm: LocalProjectDetailsVM, onNavigateBack) =
   inherit UserControl()
 
   let onNewMigration(name: string) =
@@ -327,17 +327,17 @@ let buildDetailsView
     let migrondi = Migrondi.MigrondiFactory(config, projectRoot, mLogger)
 
     let vm = LocalProjectDetailsVM(logger, migrondi, project)
-    return LProjectDetailsView(logger, vm, onNavigateBack) :> Control
+    return LProjectDetailsView(vm, onNavigateBack) :> Control
   }
 
 let buildProjectNotFound(id: Guid) : Control =
   UserControl()
-    .Name("ProjectDetails")
+    .Name("ProjectNotFound")
     .Content(TextBlock().Text($"Project with ID {id} was not found."))
 
 let buildLoading(id: Guid) : Control =
   UserControl()
-    .Name("ProjectDetails")
+    .Name("ProjectLoading")
     .Content(TextBlock().Text($"Loading project with ID {id}..."))
 
 let View
@@ -380,4 +380,4 @@ let View
     logger.LogDebug("No project ID found in route parameters")
     view.setValue(buildProjectNotFound Guid.Empty)
 
-  UserControl().Content(view |> AVal.toBinding).Margin(8) :> Control
+  UserControl().Name("LocalProjectDetails").Content(view |> AVal.toBinding).Margin(8)
