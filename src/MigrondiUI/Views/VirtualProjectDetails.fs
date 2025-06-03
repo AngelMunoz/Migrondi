@@ -447,4 +447,4 @@ let View
     logger.LogDebug("No project ID found in route parameters")
     view.setValue(buildProjectNotFound Guid.Empty)
 
-  UserControl().Content(view |> AVal.toBinding).Margin(8) :> Control
+  UserControl().Name("VirtualProjectDetails").Content(view |> AVal.toBinding).Margin(8)
