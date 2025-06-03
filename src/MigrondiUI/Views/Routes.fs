@@ -2,10 +2,8 @@ module MigrondiUI.Views.Routes
 
 
 open Microsoft.Extensions.Logging
-
 open Navs
 open Navs.Avalonia
-
 
 
 let private landingViewWithVM(lf: ILoggerFactory, lProjects, vProjects) =
@@ -34,15 +32,12 @@ let GetRouter lf (lProjects, vProjects, vMigrondiFactory) =
         "/projects/local/:projectId<guid>",
         projectDetailsViewWithVM(lf, lProjects)
       )
-      |> Route.cache NoCache
       Route.define(
         "virtual-project-details",
         "/projects/virtual/:projectId<guid>",
         vProjectDetailsViewWithVM(lf, vProjects, vMigrondiFactory)
       )
-      |> Route.cache NoCache
     ]
-
   router.Navigate "/" |> Async.AwaitTask |> Async.Ignore |> Async.StartImmediate
 
   router
