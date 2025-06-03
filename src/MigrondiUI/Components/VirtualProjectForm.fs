@@ -13,8 +13,16 @@ open MigrondiUI.Components.Fields
 
 module VirtualProject =
 
-  let setName (name: string) (project: VirtualProject cval) =
-    project.setValue(fun p -> { p with name = name })
+  let setName (name: string | null) (project: VirtualProject cval) =
+    Ok name
+    |> Result.bind(fun name ->
+      if String.IsNullOrWhiteSpace(name) then
+        Error "Name string cannot be empty."
+      else
+        Ok(nonNull name))
+    |> Result.toOption
+    |> Option.iter(fun name ->
+      project.setValue(fun p -> { p with name = name }))
 
   let setDescription
     (description: string | null)
@@ -47,10 +55,10 @@ module VirtualProject =
 
 
 type VirtualProjectForm
-  (project: VirtualProject, onSave: VirtualProject -> Async<unit>) =
+  (project: VirtualProject aval, onSave: VirtualProject -> Async<unit>) =
   inherit UserControl()
 
-  let aProject = cval project
+  let aProject = cval (project |> AVal.force)
 
   let driverItems = [|
     MigrondiDriver.Mysql.AsString
@@ -79,7 +87,15 @@ type VirtualProjectForm
       StackPanel()
         .Spacing(8)
         .Children(
-          LabeledField.Vertical("Project Name", project.name),
+          LabeledField.Vertical(
+            "Project Name",
+            TextBox()
+              .AcceptsReturn(true)
+              .Height(60.0)
+              .Text(aProject |> AVal.map(_.name) |> AVal.toBinding)
+              .OnTextChangedHandler(fun tb _ ->
+                aProject |> VirtualProject.setName(tb.Text))
+          ),
           LabeledField.Vertical(
             "Description",
             TextBox()
@@ -104,12 +120,14 @@ type VirtualProjectForm
             "Database Driver",
             ComboBox()
               .ItemsSource(driverItems)
+              .SelectedItem(
+                aProject |> AVal.map(_.driver.AsString) |> AVal.toBinding
+              )
               .OnSelectionChanged<string>(fun ((selected, _), _) ->
                 selected
                 |> Seq.tryHead
                 |> Option.iter(fun s ->
                   aProject |> VirtualProject.setDriver(s)))
           ),
-
           saveBtn
         )
