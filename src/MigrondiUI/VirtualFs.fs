@@ -45,7 +45,7 @@ let extractTimestampAndName(name: string) =
 type MigrondiUIFs =
   inherit IMiFileSystem
 
-  abstract member ExportToLocal: project: Guid -> CancellableTask<string>
+  abstract member ExportToLocal: project: Guid * projectPath: string -> CancellableTask<string>
 
   abstract member ImportFromLocal:
     project: LocalProject -> CancellableTask<Guid>
@@ -200,9 +200,7 @@ let getVirtualFs
           return! vpr.InsertMigration virtualMigration ct
         }
 
-      // TODO: add these at a later stage once we have the virtualfs bits implemented
-
-      member _.ExportToLocal project = failwith "Not Implemented"
+      member _.ExportToLocal (project, path) = failwith "Not Implemented"
 
       member _.ImportFromLocal(project: LocalProject) : CancellableTask<Guid> =
         failwith "Not Implemented"
