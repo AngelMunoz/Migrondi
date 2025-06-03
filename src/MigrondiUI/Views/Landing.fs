@@ -461,90 +461,87 @@ let View
   (vm: LandingVM, logger: ILogger)
   _
   (nav: INavigable<Control>)
-  : Async<Control> =
-  asyncEx {
-    let view = UserControl()
+  : Control =
+  let view = UserControl()
+  vm.LoadProjects() |> Async.StartImmediate
+
+  let handleProjectSelected(project: Project) =
+    asyncEx {
+      let url =
+        match project with
+        | Local _ -> $"/projects/local/%s{project.Id.ToString()}"
+        | Virtual _ -> $"/projects/virtual/%s{project.Id.ToString()}"
+
+      match! nav.Navigate url with
+      | Ok _ -> ()
+      | Error(e) ->
+        logger.LogWarning("Navigation Failure: {error}", e.StringError())
+    }
+    |> Async.StartImmediate
+
+  let handleSelectLocalProject() = asyncEx {
+    let! projectId = vm.LoadLocalProject view
+    do vm.SetLandingState Empty
+
     vm.LoadProjects() |> Async.StartImmediate
 
-    let handleProjectSelected(project: Project) =
-      asyncEx {
-        let url =
-          match project with
-          | Local _ -> $"/projects/local/%s{project.Id.ToString()}"
-          | Virtual _ -> $"/projects/virtual/%s{project.Id.ToString()}"
+    match! nav.Navigate $"/projects/local/%s{projectId.ToString()}" with
+    | Ok _ -> ()
+    | Error(e) ->
+      logger.LogWarning("Navigation Failure: {error}", e.StringError())
+  }
 
-        match! nav.Navigate url with
-        | Ok _ -> ()
-        | Error(e) ->
-          logger.LogWarning("Navigation Failure: {error}", e.StringError())
-      }
-      |> Async.StartImmediate
+  let handleCreateNewLocalProject() = asyncEx {
 
-    let handleSelectLocalProject() = asyncEx {
-      let! projectId = vm.LoadLocalProject view
-      do vm.SetLandingState Empty
+    let! projectId = vm.CreateNewLocalProject view
 
-      vm.LoadProjects() |> Async.StartImmediate
+    match projectId with
+    | ValueNone ->
+      logger.LogWarning "No project id returned"
+      return ()
+    | ValueSome projectId ->
+
 
       match! nav.Navigate $"/projects/local/%s{projectId.ToString()}" with
       | Ok _ -> ()
       | Error(e) ->
         logger.LogWarning("Navigation Failure: {error}", e.StringError())
-    }
 
-    let handleCreateNewLocalProject() = asyncEx {
-
-      let! projectId = vm.CreateNewLocalProject view
-
-      match projectId with
-      | ValueNone ->
-        logger.LogWarning "No project id returned"
-        return ()
-      | ValueSome projectId ->
-
-
-        match! nav.Navigate $"/projects/local/%s{projectId.ToString()}" with
-        | Ok _ -> ()
-        | Error(e) ->
-          logger.LogWarning("Navigation Failure: {error}", e.StringError())
-
-        vm.SetLandingState Empty
-        vm.LoadProjects() |> Async.StartImmediate
-    }
-
-    let viewContentProps = {
-      viewState = vm.ViewState
-      projects = vm.Projects
-      handleProjectSelected = handleProjectSelected
-      handleSelectLocalProject =
-        fun () -> handleSelectLocalProject() |> Async.StartImmediate
-      handleCreateNewLocalProject =
-        fun () -> handleCreateNewLocalProject() |> Async.StartImmediate
-      handleCreateVirtualProject =
-        fun args ->
-          asyncEx {
-            let! createdId = vm.CreateNewVirtualProject args
-            do vm.SetLandingState Empty
-
-            match! nav.Navigate $"/projects/virtual/%O{createdId}" with
-            | Ok _ -> ()
-            | Error(e) ->
-              logger.LogWarning("Navigation Failure: {error}", e.StringError())
-          }
-          |> Async.StartImmediate
-    }
-
-    return
-      view
-        .Name("Landing")
-        .Content(
-          DockPanel()
-            .LastChildFill(true)
-            .Children(
-              toolbar(vm.ViewState, vm.SetLandingState).DockTop(),
-              viewContent(viewContentProps).DockTop()
-            )
-            .Margin(10)
-        )
-      :> Control
+      vm.SetLandingState Empty
+      vm.LoadProjects() |> Async.StartImmediate
   }
+
+  let viewContentProps = {
+    viewState = vm.ViewState
+    projects = vm.Projects
+    handleProjectSelected = handleProjectSelected
+    handleSelectLocalProject =
+      fun () -> handleSelectLocalProject() |> Async.StartImmediate
+    handleCreateNewLocalProject =
+      fun () -> handleCreateNewLocalProject() |> Async.StartImmediate
+    handleCreateVirtualProject =
+      fun args ->
+        asyncEx {
+          let! createdId = vm.CreateNewVirtualProject args
+          do vm.SetLandingState Empty
+
+          match! nav.Navigate $"/projects/virtual/%O{createdId}" with
+          | Ok _ -> ()
+          | Error(e) ->
+            logger.LogWarning("Navigation Failure: {error}", e.StringError())
+        }
+        |> Async.StartImmediate
+  }
+
+
+  view
+    .Name("Landing")
+    .Content(
+      DockPanel()
+        .LastChildFill(true)
+        .Children(
+          toolbar(vm.ViewState, vm.SetLandingState).DockTop(),
+          viewContent(viewContentProps).DockTop()
+        )
+        .Margin(10)
+    )
