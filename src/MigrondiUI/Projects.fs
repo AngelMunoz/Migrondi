@@ -67,17 +67,16 @@ let GetLocalProjectRepository createDbConnection =
       return! None
   }
 
-  let findLocalProjects =
-    Database.FindLocalProjects(readConfig, createDbConnection)
+  let findLocalProjects = FindLocalProjects(readConfig, createDbConnection)
 
   let findLocalProjectById =
-    Database.FindLocalProjectById(readConfig, createDbConnection)
+    FindLocalProjectById(readConfig, createDbConnection)
 
-  let insertLocalProject = Database.InsertLocalProject createDbConnection
-  let updateProject = Database.UpdateProject createDbConnection
+  let insertLocalProject = InsertLocalProject createDbConnection
+  let updateProject = UpdateProject createDbConnection
 
   let updateLocalProjectConfigPath =
-    Database.UpdateLocalProjectConfigPath createDbConnection
+    UpdateLocalProjectConfigPath createDbConnection
 
   { new ILocalProjectRepository with
 
@@ -104,29 +103,25 @@ let GetLocalProjectRepository createDbConnection =
   }
 
 let GetVirtualProjectRepository createDbConnection =
-  let findVirtualProjects = Database.FindVirtualProjects createDbConnection
+  let findVirtualProjects = FindVirtualProjects createDbConnection
 
-  let findVirtualProjectById =
-    Database.FindVirtualProjectById createDbConnection
+  let findVirtualProjectById = FindVirtualProjectById createDbConnection
 
-  let insertVirtualProject = Database.InsertVirtualProject createDbConnection
-  let updateVirtualProject = Database.UpdateVirtualProject createDbConnection
-  let updateProject = Database.UpdateProject createDbConnection
+  let insertVirtualProject = InsertVirtualProject createDbConnection
+  let updateVirtualProject = UpdateVirtualProject createDbConnection
+  let updateProject = UpdateProject createDbConnection
 
-  let findVirtualMigrationByName =
-    Database.FindVirtualMigrationByName createDbConnection
+  let findVirtualMigrationByName = FindVirtualMigrationByName createDbConnection
 
   let findVirtualMigrationsByProjectId =
-    Database.FindVirtualMigrationsByProjectId createDbConnection
+    FindVirtualMigrationsByProjectId createDbConnection
 
-  let insertVirtualMigration =
-    Database.InsertVirtualMigration createDbConnection
+  let insertVirtualMigration = InsertVirtualMigration createDbConnection
 
-  let updateVirtualMigration =
-    Database.UpdateVirtualMigration createDbConnection
+  let updateVirtualMigration = UpdateVirtualMigration createDbConnection
 
   let removeVirtualMigrationByName =
-    Database.RemoveVirtualMigrationByName createDbConnection
+    RemoveVirtualMigrationByName createDbConnection
 
   { new IVirtualProjectRepository with
       member _.GetProjects() = findVirtualProjects()
