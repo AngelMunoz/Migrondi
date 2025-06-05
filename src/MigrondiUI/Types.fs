@@ -125,6 +125,15 @@ module ProjectExtensions =
       tableName = this.tableName
       driver = this.driver
     }
+
+  type VirtualMigration with
+    member this.ToMigration(): Migration = {
+      name = this.name
+      timestamp = this.timestamp
+      upContent = this.upContent
+      downContent = this.downContent
+      manualTransaction = this.manualTransaction
+    }
 // TODO: Add this.Migrations
 // TODO: Add this.Config
 // These have to be added later down where we are able to resolve the migrations whether they are local or virtual
