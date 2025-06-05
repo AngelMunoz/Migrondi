@@ -169,8 +169,9 @@ let localProjectView
   let configView(configPath: string, config: MigrondiConfig) : Control =
     let migrationsDir =
       option {
-        let! path = configPath |> Path.GetDirectoryName
-        return Path.Combine(path, config.migrations) |> Path.GetFullPath
+        let! path = Path.GetDirectoryName(configPath)
+        let path = Path.Combine(path, config.migrations)
+        return Path.GetFullPath path
       }
       |> Option.defaultValue "Unable to resolve the project's root directory"
 
@@ -251,8 +252,7 @@ let toolbar
     )
 
 
-type LProjectDetailsView
-  (vm: LocalProjectDetailsVM, onNavigateBack) =
+type LProjectDetailsView(vm: LocalProjectDetailsVM, onNavigateBack) =
   inherit UserControl()
 
   let onNewMigration(name: string) =
@@ -380,4 +380,7 @@ let View
     logger.LogDebug("No project ID found in route parameters")
     view.setValue(buildProjectNotFound Guid.Empty)
 
-  UserControl().Name("LocalProjectDetails").Content(view |> AVal.toBinding).Margin(8)
+  UserControl()
+    .Name("LocalProjectDetails")
+    .Content(view |> AVal.toBinding)
+    .Margin(8)

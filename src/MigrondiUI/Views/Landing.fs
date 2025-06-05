@@ -78,116 +78,102 @@ type LandingVM
 
   member _.ViewState: aval<LandingViewState> = viewState
 
-  member _.LoadLocalProject(view: Control) : Async<Guid voption> = asyncEx {
+  member _.LoadLocalProject(view: Control) : Async<Guid option> = asyncOption {
+    let! token = Async.CancellationToken
     logger.LogDebug "Loading local project"
+    let! topLevel = TopLevel.GetTopLevel(view)
 
-    match TopLevel.GetTopLevel(view) with
-    | null ->
-      logger.LogWarning "TopLevel is null"
-      return ValueNone
-    | topLevel ->
-      let! file =
-        topLevel.StorageProvider.OpenFilePickerAsync(
-          FilePickerOpenOptions(
-            Title = "Select Project File",
-            AllowMultiple = false,
-            FileTypeFilter = [|
-              FilePickerFileType(
-                "Migrondi Config",
-                Patterns = [ "migrondi.json" ]
-              )
-            |]
-          )
+    let! file =
+      topLevel.StorageProvider.OpenFilePickerAsync(
+        FilePickerOpenOptions(
+          Title = "Select Project File",
+          AllowMultiple = false,
+          FileTypeFilter = [|
+            FilePickerFileType(
+              "Migrondi Config",
+              Patterns = [ "migrondi.json" ]
+            )
+          |]
         )
+      )
 
-      match file |> Seq.tryHead with
-      | Some file ->
-        let! parentFolder = file.GetParentAsync()
+    let! file = file |> Seq.tryHead
+    let! parentFolder = file.GetParentAsync()
+    let! parentFolder = parentFolder
+    let name = parentFolder.Name
 
-        logger.LogDebug("Selected file: {File}", file.Name)
+    logger.LogDebug("Selected file: {File}", file.Name)
 
-        let! pid =
-          projects.InsertProject(
-            parentFolder.Name,
-            // TODO: handle uris when we're not on desktop platforms
-            configPath = file.Path.LocalPath
-          )
+    let! pid =
+      projects.InsertProject
+        (name,
+         // TODO: handle uris when we're not on desktop platforms
+         configPath = file.Path.LocalPath)
+        token
 
-        return ValueSome pid
-      | None ->
-        logger.LogWarning "No file selected"
-        return ValueNone
+    return pid
   }
 
-  member _.CreateNewLocalProject(view) = asyncEx {
+  member _.CreateNewLocalProject(view) = asyncOption {
     logger.LogDebug "Creating new local project"
+    let! token = Async.CancellationToken
+    let! topLevel = TopLevel.GetTopLevel view
 
-    match TopLevel.GetTopLevel view with
-    | null ->
-      logger.LogWarning "TopLevel is null"
-      return ValueNone
-    | topLevel ->
-      let! selectedDirectory = asyncOption {
-        let! directory =
-          topLevel.StorageProvider.OpenFolderPickerAsync(
-            FolderPickerOpenOptions(AllowMultiple = false)
-          )
-
-        let! selected = directory |> Seq.tryHead
-
-        return! selected.TryGetLocalPath() |> Option.ofNull
-      }
-
-      match selectedDirectory with
-      | None ->
-        logger.LogWarning "No directory selected"
-        return ValueNone
-      | Some directory ->
-        let config = MigrondiConfig.Default
-
-        logger.LogDebug("Selected directory: {Directory}", directory)
-
-        try
-          Directory.CreateDirectory(Path.Combine(directory, "migrations"))
-          |> ignore
-        with
-        | :? IOException
-        | :? UnauthorizedAccessException as ex ->
-
-          logger.LogWarning(
-            "Failed to create migrations directory: {Message}",
-            ex.Message
-          )
-
-        let configPath = Path.Combine(directory, "migrondi.json")
-        logger.LogDebug("Creating config file in {configfile}", configPath)
-
-        File.WriteAllText(
-          configPath,
-          Json
-            .migrondiConfigEncoder(config)
-            .ToJsonString(
-              JsonSerializerOptions(WriteIndented = true, IndentSize = 2)
-            )
+    let! directory = asyncOption {
+      let! directory =
+        topLevel.StorageProvider.OpenFolderPickerAsync(
+          FolderPickerOpenOptions(AllowMultiple = false)
         )
 
-        let dirName = Path.GetFileNameWithoutExtension directory |> nonNull
+      let! selected = directory |> Seq.tryHead
 
-        logger.LogDebug("Inserting local project with name {Name}", dirName)
+      return! selected.TryGetLocalPath()
+    }
 
-        logger.LogDebug(
-          "Inserting local project with config path {Path}",
-          directory
+    let config = MigrondiConfig.Default
+
+    logger.LogDebug("Selected directory: {Directory}", directory)
+
+    try
+      Directory.CreateDirectory(Path.Combine(directory, "migrations")) |> ignore
+    with
+    | :? IOException
+    | :? UnauthorizedAccessException as ex ->
+
+      logger.LogWarning(
+        "Failed to create migrations directory: {Message}",
+        ex.Message
+      )
+
+    let configPath = Path.Combine(directory, "migrondi.json")
+    logger.LogDebug("Creating config file in {configfile}", configPath)
+
+    File.WriteAllText(
+      configPath,
+      Json
+        .migrondiConfigEncoder(config)
+        .ToJsonString(
+          JsonSerializerOptions(WriteIndented = true, IndentSize = 2)
         )
+    )
 
-        logger.LogDebug("Inserting local project with config {Config}", config)
+    let! dirName = Path.GetFileNameWithoutExtension directory
 
-        let configPath = Path.Combine(directory, "migrondi.json")
+    logger.LogDebug("Inserting local project with name {Name}", dirName)
 
-        let! pid = projects.InsertProject(dirName, configPath = configPath)
+    logger.LogDebug(
+      "Inserting local project with config path {Path}",
+      directory
+    )
 
-        logger.LogDebug("Inserted local project with id {Id}", pid)
-        return ValueSome pid
+    logger.LogDebug("Inserting local project with config {Config}", config)
+
+    let configPath = Path.Combine(directory, "migrondi.json")
+
+    let! pid = projects.InsertProject (dirName, configPath = configPath) token
+
+    logger.LogDebug("Inserted local project with id {Id}", pid)
+    return pid
   }
 
   member _.CreateNewVirtualProject(args: NewVirtualProjectArgs) = asyncEx {
@@ -492,14 +478,13 @@ let View
   }
 
   let handleCreateNewLocalProject() = asyncEx {
-
     let! projectId = vm.CreateNewLocalProject view
 
     match projectId with
-    | ValueNone ->
+    | None ->
       logger.LogWarning "No project id returned"
       return ()
-    | ValueSome projectId ->
+    | Some projectId ->
 
 
       match! nav.Navigate $"/projects/local/%s{projectId.ToString()}" with
@@ -525,7 +510,7 @@ let View
           let! createdId = vm.CreateNewVirtualProject args
           do vm.SetLandingState Empty
 
-          match! nav.Navigate $"/projects/virtual/%O{createdId}" with
+          match! nav.Navigate $"/projects/virtual/{createdId}" with
           | Ok _ -> ()
           | Error(e) ->
             logger.LogWarning("Navigation Failure: {error}", e.StringError())

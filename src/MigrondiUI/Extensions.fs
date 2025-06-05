@@ -3,6 +3,7 @@ module Extensions
 
 open System
 open System.Text
+open System.Threading.Tasks
 open System.Runtime.CompilerServices
 
 open Avalonia
@@ -13,14 +14,31 @@ open Avalonia.Data
 open Avalonia.Markup.Xaml.Styling
 open Avalonia.Layout
 open Avalonia.Styling
-
 open AvaloniaEdit
 open AvaloniaEdit.Document
 open AvaloniaEdit.Highlighting
 
 open NXUI.Extensions
+
+open FsToolkit.ErrorHandling
+open IcedTasks
+
 open Navs
 open Migrondi.Core
+
+type AsyncOptionBuilder with
+
+  member _.Source(value: 'T | null) : Async<'T option> =
+    match value with
+    | null -> Async.singleton None
+    | value -> Async.singleton(Some value)
+
+  member _.Source(value: Async<'T | null>) : Async<'T option> =
+    value
+    |> Async.map (function
+      | null -> None
+      | value -> Some value)
+
 
 type Styles with
   member inline this.Load(source: string) =
@@ -211,6 +229,6 @@ type NavigationError<'View> with
 type MigrationStatus with
 
   member this.Migration =
-      match this with
-      | Applied m -> m
-      | Pending m -> m
+    match this with
+    | Applied m -> m
+    | Pending m -> m
