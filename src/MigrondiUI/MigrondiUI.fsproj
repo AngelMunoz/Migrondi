@@ -52,11 +52,11 @@
     <PackageReference Include="Donald" Version="10.1.0" />
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
 
-    <PackageReference Include="FsToolkit.ErrorHandling" Version="4.18.0" />
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.0.0" />
 
     <PackageReference Include="JDeck" Version="1.0.0-beta-006" />
     <PackageReference Include="Migrondi.Core" Version="1.0.0-beta-013" />
-    <PackageReference Include="Navs.Avalonia" Version="1.0.0-rc-005" />
+    <PackageReference Include="Navs.Avalonia" Version="1.0.0-rc-007" />
 
   </ItemGroup>
 </Project>
