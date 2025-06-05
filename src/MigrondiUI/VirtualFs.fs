@@ -73,9 +73,11 @@ let getVirtualFs
 
     )
 
-    let! config =
-      (fun token -> File.ReadAllTextAsync(configPath, token))
-      |> CancellableTask.map(configSerializer.Decode)
+    let! config = cancellableTask {
+      let! token = CancellableTask.getCancellationToken()
+      let! content = File.ReadAllTextAsync(configPath, token)
+      return configSerializer.Decode content
+    }
 
     logger.LogInformation("Found config {config}", config)
 
@@ -349,7 +351,7 @@ let getVirtualFs
 
           do!
             migrations
-            |> List.map(fun vm -> async {
+            |> List.map(fun vm -> asyncEx {
               let! token = Async.CancellationToken
 
               let migration = vm.ToMigration()
