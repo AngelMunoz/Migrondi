@@ -21,15 +21,11 @@ Log.Logger <-
     .WriteTo.Console()
     .CreateLogger()
 
-let loggerFactory = (new LoggerFactory()).AddSerilog(Log.Logger)
+let loggerFactory = (new LoggerFactory()).AddSerilog Log.Logger
 
-let BuildMainWindow router =
+let BuildMainWindow(routes: Routes) =
   let win =
-    Window()
-      .Content(RouterOutlet().router router)
-      .MinWidth(800)
-      .MinHeight(640)
-      .Title("MigrondiUI")
+    Window().Content(routes).MinWidth(800).MinHeight(640).Title "MigrondiUI"
 #if DEBUG
   win.AttachDevTools()
 #endif
@@ -47,7 +43,7 @@ let Orchestrate() =
   let migrondiui = MigrondiExt.getMigrondiUI(loggerFactory, vProjects)
 
   (lProjects, vProjects, migrondiui)
-  |> Views.Routes.GetRouter loggerFactory
+  |> Views.Routes.GetRoutes loggerFactory
   |> BuildMainWindow
 
 

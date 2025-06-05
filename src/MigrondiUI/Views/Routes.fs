@@ -22,22 +22,20 @@ let private vProjectDetailsViewWithVM
   VirtualProjectDetails.View(logger, vProjects, vMigrondiFactory)
 
 
-let GetRouter lf (lProjects, vProjects, vMigrondiFactory) =
+let GetRoutes (lf: ILoggerFactory) (lProjects, vProjects, vMigrondiFactory) =
+  let logger = lf.CreateLogger<Routes>()
 
-  let router: IRouter<_> =
-    AvaloniaRouter [
-      Route.define("landing", "/", landingViewWithVM(lf, lProjects, vProjects))
-      Route.define(
+  Routes(logger = logger)
+    .Children(
+      Route("landing", "/", landingViewWithVM(lf, lProjects, vProjects)),
+      Route(
         "local-project-details",
         "/projects/local/:projectId<guid>",
         projectDetailsViewWithVM(lf, lProjects)
-      )
-      Route.define(
+      ),
+      Route(
         "virtual-project-details",
         "/projects/virtual/:projectId<guid>",
         vProjectDetailsViewWithVM(lf, vProjects, vMigrondiFactory)
       )
-    ]
-  router.Navigate "/" |> Async.AwaitTask |> Async.Ignore |> Async.StartImmediate
-
-  router
+    )
