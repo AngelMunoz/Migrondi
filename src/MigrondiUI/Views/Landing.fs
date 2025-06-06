@@ -23,6 +23,8 @@ open Navs.Avalonia
 open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Projects
+open MigrondiUI.Components.CreateVirtualProjectView
+open MigrondiUI.VirtualFs
 
 
 type LandingViewState =
@@ -31,12 +33,16 @@ type LandingViewState =
   | RemoveProjects
   | Empty
 
+type LocalProjectTarget =
+  | CreateLocal
+  | ImportToVirtual
+
 [<Struct>]
 type ViewContentProps = {
   viewState: LandingViewState aval
   projects: Project list aval
   handleProjectSelected: Project -> unit
-  handleSelectLocalProject: unit -> unit
+  handleSelectLocalProject: LocalProjectTarget -> unit
   handleCreateNewLocalProject: unit -> unit
   handleCreateVirtualProject: NewVirtualProjectArgs -> unit
 }
@@ -45,7 +51,8 @@ type LandingVM
   (
     logger: ILogger<LandingVM>,
     projects: ILocalProjectRepository,
-    vProjects: IVirtualProjectRepository
+    vProjects: IVirtualProjectRepository,
+    vfs: MigrondiUIFs
   ) =
 
   let _projects: Project list cval = cval []
@@ -183,6 +190,31 @@ type LandingVM
     return pid
   }
 
+  member _.ImportToVirtualProject(view: Control) : Async<Guid option> = asyncOption {
+    logger.LogDebug "Importing local project to virtual project"
+    let! token = Async.CancellationToken
+    let! topLevel = TopLevel.GetTopLevel(view)
+
+    let! file =
+      topLevel.StorageProvider.OpenFilePickerAsync(
+        FilePickerOpenOptions(
+          Title = "Select Project File",
+          AllowMultiple = false,
+          FileTypeFilter = [|
+            FilePickerFileType(
+              "Migrondi Config",
+              Patterns = [ "migrondi.json" ]
+            )
+          |]
+        )
+      )
+
+    let! file = file |> Seq.tryHead
+    logger.LogDebug("Selected file: {File}", file.Name)
+    let! guid = vfs.ImportFromLocal file.Path.LocalPath token
+    return guid
+  }
+
 let inline emptyProjectsView() : Control =
   StackPanel()
     .Children(TextBlock().Text("No projects available"))
@@ -273,105 +305,6 @@ let importLocalProject
     .Children(createNewLocalProject, selectLocalProject)
     .Margin(10)
 
-let createVirtualProject
-  (onCreateVirtualProject: NewVirtualProjectArgs -> unit)
-  : Control =
-  // State for form fields
-  let name = cval ""
-  let description = cval ""
-  let connection = cval "Data Source=./migrondi.db"
-  let driver = cval MigrondiDriver.Sqlite
-
-  let driverTpl =
-    FuncDataTemplate<MigrondiDriver>(fun driver _ ->
-      TextBlock().Text(driver.AsString))
-
-  let driverOptions = [
-    MigrondiDriver.Sqlite
-    MigrondiDriver.Postgresql
-    MigrondiDriver.Mysql
-    MigrondiDriver.Mssql
-  ]
-
-  let driverCombo =
-    ComboBox()
-      .ItemsSource(driverOptions)
-      .SelectedIndex(0)
-      .ItemTemplate(driverTpl)
-      .OnSelectionChanged<MigrondiDriver>(fun (args, _) ->
-        args |> fst |> Seq.tryHead |> Option.iter(AVal.setValue driver))
-
-  let form =
-    let nameTextBox =
-      TextBox()
-        .Text(name.Value)
-        .OnTextChangedHandler(fun tb _ -> name.setValue tb.Text)
-
-    let descriptionTextBox =
-      TextBox()
-        .Text(description.Value)
-        .OnTextChangedHandler(fun tb _ -> description.setValue tb.Text)
-
-    let connectionTextBox =
-      TextBox()
-        .Text(connection.Value)
-        .OnTextChangedHandler(fun tb _ -> connection.setValue tb.Text)
-
-    let createBtn =
-      Button()
-        .Content("Create")
-        .IsEnabled(
-          (name, connection)
-          ||> AVal.map2(fun n c -> n.Trim() <> "" && c.Trim() <> "")
-          |> AVal.toBinding
-        )
-        // No-op for now, just a placeholder for submit
-        .OnClickHandler(fun _ _ ->
-          onCreateVirtualProject {
-            name = name.getValue()
-            description = description.getValue()
-            connection = connection.getValue()
-            driver = driver.getValue()
-            tableName = MigrondiConfig.Default.tableName
-          })
-
-    Grid()
-      .Classes("CreateVirtualProjectForm")
-      .RowDefinitions("Auto,Auto,Auto,Auto")
-      .ColumnDefinitions("*,*")
-      .VerticalAlignmentTop()
-      .Children(
-        LabeledField
-          .Vertical("Project Name:", nameTextBox)
-          .MarginRight(4)
-          .Row(0)
-          .Column(0),
-        LabeledField
-          .Vertical("Description:", descriptionTextBox)
-          .MarginLeft(4)
-          .Row(0)
-          .Column(1),
-        LabeledField
-          .Vertical("Driver:", driverCombo.HorizontalAlignmentStretch())
-          .HorizontalAlignmentStretch()
-          .Row(1)
-          .Column(0)
-          .ColumnSpan(2),
-        LabeledField
-          .Vertical("Connection String:", connectionTextBox)
-          .Row(2)
-          .Column(0)
-          .ColumnSpan(2),
-        createBtn
-          .Row(3)
-          .Column(1)
-          .ColumnSpan(2)
-          .HorizontalAlignmentRight()
-          .MarginY(10)
-      )
-
-  form
-
 let newProjectView
   (
     handleSelectLocalProject,
@@ -412,10 +345,14 @@ let newProjectView
             match t with
             | "Local" ->
               importLocalProject(
-                handleSelectLocalProject,
+                (fun () -> handleSelectLocalProject(CreateLocal)),
                 handleCreateNewLocalProject
               )
-            | "Virtual" -> createVirtualProject handleCreateVirtualProject
+            | "Virtual" ->
+              CreateVirtualProjectView(
+                handleCreateVirtualProject,
+                fun () -> handleSelectLocalProject(ImportToVirtual)
+              )
             | _ -> TextBlock().Text "Unknown project type")
           |> AVal.toBinding
         )
@@ -465,13 +402,27 @@ let View
     }
     |> Async.StartImmediate
 
-  let handleSelectLocalProject() = asyncEx {
-    let! projectId = vm.LoadLocalProject view
-    do vm.SetLandingState Empty
+  let handleSelectLocalProject(target: LocalProjectTarget) = asyncEx {
+    let! projectId = asyncEx {
+      match target with
+      | CreateLocal ->
+        let! projectId = vm.LoadLocalProject view
+        do vm.SetLandingState Empty
+        return projectId
+      | ImportToVirtual ->
+        let! projectId = vm.ImportToVirtualProject view
+        do vm.SetLandingState Empty
+        return projectId
+    }
 
     vm.LoadProjects() |> Async.StartImmediate
 
-    match! nav.Navigate $"/projects/local/%s{projectId.ToString()}" with
+    let target =
+      match target with
+      | CreateLocal -> "local"
+      | ImportToVirtual -> "virtual"
+
+    match! nav.Navigate $"/projects/{target}/%s{projectId.ToString()}" with
     | Ok _ -> ()
     | Error(e) ->
       logger.LogWarning("Navigation Failure: {error}", e.StringError())
@@ -501,9 +452,9 @@ let View
     projects = vm.Projects
     handleProjectSelected = handleProjectSelected
     handleSelectLocalProject =
-      fun () -> handleSelectLocalProject() |> Async.StartImmediate
+      fun target -> handleSelectLocalProject target |> Async.StartImmediate
     handleCreateNewLocalProject =
-      fun () -> handleCreateNewLocalProject() |> Async.StartImmediate
+      fun target -> handleCreateNewLocalProject target |> Async.StartImmediate
     handleCreateVirtualProject =
       fun args ->
         asyncEx {

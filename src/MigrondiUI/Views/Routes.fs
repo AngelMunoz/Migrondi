@@ -6,9 +6,9 @@ open Navs
 open Navs.Avalonia
 
 
-let private landingViewWithVM(lf: ILoggerFactory, lProjects, vProjects) =
+let private landingViewWithVM(lf: ILoggerFactory, lProjects, vProjects, vfs) =
   let logger = lf.CreateLogger<Landing.LandingVM>()
-  Landing.View(Landing.LandingVM(logger, lProjects, vProjects), logger)
+  Landing.View(Landing.LandingVM(logger, lProjects, vProjects, vfs), logger)
 
 let private projectDetailsViewWithVM(lf: ILoggerFactory, projects) =
   let logger = lf.CreateLogger<LocalProjectDetails.LocalProjectDetailsVM>()
@@ -22,12 +22,15 @@ let private vProjectDetailsViewWithVM
   VirtualProjectDetails.View(logger, vProjects, vMigrondiFactory)
 
 
-let GetRoutes (lf: ILoggerFactory) (lProjects, vProjects, vMigrondiFactory) =
+let GetRoutes
+  (lf: ILoggerFactory)
+  (lProjects, vProjects, vfs, vMigrondiFactory)
+  =
   let logger = lf.CreateLogger<Routes>()
 
   Routes(logger = logger)
     .Children(
-      Route("landing", "/", landingViewWithVM(lf, lProjects, vProjects)),
+      Route("landing", "/", landingViewWithVM(lf, lProjects, vProjects, vfs)),
       Route(
         "local-project-details",
         "/projects/local/:projectId<guid>",

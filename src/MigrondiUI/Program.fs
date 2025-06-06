@@ -42,7 +42,11 @@ let Orchestrate() =
 
   let migrondiui = MigrondiExt.getMigrondiUI(loggerFactory, vProjects)
 
-  (lProjects, vProjects, migrondiui)
+  let vfs =
+    let logger = loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>()
+    VirtualFs.getVirtualFs(logger, vProjects)
+
+  (lProjects, vProjects, vfs, migrondiui)
   |> Views.Routes.GetRoutes loggerFactory
   |> BuildMainWindow
 
