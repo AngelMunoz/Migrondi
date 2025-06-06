@@ -404,28 +404,27 @@ let View
 
   let handleSelectLocalProject(target: LocalProjectTarget) = asyncEx {
     let! projectId = asyncEx {
-      match target with
-      | CreateLocal ->
-        let! projectId = vm.LoadLocalProject view
-        do vm.SetLandingState Empty
-        return projectId
-      | ImportToVirtual ->
-        let! projectId = vm.ImportToVirtualProject view
-        do vm.SetLandingState Empty
-        return projectId
+      return!
+        match target with
+        | CreateLocal -> vm.LoadLocalProject view
+        | ImportToVirtual -> vm.ImportToVirtualProject view
     }
 
-    vm.LoadProjects() |> Async.StartImmediate
+    match projectId with
+    | None ->
+      logger.LogWarning "No project id returned"
+      return ()
+    | Some projectId ->
 
-    let target =
-      match target with
-      | CreateLocal -> "local"
-      | ImportToVirtual -> "virtual"
+      let target =
+        match target with
+        | CreateLocal -> "local"
+        | ImportToVirtual -> "virtual"
 
-    match! nav.Navigate $"/projects/{target}/%s{projectId.ToString()}" with
-    | Ok _ -> ()
-    | Error(e) ->
-      logger.LogWarning("Navigation Failure: {error}", e.StringError())
+      match! nav.Navigate $"/projects/{target}/{projectId}" with
+      | Ok _ -> vm.LoadProjects() |> Async.StartImmediate
+      | Error(e) ->
+        logger.LogWarning("Navigation Failure: {error}", e.StringError())
   }
 
   let handleCreateNewLocalProject() = asyncEx {
