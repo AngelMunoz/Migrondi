@@ -420,6 +420,7 @@ module Database =
       do! connection.TryOpenConnectionAsync(ct)
 
       let projectId = Guid.NewGuid()
+      let vProjectId = Guid.NewGuid()
 
       use! trx = connection.TryBeginTransactionAsync(ct)
 
@@ -441,7 +442,7 @@ module Database =
         |> Db.setTransaction trx
         |> Db.setCancellationToken ct
         |> Db.setParams [
-          "id", sqlString(Guid.NewGuid())
+          "id", sqlString(vProjectId)
           "connection", sqlString args.connection
           "table_name", sqlString args.tableName
           "driver", sqlString args.driver
@@ -450,7 +451,7 @@ module Database =
         |> Db.Async.exec
 
       do! trx.TryCommitAsync(ct)
-      return projectId
+      return vProjectId
     }
 
   let UpdateVirtualProject(createDbConnection: unit -> IDbConnection) =
