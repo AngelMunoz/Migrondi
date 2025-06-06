@@ -127,7 +127,7 @@ module ProjectExtensions =
     }
 
   type VirtualMigration with
-    member this.ToMigration(): Migration = {
+    member this.ToMigration() : Migration = {
       name = this.name
       timestamp = this.timestamp
       upContent = this.upContent
