@@ -1,7 +1,7 @@
 namespace Migrondi.Core.Database
 
 open System.Collections.Generic
-open System.Data
+open System.Data.Common
 open System.Runtime.InteropServices
 open System.Threading
 open System.Threading.Tasks
@@ -138,7 +138,7 @@ type internal IMiDatabaseHandler =
 
 module internal MigrationsImpl =
 
-  val getConnection: connectionString: string * driver: MigrondiDriver -> IDbConnection
+  val getConnection: connectionString: string * driver: MigrondiDriver -> DbConnection
 
 [<Class>]
 type internal MiDatabaseHandler =
