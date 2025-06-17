@@ -1,4 +1,6 @@
 [![.NET Core](https://github.com/AngelMunoz/Migrondi/actions/workflows/dotnetcore.yml/badge.svg)](https://github.com/AngelMunoz/Migrondi/actions/workflows/dotnetcore.yml)
+![NuGet Version](https://img.shields.io/nuget/vpre/Migrondi?label=Migrondi)
+![NuGet Version](https://img.shields.io/nuget/vpre/Migrondi.Core?label=Migrondi.Core)
 
 # Migrondi
 
