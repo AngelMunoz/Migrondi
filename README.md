@@ -1,4 +1,4 @@
-![.NET Core](https://github.com/AngelMunoz/Migrondi/workflows/.NET%20Core/badge.svg?branch=vnext)
+[![.NET Core](https://github.com/AngelMunoz/Migrondi/actions/workflows/dotnetcore.yml/badge.svg)](https://github.com/AngelMunoz/Migrondi/actions/workflows/dotnetcore.yml)
 
 # Migrondi
 
