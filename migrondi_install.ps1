@@ -125,7 +125,7 @@ param(
     # Add to profile by default, unless -AddToProfile:$false is specified
     if (-not ($PSBoundParameters.ContainsKey('AddToProfile') -and $AddToProfile -eq $false)) {
         $MigrondiProxyDirActualResolved = $EffectiveDownloadDir # This is the actual resolved path where migrondi.ps1 is
-        
+
         $PathStringForProfileFile = "" # This will hold either the literal '$env:...' or the resolved custom path
         $PathExistenceCheckRegex = "" # Regex to check if it's already there
 
@@ -164,21 +164,23 @@ param(
                 Write-Error "Failed to create profile file ($PROFILE): $_. Please create it manually and add '$PathStringForProfileFile' to your PATH."
             }
         }
-        
+
         if (Test-Path $PROFILE) {
             try {
                 $ProfileContent = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
-                
+
                 # Check if the directory is already in a line that modifies $env:PATH
                 if ($ProfileContent -match $PathExistenceCheckRegex) {
                     Write-Host "'$PathStringForProfileFile' appears to be already configured in the PATH in $PROFILE."
                 } else {
                     $PathSeparator = [System.IO.Path]::PathSeparator
                     $Comment = "# Added by migrondi_install.ps1 to include Migrondi CLI"
-                    $PathAddCommand = "`$env:PATH += '$PathSeparator$PathStringForProfileFile'"
-                    
+                    $MigrondiHomeEnvVarCommand = "`$env:MIGRONDI_HOME = '$PathStringForProfileFile'"
+                    $PathAddCommand = "`$env:PATH += '$PathSeparator`$env:MIGRONDI_HOME'" # Use MIGRONDI_HOME var
+
                     $FinalCommandToAdd = ""
-                    $BaseContentToAdd = "`n$Comment`n$PathAddCommand"
+                    # Add MIGRONDI_HOME first, then modify PATH
+                    $BaseContentToAdd = "`n$Comment`n$MigrondiHomeEnvVarCommand`n$PathAddCommand"
 
                     if (-not [string]::IsNullOrEmpty($ProfileContent) -and $ProfileContent[-1] -ne "`n" -and $ProfileContent[-1] -ne "`r") {
                         $FinalCommandToAdd = "`n" + $BaseContentToAdd # Extra newline if profile not empty and no trailing newline
