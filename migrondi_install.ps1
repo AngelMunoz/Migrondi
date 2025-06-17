@@ -2,7 +2,7 @@ param (
     [string]$Version,
     [switch]$Latest,
     [string]$DownloadPath, # New parameter for download location
-    [switch]$AddToProfile # New parameter to add to PATH in $PROFILE
+    [switch]$NoProfile # If present, Migrondi will NOT be added to PATH in $PROFILE
 )
 
 $RepoOwner = "AngelMunoz"
@@ -122,8 +122,10 @@ param(
     Set-Content -Path $ProxyScriptFilePath -Value $ProxyScriptContent
     Write-Host "Created Migrondi proxy script at $ProxyScriptFilePath"
 
-    # Add to profile by default, unless -AddToProfile:$false is specified
-    if (-not ($PSBoundParameters.ContainsKey('AddToProfile') -and $AddToProfile -eq $false)) {
+    # Add to profile by default, unless -NoProfile is specified
+    if (-not $NoProfile) { # If $NoProfile is $false (i.e., -NoProfile switch not used), then add to profile
+        Write-Host "Adding Migrondi to PATH in PowerShell profile: $PROFILE..."
+
         $MigrondiProxyDirActualResolved = $EffectiveDownloadDir # This is the actual resolved path where migrondi.ps1 is
 
         $PathStringForProfileFile = "" # This will hold either the literal '$env:...' or the resolved custom path
