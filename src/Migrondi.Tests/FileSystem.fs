@@ -5,7 +5,6 @@ open System.IO
 open System.Threading.Tasks
 open Microsoft.VisualStudio.TestTools.UnitTesting
 
-open FSharp.UMX
 
 open Microsoft.Extensions.Logging
 
@@ -405,7 +404,7 @@ type FileSystemTests() =
             false
         )
         |> List.ofSeq
-        |> List.traverseResultA(fun (err) ->
+        |> List.traverseResultA(fun err ->
           let err = err :?> MalformedSource
 
           Error
@@ -452,7 +451,7 @@ type FileSystemTests() =
             false
         )
         |> List.ofSeq
-        |> List.traverseResultA(fun (err) ->
+        |> List.traverseResultA(fun err ->
           let err = err :?> MalformedSource
 
           Error
@@ -512,7 +511,7 @@ type FileSystemTests() =
             false
         )
         |> List.ofSeq
-        |> List.traverseResultA(fun (err) ->
+        |> List.traverseResultA(fun err ->
           let err = err :?> MalformedSource
 
           Error

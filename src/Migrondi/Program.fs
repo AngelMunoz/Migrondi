@@ -8,7 +8,6 @@ open Serilog
 open Serilog.Formatting.Compact
 open Serilog.Extensions.Logging
 
-open Migrondi.Core
 open Migrondi.Commands
 open Migrondi.Env
 open Migrondi.Middleware
@@ -30,7 +29,7 @@ let main argv =
       config.MinimumLevel.Information() |> ignore
 
     if useJson then
-      config.WriteTo.Console(new RenderedCompactJsonFormatter()) |> ignore
+      config.WriteTo.Console(RenderedCompactJsonFormatter()) |> ignore
     else
       config.WriteTo.Console() |> ignore
 

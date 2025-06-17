@@ -26,7 +26,7 @@ module internal Matcher =
     val reg: Lazy<System.Text.RegularExpressions.Regex>
 
 
-  val (|V0Name|V1Name|NotMatched|): string -> Choice<(string * int64), (string * int64), unit>
+  val (|V0Name|V1Name|NotMatched|): string -> Choice<string * int64, string * int64, unit>
 
 /// DU that represents the currently supported drivers
 [<RequireQualifiedAccess>]
@@ -102,7 +102,7 @@ type Migration =
   /// A Result that may contain a tuple of the migration name and timestamp
   /// or a set of strings that may represent all of the found errors while validating the filename
   /// </returns>
-  static member internal ExtractFromFilename: filename: string -> Validation<(string * int64), string>
+  static member internal ExtractFromFilename: filename: string -> Validation<string * int64, string>
 
   /// <summary>
   /// Takes a path and tries to extract the migration information from it
@@ -115,7 +115,7 @@ type Migration =
   /// A Result that may contain a tuple of the migration name and timestamp
   /// or a set of strings that may represent all of the found errors while validating the path
   /// </returns>
-  static member internal ExtractFromPath: path: string -> Validation<(string * int64), string>
+  static member internal ExtractFromPath: path: string -> Validation<string * int64, string>
 
 /// Migration information can be obtained from a file or the database
 /// this DU allows to identify where the information is coming from
@@ -147,7 +147,6 @@ type MigrationStatus =
 
 [<AutoOpen>]
 module Exceptions =
-  open System.Runtime.ExceptionServices
   val internal reriseCustom: exn: exn -> 'ReturnValue
 
 /// <summary>

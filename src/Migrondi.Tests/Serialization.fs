@@ -1,6 +1,5 @@
 module Migrondi.Tests.Serialization
 
-open System
 open Microsoft.VisualStudio.TestTools.UnitTesting
 
 open Migrondi.Core

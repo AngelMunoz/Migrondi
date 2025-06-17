@@ -1,6 +1,5 @@
 namespace Migrondi.Commands
 
-open System
 open System.IO
 
 open FSharp.SystemCommandLine

@@ -2,7 +2,6 @@ namespace Migrondi.Tests.Database
 
 open System
 open System.Data
-open System.Data.Common
 open System.Threading.Tasks
 
 open Microsoft.VisualStudio.TestTools.UnitTesting

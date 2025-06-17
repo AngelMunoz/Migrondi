@@ -351,9 +351,9 @@ type DatabaseTests() =
             let c = Convert.ToInt64(countVal)
 
             if c = 0L then
-              return () // Empty
+              return ()
             else
-              return! Error msg // Not empty because msg is "There should not be records in this table"
+              return! Error msg
         }
 
         do! checkTableIsEmpty connection "test_1"
@@ -399,7 +399,7 @@ type DatabaseTests() =
       // rollback two
       let afterMigrationRollback =
         databaseEnv.RollbackMigrations(
-          // Rollback the last two migrations
+          // RollBack the last two migrations
           sampleMigrations |> List.rev |> List.take 2
         )
 
@@ -463,6 +463,7 @@ type DatabaseTests() =
       Assert.AreEqual<int>(2, migrations.Count)
       Assert.AreEqual<string>("test_4", migrations[0].name)
       Assert.AreEqual<string>("test_3", migrations[1].name)
+      Assert.AreEqual<string>("test_2", lastApplied.name)
     | Error err ->
       Assert.Fail($"Failed to find the last applied migration: %s{err}")
 
@@ -495,9 +496,7 @@ type DatabaseTests() =
 
     let thrown =
       Assert.ThrowsException<MigrationApplicationFailed>(
-        Action(
-          (fun () -> databaseEnv.ApplyMigrations(runnableMigrations) |> ignore)
-        )
+        Action (fun () -> databaseEnv.ApplyMigrations(runnableMigrations) |> ignore)
       )
 
     Assert.AreEqual(failingMigration, thrown.Migration)
@@ -539,18 +538,16 @@ type DatabaseTests() =
 
     let thrown =
       Assert.ThrowsException<MigrationRollbackFailed>(
-        Action(
-          (fun () ->
-            databaseEnv.RollbackMigrations(runnableMigrations) |> ignore
-          )
-        )
+        Action (fun () ->
+                databaseEnv.RollbackMigrations(runnableMigrations) |> ignore
+              )
       )
 
     Assert.AreEqual(failingMigration, thrown.Migration)
 
     match databaseEnv.FindLastApplied() with
     | Some migration -> Assert.AreEqual<string>("test_3", migration.name)
-    | None -> Assert.Fail($"Failed to find the last applied migration")
+    | None -> Assert.Fail("Failed to find the last applied migration")
 
   [<TestMethod>]
   member _.``Migrations with ManualTransaction can be applied``() =

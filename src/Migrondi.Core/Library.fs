@@ -13,7 +13,7 @@ module internal Matcher =
     let MigrationNameSchema: string =
       "^(?<Name>.+)_(?<Timestamp>[0-9]+).(sql|SQL)$"
 
-    let reg = lazy (Regex(MigrationNameSchema))
+    let reg = lazy Regex(MigrationNameSchema)
 
   module V1 =
 
@@ -21,7 +21,7 @@ module internal Matcher =
     let MigrationNameSchema: string =
       "^(?<Timestamp>[0-9]+)_(?<Name>.+).(sql|SQL)$"
 
-    let reg = lazy (Regex(MigrationNameSchema))
+    let reg = lazy Regex(MigrationNameSchema)
 
   [<return: Struct>]
   let (|HasGroup|_|) (name: string) (groups: Match) =

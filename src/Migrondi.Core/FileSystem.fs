@@ -3,7 +3,6 @@ namespace Migrondi.Core.FileSystem
 open System
 open System.Collections.Generic
 open System.IO
-open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
 open System.Runtime.InteropServices
@@ -347,7 +346,7 @@ module PhysicalFileSystemImpl =
 
     match operation with
     | Ok value ->
-      value |> List.sortByDescending(fun migration -> migration.timestamp)
+      value |> List.sortByDescending(_.timestamp)
     | Error err ->
       raise(AggregateException("Failed to Decode Some Migrations", err))
 
@@ -404,7 +403,7 @@ module PhysicalFileSystemImpl =
       return
         match operation with
         | Ok value ->
-          value |> List.sortByDescending(fun migration -> migration.timestamp)
+          value |> List.sortByDescending(_.timestamp)
           :> IReadOnlyList<_>
         | Error err ->
           raise(AggregateException("Failed to Decode Some Migrations", err))

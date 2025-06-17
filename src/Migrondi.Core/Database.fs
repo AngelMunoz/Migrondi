@@ -440,7 +440,7 @@ module MigrationsImpl =
     let executeMigration = runQuery(logger, connection, tableName)
 
     let rolledBack =
-      let migrationNames = migrations |> List.map(fun m -> m.name)
+      let migrationNames = migrations |> List.map(_.name)
 
       if List.isEmpty migrationNames then
         []
@@ -755,7 +755,7 @@ module MigrationsAsyncImpl =
       let executeMigration = runQueryAsync(logger, connection, tableName)
 
       // Get the records from DB *before* rolling them back to return them
-      let migrationNames = migrationsToRollback |> List.map(fun m -> m.name)
+      let migrationNames = migrationsToRollback |> List.map(_.name)
       let mutable rolledBackRecords = [] // Default to empty list
 
       if not(List.isEmpty migrationNames) then

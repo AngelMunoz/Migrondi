@@ -13,7 +13,6 @@ open Migrondi.Core.Database
 open System.Threading
 open Microsoft.Extensions.Logging
 
-open FsToolkit.ErrorHandling
 
 open IcedTasks
 
@@ -105,9 +104,9 @@ module internal MigrondiserviceImpl =
 
         let isWindowsRooted (path: string) =
           path.Length >= 3
-          && System.Char.IsLetter(path.[0])
-          && path.[1] = ':'
-          && (path.[2] = '\\' || path.[2] = '/')
+          && Char.IsLetter(path[0])
+          && path[1] = ':'
+          && (path[2] = '\\' || path[2] = '/')
 
         if
           System.IO.Path.IsPathRooted(dbPathTrimmed)
@@ -141,7 +140,7 @@ module internal MigrondiserviceImpl =
       | Some _ -> None
       | None -> Some migration
     )
-    |> Array.sortBy(fun migration -> migration.timestamp)
+    |> Array.sortBy(_.timestamp)
 
   let obtainPendingDown
     (migrations: IReadOnlyList<Migration>)
@@ -160,7 +159,7 @@ module internal MigrondiserviceImpl =
       | Some _ -> Some migration
       | None -> None
     )
-    |> Array.sortByDescending(fun migration -> migration.timestamp)
+    |> Array.sortByDescending(_.timestamp)
 
 
   let runUp
@@ -175,14 +174,14 @@ module internal MigrondiserviceImpl =
 
     logger.LogDebug(
       "Applied migrations: {Migrations}",
-      (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+      (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
     )
 
     let pendingMigrations = obtainPendingUp migrations appliedMigrations
 
     logger.LogDebug(
       "Pending migrations: {Migrations}",
-      (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+      (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
     )
 
     let migrationsToRun =
@@ -212,14 +211,14 @@ module internal MigrondiserviceImpl =
 
     logger.LogDebug(
       "Applied migrations: {Migrations}",
-      (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+      (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
     )
 
     let pendingMigrations = obtainPendingDown migrations appliedMigrations
 
     logger.LogDebug(
       "Rolling back migrations: {Migrations}",
-      (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+      (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
     )
 
     let migrationsToRun =
@@ -335,14 +334,14 @@ module internal MigrondiserviceImpl =
 
       logger.LogDebug(
         "Applied migrations: {Migrations}",
-        (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+        (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
       )
 
       let pendingMigrations = obtainPendingUp migrations appliedMigrations
 
       logger.LogDebug(
         "Pending migrations: {Migrations}",
-        (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+        (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
       )
 
       let migrationsToRun =
@@ -379,14 +378,14 @@ module internal MigrondiserviceImpl =
 
       logger.LogDebug(
         "Applied migrations: {Migrations}",
-        (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+        (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
       )
 
       let pendingMigrations = obtainPendingDown migrations appliedMigrations
 
       logger.LogDebug(
         "Rolling back migrations: {Migrations}",
-        (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+        (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
       )
 
       let migrationsToRun =
@@ -508,16 +507,16 @@ module internal MigrondiserviceImpl =
 
   let defaultLoggerFactory =
     lazy
-      (LoggerFactory.Create(fun builder ->
-        builder
+      LoggerFactory.Create(fun builder ->
+       builder
 #if DEBUG
-          .SetMinimumLevel(LogLevel.Debug)
+         .SetMinimumLevel(LogLevel.Debug)
 #else
-          .SetMinimumLevel(LogLevel.Information)
+         .SetMinimumLevel(LogLevel.Information)
 #endif
-          .AddSimpleConsole()
-        |> ignore
-      ))
+         .AddSimpleConsole()
+       |> ignore
+     )
 
 [<Class>]
 type Migrondi
@@ -559,8 +558,8 @@ type Migrondi
           connection = MigrondiserviceImpl.getConnectionStr rootDirectory config
     }
 
-    let database = new MiDatabaseHandler(logger, config)
-    let serializer = new MigrondiSerializer()
+    let database = MiDatabaseHandler(logger, config)
+    let serializer = MigrondiSerializer()
 
     let projectRoot =
       let rootDirectory = IO.Path.GetFullPath(rootDirectory)
@@ -604,8 +603,8 @@ type Migrondi
           connection = MigrondiserviceImpl.getConnectionStr rootDirectory config
     }
 
-    let database = new MiDatabaseHandler(logger, config)
-    let serializer = new MigrondiSerializer()
+    let database = MiDatabaseHandler(logger, config)
+    let serializer = MigrondiSerializer()
 
     let projectRoot =
       let rootDirectory = IO.Path.GetFullPath(rootDirectory)

@@ -1,6 +1,5 @@
 namespace Migrondi.Core
 
-open System
 open System.Collections.Generic
 open System.Threading.Tasks
 open System.Runtime.InteropServices

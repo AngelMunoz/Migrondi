@@ -165,12 +165,12 @@ module private Migration =
       let upIndex =
         collection
         |> Seq.find(fun value -> value.Groups["Identifier"].Value = "UP")
-        |> fun value -> value.Index
+        |> _.Index
 
       let downIndex =
         collection
         |> Seq.find(fun value -> value.Groups["Identifier"].Value = "DOWN")
-        |> fun value -> value.Index
+        |> _.Index
 
       // we've found the up delimiter, skip it and go straight for the content
       let slicedUp = content[upIndex .. downIndex - 1]
@@ -276,12 +276,12 @@ module private Migration =
     let upIndex =
       upDownCollection
       |> Seq.find(fun value -> value.Groups["Identifier"].Value = "UP")
-      |> fun value -> value.Index
+      |> _.Index
 
     let downIndex =
       upDownCollection
       |> Seq.find(fun value -> value.Groups["Identifier"].Value = "DOWN")
-      |> fun value -> value.Index
+      |> _.Index
 
     // we've found the up delimiter, skip it and go straight for the content
     let slicedUp = content[upIndex .. downIndex - 1]
