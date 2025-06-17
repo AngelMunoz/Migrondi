@@ -276,8 +276,8 @@ type DatabaseAsyncTests() =
           let msg = "There should not be records in this table"
 
           let checkTableIsEmpty (conn: IDbConnection) (tblName: string) = result {
-            if connection.State <> ConnectionState.Open then
-              connection.Open()
+            if conn.State <> ConnectionState.Open then
+              conn.Open()
 
             use cmd = conn.CreateCommand()
             cmd.CommandText <- $"SELECT COUNT(*) FROM \"{tblName}\""

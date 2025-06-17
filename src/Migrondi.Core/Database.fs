@@ -501,7 +501,7 @@ module MigrationsAsyncImpl =
       try
         use command = connection.CreateCommand()
         command.CommandText <- Queries.createTable driver tableName
-        let! _ = command.ExecuteNonQueryAsync(token)
+        do! command.ExecuteNonQueryAsync(token) :> Task
 
         return ()
       with ex ->
@@ -529,8 +529,9 @@ module MigrationsAsyncImpl =
     command.Parameters.Add(param) |> ignore
 
     use! reader = command.ExecuteReaderAsync(token) // Use token
+    let! result = reader.ReadAsync(token) // Use token
 
-    if reader.Read() then
+    if result then
       return
         Some {
           id = reader.GetInt32(0)
@@ -602,7 +603,7 @@ module MigrationsAsyncImpl =
 
           use command = connection.CreateCommand()
           command.CommandText <- content
-          let! _ = command.ExecuteNonQueryAsync(token)
+          do! command.ExecuteNonQueryAsync(token) :> Task
 
           if isUp then
             use insertCmd = connection.CreateCommand()
@@ -618,7 +619,7 @@ module MigrationsAsyncImpl =
             tsParam.ParameterName <- "@timestamp"
             tsParam.Value <- migration.timestamp
             insertCmd.Parameters.Add(tsParam) |> ignore
-            let! _ = insertCmd.ExecuteNonQueryAsync(token)
+            do! insertCmd.ExecuteNonQueryAsync(token) :> Task
             return ()
           else
             use deleteCmd = connection.CreateCommand()
@@ -630,7 +631,7 @@ module MigrationsAsyncImpl =
             nameParam.ParameterName <- "@name"
             nameParam.Value <- migration.name
             deleteCmd.Parameters.Add(nameParam) |> ignore
-            let! _ = deleteCmd.ExecuteNonQueryAsync(token)
+            do! deleteCmd.ExecuteNonQueryAsync(token) :> Task
             return ()
         with ex ->
           logger.LogError(
@@ -647,13 +648,13 @@ module MigrationsAsyncImpl =
         if connection.State <> ConnectionState.Open then
           do! connection.OpenAsync(token)
         // BeginTransaction is synchronous.
-        use transaction = connection.BeginTransaction()
+        use! transaction = connection.BeginTransactionAsync(token)
 
         try
           use command = connection.CreateCommand()
           command.CommandText <- content
           command.Transaction <- transaction
-          let! _ = command.ExecuteNonQueryAsync(token)
+          do! command.ExecuteNonQueryAsync(token) :> Task
 
           if isUp then
             use insertCmd = connection.CreateCommand()
@@ -670,8 +671,8 @@ module MigrationsAsyncImpl =
             tsParam.ParameterName <- "@timestamp"
             tsParam.Value <- migration.timestamp
             insertCmd.Parameters.Add(tsParam) |> ignore
-            let! _ = insertCmd.ExecuteNonQueryAsync(token)
-            () // Explicit unit
+            do! insertCmd.ExecuteNonQueryAsync(token) :> Task
+            ()
           else
             use deleteCmd = connection.CreateCommand()
 
@@ -683,10 +684,10 @@ module MigrationsAsyncImpl =
             nameParam.ParameterName <- "@name"
             nameParam.Value <- migration.name
             deleteCmd.Parameters.Add(nameParam) |> ignore
-            let! _ = deleteCmd.ExecuteNonQueryAsync(token)
-            () // Explicit unit
+            do! deleteCmd.ExecuteNonQueryAsync(token) :> Task
+            ()
 
-          transaction.Commit() // Synchronous commit
+          do! transaction.CommitAsync(token)
           return ()
         with ex ->
           logger.LogError(
@@ -695,7 +696,7 @@ module MigrationsAsyncImpl =
             ex.Message
           )
 
-          transaction.Rollback() // Synchronous rollback
+          do! transaction.RollbackAsync(token)
 
           if isUp then
             raise(MigrationApplicationFailed migration)
