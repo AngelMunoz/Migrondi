@@ -460,7 +460,7 @@ let View
           do vm.SetLandingState Empty
 
           match! nav.Navigate $"/projects/virtual/{createdId}" with
-          | Ok _ -> ()
+          | Ok _ -> vm.LoadProjects() |> Async.StartImmediate
           | Error(e) ->
             logger.LogWarning("Navigation Failure: {error}", e.StringError())
         }
