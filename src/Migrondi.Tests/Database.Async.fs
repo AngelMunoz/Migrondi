@@ -1,13 +1,14 @@
 namespace Migrondi.Tests.Database
 
 open System
+open System.Data
+open System.Data.Common
 open System.Threading.Tasks
 
 open Microsoft.VisualStudio.TestTools.UnitTesting
 
 open Microsoft.Extensions.Logging
 
-open RepoDb
 
 open FsToolkit.ErrorHandling
 
@@ -59,12 +60,22 @@ type DatabaseAsyncTests() =
         use connection =
           MigrationsImpl.getConnection(config.connection, config.driver)
 
-        return!
-          connection.ExecuteQuery<string>(
-            $"SELECT name FROM sqlite_master WHERE type='table' AND name='{config.tableName}';"
-          )
-          |> Seq.tryHead
-          |> Result.requireSome "Table not found"
+        use cmd = connection.CreateCommand()
+
+
+        if connection.State <> ConnectionState.Open then
+          connection.Open()
+
+        cmd.CommandText <-
+          $"SELECT name FROM sqlite_master WHERE type='table' AND name='{config.tableName}';"
+
+        use! reader = cmd.ExecuteReaderAsync()
+
+        if reader.Read() then
+          let tableNameStr = reader.GetString(0)
+          return tableNameStr
+        else
+          return! Error "Table not found"
       }
 
       match operation with
@@ -264,21 +275,31 @@ type DatabaseAsyncTests() =
 
           let msg = "There should not be records in this table"
 
-          do!
-            connection.QueryAll<{| name: string |}>(tableName = "test_1")
-            |> Result.requireEmpty msg
+          let checkTableIsEmpty (conn: IDbConnection) (tblName: string) = result {
+            if connection.State <> ConnectionState.Open then
+              connection.Open()
 
-          do!
-            connection.QueryAll<{| name: string |}>(tableName = "test_2")
-            |> Result.requireEmpty msg
+            use cmd = conn.CreateCommand()
+            cmd.CommandText <- $"SELECT COUNT(*) FROM \"{tblName}\""
 
-          do!
-            connection.QueryAll<{| name: string |}>(tableName = "test_3")
-            |> Result.requireEmpty msg
+            match cmd.ExecuteScalar() with
+            | null -> return! Error $"Could not get count for table {tblName}"
+            | countVal ->
+              let c = Convert.ToInt64(countVal)
 
-          do!
-            connection.QueryAll<{| name: string |}>(tableName = "test_4")
-            |> Result.requireEmpty msg
+              if c = 0L then
+                return () // Empty
+              else
+                return! Error msg // Not empty because msg is "There should not be records in this table"
+          }
+
+          do! checkTableIsEmpty connection "test_1"
+
+          do! checkTableIsEmpty connection "test_2"
+
+          do! checkTableIsEmpty connection "test_3"
+
+          do! checkTableIsEmpty connection "test_4"
         }
 
         do!
@@ -318,7 +339,7 @@ type DatabaseAsyncTests() =
           |> Async.Ignore
 
         // rollback two
-        let! afterMigrationRollback =
+        let! rolledBackMigrations =
           databaseEnv.RollbackMigrationsAsync(
             // Rollback the last two migrations
             sampleMigrations |> List.rev |> List.take 2
@@ -332,23 +353,27 @@ type DatabaseAsyncTests() =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          let! _ =
-            try
-              connection.QueryAll<{| name: string |}>(tableName = "test_3")
-              |> ignore
+          // Helper to check if a table is missing
+          let checkTableMissing (conn: IDbConnection) (tblName: string) = result {
+            use cmd = conn.CreateCommand()
 
-              Error "Table 'test_3' should not exist"
-            with ex ->
-              Ok(ex.Message)
+            cmd.CommandText <-
+              $"SELECT name FROM sqlite_master WHERE type='table' AND name='{tblName}'"
 
-          and! _ =
-            try
-              connection.QueryAll<{| name: string |}>(tableName = "test_4")
-              |> ignore
+            use reader = cmd.ExecuteReader()
 
-              Error "Table 'test_4' should not exist"
-            with ex ->
-              Ok(ex.Message)
+            if reader.Read() then // Table found
+              return! Error $"Table '{tblName}' should not exist"
+            else // Table not found
+              return ()
+          }
+
+          if connection.State <> ConnectionState.Open then
+            connection.Open()
+
+          do! checkTableMissing connection "test_3"
+
+          do! checkTableMissing connection "test_4"
 
           return ()
         }
@@ -357,14 +382,15 @@ type DatabaseAsyncTests() =
           queryMigratedTables
           |> Result.mapError(fun err -> String.Join("\n", err))
 
-        return (afterMigrationRollback, lastApplied)
+
+        return (rolledBackMigrations, lastApplied)
       }
 
       match operation with
-      | Ok(migrations, lastApplied) ->
-        Assert.AreEqual<int>(2, migrations.Count)
-        Assert.AreEqual<string>("test_2", migrations[0].name)
-        Assert.AreEqual<string>("test_1", migrations[1].name)
+      | Ok(rolledBackMigrations, lastApplied) ->
+        Assert.AreEqual<int>(2, rolledBackMigrations.Count)
+        Assert.AreEqual<string>("test_4", rolledBackMigrations[0].name)
+        Assert.AreEqual<string>("test_3", rolledBackMigrations[1].name)
         Assert.AreEqual<string>("test_2", lastApplied.name)
       | Error err ->
         Assert.Fail($"Failed to find the last applied migration: %s{err}")
@@ -434,8 +460,6 @@ type DatabaseAsyncTests() =
     ()
     =
     task {
-
-
       let sampleMigrations = DatabaseData.createTestMigrations 4
 
       // pre-fill the database

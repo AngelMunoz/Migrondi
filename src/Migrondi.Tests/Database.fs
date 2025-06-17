@@ -1,10 +1,10 @@
 namespace Migrondi.Tests.Database
 
 open System
+open System.Data
 
 open Microsoft.VisualStudio.TestTools.UnitTesting
 
-open RepoDb
 
 open FsToolkit.ErrorHandling
 
@@ -15,7 +15,6 @@ open Migrondi.Core.Database
 
 
 module DatabaseData =
-  open System.Data
 
   let getConfig (dbName: Guid) = {
     connection =
@@ -39,12 +38,12 @@ module DatabaseData =
     $"""DROP TABLE %s{tableName};"""
 
   let insertMigrationRecords
-    (records: int)
+    (recordsCount: int)
     (tableName: string)
     (connection: IDbConnection)
     =
-    let records = [
-      for i in 0..records do
+    let recordsToInsert = [
+      for i in 0..recordsCount do
         {
           id = int64(i + 1)
           name = $"test_{i + 1}"
@@ -55,18 +54,41 @@ module DatabaseData =
         }
     ]
 
-    let connection = connection.EnsureOpen()
+    if connection.State <> ConnectionState.Open then
+      connection.Open()
+
     use transaction = connection.BeginTransaction()
 
-    let result =
-      connection.InsertAll<MigrationRecord>(
-        tableName = tableName,
-        entities = records,
-        transaction = transaction
-      )
+    let mutable insertedCount = 0
+
+    for record in recordsToInsert do
+      use cmd = connection.CreateCommand()
+      cmd.Transaction <- transaction
+
+      cmd.CommandText <-
+        $"INSERT INTO \"{tableName}\" (id, name, timestamp) VALUES (@id, @name, @timestamp)"
+
+      let pId = cmd.CreateParameter()
+      pId.ParameterName <- "@id"
+      pId.Value <- record.id
+      cmd.Parameters.Add(pId) |> ignore
+
+      let pName = cmd.CreateParameter()
+      pName.ParameterName <- "@name"
+      pName.Value <- record.name
+      cmd.Parameters.Add(pName) |> ignore
+
+      let pTimestamp = cmd.CreateParameter()
+      pTimestamp.ParameterName <- "@timestamp"
+      pTimestamp.Value <- record.timestamp
+      cmd.Parameters.Add(pTimestamp) |> ignore
+
+      insertedCount <- insertedCount + cmd.ExecuteNonQuery()
 
     transaction.Commit()
-    result
+    // result
+    insertedCount
+
 
   let createTestMigrations upToIndex = [
     for i in 0..upToIndex do
@@ -117,17 +139,27 @@ type DatabaseTests() =
   [<TestMethod>]
   member _.``Database Should be Setup Correctly``() =
     let operation = result {
+
       do databaseEnv.SetupDatabase()
 
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
 
-      return!
-        connection.ExecuteQuery<string>(
-          $"SELECT name FROM sqlite_master WHERE type='table' AND name='{config.tableName}';"
-        )
-        |> Seq.tryHead
-        |> Result.requireSome "Table not found"
+      if connection.State <> ConnectionState.Open then
+        connection.Open()
+
+      use cmd = connection.CreateCommand()
+
+      cmd.CommandText <-
+        $"SELECT name FROM sqlite_master WHERE type='table' AND name='{config.tableName}';"
+
+      use reader = cmd.ExecuteReader()
+
+      if reader.Read() then
+        let tableNameStr = reader.GetString(0)
+        return tableNameStr
+      else
+        return! Error "Table not found"
     }
 
     match operation with
@@ -305,21 +337,32 @@ type DatabaseTests() =
 
         let msg = "There should not be records in this table"
 
-        do!
-          connection.QueryAll<{| name: string |}>(tableName = "test_1")
-          |> Result.requireEmpty msg
+        // Helper to check if a table is empty
+        let checkTableIsEmpty (conn: IDbConnection) (tblName: string) = result {
+          if conn.State <> ConnectionState.Open then
+            conn.Open()
 
-        do!
-          connection.QueryAll<{| name: string |}>(tableName = "test_2")
-          |> Result.requireEmpty msg
+          use cmd = conn.CreateCommand()
+          cmd.CommandText <- $"SELECT COUNT(*) FROM \"{tblName}\""
 
-        do!
-          connection.QueryAll<{| name: string |}>(tableName = "test_3")
-          |> Result.requireEmpty msg
+          match cmd.ExecuteScalar() with
+          | null -> return! Error $"Could not get count for table {tblName}"
+          | countVal ->
+            let c = Convert.ToInt64(countVal)
 
-        do!
-          connection.QueryAll<{| name: string |}>(tableName = "test_4")
-          |> Result.requireEmpty msg
+            if c = 0L then
+              return () // Empty
+            else
+              return! Error msg // Not empty because msg is "There should not be records in this table"
+        }
+
+        do! checkTableIsEmpty connection "test_1"
+
+        do! checkTableIsEmpty connection "test_2"
+
+        do! checkTableIsEmpty connection "test_3"
+
+        do! checkTableIsEmpty connection "test_4"
       }
 
       do!
@@ -368,23 +411,42 @@ type DatabaseTests() =
         use connection =
           MigrationsImpl.getConnection(config.connection, config.driver)
 
-        let! _ =
-          try
-            connection.QueryAll<{| name: string |}>(tableName = "test_3")
-            |> ignore
+        // Helper to check if a table is missing
+        let checkTableMissing (conn: IDbConnection) (tblName: string) = result {
 
-            Error "Table 'test_3' should not exist"
-          with ex ->
-            Ok(ex.Message)
+          if conn.State <> ConnectionState.Open then
+            conn.Open()
 
-        and! _ =
-          try
-            connection.QueryAll<{| name: string |}>(tableName = "test_4")
-            |> ignore
+          use cmd = conn.CreateCommand()
 
-            Error "Table 'test_4' should not exist"
-          with ex ->
-            Ok(ex.Message)
+          cmd.CommandText <-
+            $"SELECT name FROM sqlite_master WHERE type='table' AND name='{tblName}'"
+
+          use reader = cmd.ExecuteReader()
+
+          if reader.Read() then // Table found
+            return! Error $"Table '{tblName}' should not exist"
+          else // Table not found
+            return ()
+        }
+
+        do! checkTableMissing connection "test_3"
+        // let! _ =
+        //   try
+        //     connection.QueryAll<{| name: string |}>(tableName = "test_3")
+        //     |> ignore
+        //     Error "Table 'test_3' should not exist"
+        //   with ex ->
+        //     Ok(ex.Message)
+
+        do! checkTableMissing connection "test_4"
+        // and! _ =
+        //   try
+        //     connection.QueryAll<{| name: string |}>(tableName = "test_4")
+        //     |> ignore
+        //     Error "Table 'test_4' should not exist"
+        //   with ex ->
+        //     Ok(ex.Message)
 
         return ()
       }
