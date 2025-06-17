@@ -283,11 +283,14 @@ if [ "$ADD_TO_PROFILE" = true ]; then
         if [ -f "$profile_file" ]; then
             # Check if the directory is already in a line that modifies PATH
             # This grep is a basic check; more sophisticated checks might be needed for complex PATH setups
-            if grep -q "export PATH=.*${path_to_add}" "$profile_file"; then
-                log_info "'$path_to_add' appears to be already configured in the PATH in $profile_file."
+            if grep -q "export PATH=.*${path_to_add}" "$profile_file" && grep -q "export MIGRONDI_HOME=.*${path_to_add}" "$profile_file"; then
+                log_info "'$path_to_add' appears to be already configured in the PATH and MIGRONDI_HOME is set in $profile_file."
             else
                 comment="# Added by migrondi_install.sh to include Migrondi CLI"
-                path_add_command="export PATH=\"${path_to_add}:\$PATH\""
+                migrondi_home_command="export MIGRONDI_HOME=\"${path_to_add}\""
+                path_add_command="export PATH=\"${path_to_add}:\$PATH\"" # Original PATH modification
+                # If you want to use the MIGRONDI_HOME in PATH:
+                # path_add_command="export PATH=\"$MIGRONDI_HOME:\$PATH\""
 
                 # Add a newline before the comment if the file is not empty and doesn't end with a newline
                 if [ -s "$profile_file" ] && [ "$(tail -c1 "$profile_file"; echo x)" != $'\nx' ]; then
@@ -296,8 +299,9 @@ if [ "$ADD_TO_PROFILE" = true ]; then
 
                 echo "" >> "$profile_file" # Ensure separation
                 echo "$comment" >> "$profile_file"
+                echo "$migrondi_home_command" >> "$profile_file"
                 echo "$path_add_command" >> "$profile_file"
-                log_info "Successfully added '$path_to_add' to PATH in $profile_file."
+                log_info "Successfully added '$path_to_add' to PATH and set MIGRONDI_HOME in $profile_file."
                 log_info "Please restart your shell session or run 'source $profile_file' to apply the changes."
             fi
         fi
