@@ -58,7 +58,7 @@ type VirtualProjectForm
   (project: VirtualProject aval, onSave: VirtualProject -> Async<unit>) =
   inherit UserControl()
 
-  let aProject = cval (project |> AVal.force)
+  let aProject = cval(project |> AVal.force)
 
   let driverItems = [|
     MigrondiDriver.Mysql.AsString

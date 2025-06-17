@@ -12,7 +12,6 @@ open Avalonia.Controls
 open Avalonia.Controls.Templates
 open Avalonia.Platform.Storage
 
-open MigrondiUI.Components.Fields
 open NXUI.Extensions
 
 open FSharp.Data.Adaptive

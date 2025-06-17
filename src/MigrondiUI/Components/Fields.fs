@@ -44,4 +44,3 @@ type LabeledField =
       .OrientationVertical()
       .Spacing(defaultArg spacing 4)
       .Children(TextBlock().Classes("LabeledField_Label").Text label, content)
-

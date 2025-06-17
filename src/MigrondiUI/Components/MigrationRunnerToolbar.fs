@@ -8,7 +8,7 @@ open NXUI.Extensions
 open Navs.Avalonia
 open MigrondiUI.Components.ProjectDetails
 
-let applyPendingButton (dryRun, onRunMigrationsRequested, getIntValue) =
+let applyPendingButton(dryRun, onRunMigrationsRequested, getIntValue) =
   let btn =
     dryRun
     |> AVal.map(fun dryRun ->
@@ -36,7 +36,7 @@ let applyPendingButton (dryRun, onRunMigrationsRequested, getIntValue) =
 
   UserControl().Name("ApplyPendingButton").Content(btn |> AVal.toBinding)
 
-let rollbackButton (dryRun, onRunMigrationsRequested, getIntValue) =
+let rollbackButton(dryRun, onRunMigrationsRequested, getIntValue) =
   let btn =
     dryRun
     |> AVal.map(fun dryRun ->
@@ -44,10 +44,7 @@ let rollbackButton (dryRun, onRunMigrationsRequested, getIntValue) =
         Button()
           .Content("Rollback (Dry Run)")
           .OnClickHandler(fun _ _ ->
-            onRunMigrationsRequested(
-              RunMigrationKind.DryDown,
-              getIntValue()
-            ))
+            onRunMigrationsRequested(RunMigrationKind.DryDown, getIntValue()))
         :> Control
       else
         SplitButton()
@@ -67,7 +64,7 @@ let rollbackButton (dryRun, onRunMigrationsRequested, getIntValue) =
 
   UserControl().Name("RollbackButton").Content(btn |> AVal.toBinding)
 
-let numericUpDown (steps: _ cval) =
+let numericUpDown(steps: _ cval) =
   NumericUpDown()
     .Minimum(0)
     .Value(steps |> AVal.toBinding)
@@ -77,22 +74,23 @@ let numericUpDown (steps: _ cval) =
       | ValueNone -> steps.setValue 1M
       | ValueSome value -> steps.setValue value)
 
-let checkBox (dryRun: _ cval) =
-    CheckBox()
-      .Content("Dry Run")
-      .IsChecked(dryRun |> AVal.toBinding)
-      .OnIsCheckedChangedHandler(fun checkbox _ ->
+let checkBox(dryRun: _ cval) =
+  CheckBox()
+    .Content("Dry Run")
+    .IsChecked(dryRun |> AVal.toBinding)
+    .OnIsCheckedChangedHandler(fun checkbox _ ->
 
-        let isChecked =
-          checkbox.IsChecked
-          |> ValueOption.ofNullable
-          |> ValueOption.defaultValue true
+      let isChecked =
+        checkbox.IsChecked
+        |> ValueOption.ofNullable
+        |> ValueOption.defaultValue true
 
-        dryRun.setValue isChecked)
+      dryRun.setValue isChecked)
 
 
 
-type MigrationsRunnerToolbar(onRunMigrationsRequested: RunMigrationKind * int -> unit) =
+type MigrationsRunnerToolbar
+  (onRunMigrationsRequested: RunMigrationKind * int -> unit) =
   inherit UserControl()
   let dryRun = cval false
   let steps = cval 1M
@@ -103,6 +101,7 @@ type MigrationsRunnerToolbar(onRunMigrationsRequested: RunMigrationKind * int ->
       if v < 0 then 1 else v
     with :? OverflowException ->
       1
+
   do
     base.Content <-
       StackPanel()

@@ -1,7 +1,5 @@
 module MigrondiUI.OsOperations
 
-open System
-open System.IO
 open System.Runtime.InteropServices
 
 open CliWrap
@@ -9,7 +7,6 @@ open CliWrap.Buffered
 
 open System.Threading.Tasks
 
-open IcedTasks
 open IcedTasks
 
 

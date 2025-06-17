@@ -3,7 +3,6 @@ module MigrondiUI.Components.CreateVirtualProjectView
 open Avalonia.Controls
 open NXUI.Extensions
 open FSharp.Data.Adaptive
-open MigrondiUI
 open MigrondiUI.Components.Fields
 open Migrondi.Core
 open Avalonia.Controls.Templates

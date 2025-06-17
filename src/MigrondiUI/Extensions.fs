@@ -3,7 +3,6 @@ module Extensions
 
 open System
 open System.Text
-open System.Threading.Tasks
 open System.Runtime.CompilerServices
 
 open Avalonia
@@ -21,7 +20,6 @@ open AvaloniaEdit.Highlighting
 open NXUI.Extensions
 
 open FsToolkit.ErrorHandling
-open IcedTasks
 
 open Navs
 open Migrondi.Core
@@ -33,12 +31,22 @@ type AsyncOptionBuilder with
     | null -> Async.singleton None
     | value -> Async.singleton(Some value)
 
+  member _.Source(value: string | null) : Async<string option> =
+    match value with
+    | null -> Async.singleton None
+    | value -> Async.singleton(Some value)
+
   member _.Source(value: Async<'T | null>) : Async<'T option> =
     value
     |> Async.map (function
       | null -> None
       | value -> Some value)
 
+  member _.Source(value: Async<string | null>) : Async<string option> =
+    value
+    |> Async.map (function
+      | null -> None
+      | value -> Some value)
 
 type Styles with
   member inline this.Load(source: string) =

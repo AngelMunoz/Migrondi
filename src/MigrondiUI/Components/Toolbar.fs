@@ -14,8 +14,6 @@ type ToolbarOrientation =
   | Horizontal
   | Vertical
 
-[<Extension>]
-
 type ToolbarProps =
   | Spacing of float
   | Orientation of ToolbarOrientation

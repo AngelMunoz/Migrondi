@@ -1,4 +1,5 @@
 ﻿module MigrondiUI.Components.EditableMigration
+
 open System
 
 open Avalonia.Controls
@@ -75,9 +76,7 @@ type EditableMigrationView
           "[Pending]")
 
   let strDate =
-    DateTimeOffset.FromUnixTimeMilliseconds(
-      AVal.force migration |> _.timestamp
-    )
+    DateTimeOffset.FromUnixTimeMilliseconds(AVal.force migration |> _.timestamp)
     |> _.ToString("G")
 
   let migrationName = AVal.force migration |> _.name
