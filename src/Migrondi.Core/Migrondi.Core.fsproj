@@ -39,10 +39,9 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
     <PackageReference Include="Thoth.Json.Net" Version="11.0.0" />
     <!-- RepoDB Packages to handle SQL Servers -->
-    <PackageReference Include="RepoDb" Version="1.13.1" />
-    <PackageReference Include="RepoDb.SqlServer" Version="1.13.1" />
-    <PackageReference Include="RepoDb.PostgreSql" Version="1.13.1" />
-    <PackageReference Include="RepoDb.Sqlite.Microsoft" Version="1.13.1" />
-    <PackageReference Include="RepoDb.MySqlConnector" Version="1.13.1" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.6" />
+    <PackageReference Include="Npgsql" Version="9.0.3" />
+    <PackageReference Include="MySql.Data" Version="9.3.0" />
   </ItemGroup>
 </Project>
