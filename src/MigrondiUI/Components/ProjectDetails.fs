@@ -30,7 +30,7 @@ type CurrentShow =
   | DryRun of RunMigrationKind
   | ExceptionThrown of exn
 
-type MigrationStatusView(migrationStatus: MigrationStatus) as this =
+type MigrationStatusView(migrationStatus: MigrationStatus) =
   inherit UserControl()
 
   let migration =
@@ -52,6 +52,7 @@ type MigrationStatusView(migrationStatus: MigrationStatus) as this =
 
     base.Content <-
       Expander()
+        .Classes("MigrationStatusExpander")
         .Header(
           StackPanel()
             .Classes("MigrationStatusHeader")
@@ -63,7 +64,7 @@ type MigrationStatusView(migrationStatus: MigrationStatus) as this =
         )
         .Content(
           StackPanel()
-            .Classes("MigrationContent")
+            .Classes("MigrationContent", "SpacedStackPanel")
             .Children(
               LabeledField.Horizontal(
                 "Manual Transaction:",
@@ -80,7 +81,7 @@ type MigrationStatusView(migrationStatus: MigrationStatus) as this =
                     )
                     .Column(0),
                   GridSplitter()
-                    .Classes("Divider")
+                    .Classes("VerticalDivider")
                     .Column(1)
                     .ResizeDirectionColumns()
                     .IsEnabled(false),
@@ -94,43 +95,7 @@ type MigrationStatusView(migrationStatus: MigrationStatus) as this =
             )
         )
 
-    this.StyleUp()
-
-
-  member this.StyleUp() =
-    this.Styles.AddRange [
-      Style()
-        .Selector(_.OfType<Expander>().Class("MigrationStatus"))
-        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
-        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
-        .SetLayoutableMargin(Thickness(0, 4))
-
-      Style()
-        .Selector(_.OfType<StackPanel>().Class("MigrationStatusHeader"))
-        .SetStackLayoutOrientation(Layout.Orientation.Horizontal)
-
-      Style()
-        .Selector(_.OfType<TextBlock>().Class("StatusText_Applied"))
-        .SetTextBlockForeground("Green" |> SolidColorBrush.Parse)
-
-      Style()
-        .Selector(_.OfType<TextBlock>().Class("StatusText_Pending"))
-        .SetTextBlockForeground("OrangeRed" |> SolidColorBrush.Parse)
-
-      Style()
-        .Selector(_.OfType<StackPanel>().Class("MigrationContent"))
-        .SetStackLayoutSpacing(8)
-
-      Style()
-        .Selector(_.OfType<GridSplitter>().Class("Divider"))
-        .SetPanelBackground("Black" |> SolidColorBrush.Parse)
-        .SetLayoutableMargin(Thickness(8, 0))
-        .SetBorderCornerRadius(CornerRadius(5))
-    ]
-
-
-
-type DryRunView(show: RunMigrationKind, migration: Migration) as this =
+type DryRunView(show: RunMigrationKind, migration: Migration) =
   inherit UserControl()
 
   let content =
@@ -144,20 +109,11 @@ type DryRunView(show: RunMigrationKind, migration: Migration) as this =
     if migration.manualTransaction then
       content
     else
-      $"-- ----------START TRANSACTION----------\n{content}\n-- ----------COMMIT TRANSACTION----------"
+      $"-- ----------START TRANSACTION----------
+{content}
+-- ----------COMMIT TRANSACTION----------"
 
-  do
-    base.Content <- TxtEditor.Readonly(content).Name("MigrationContent")
-
-    this.StyleUp()
-
-  member this.StyleUp() =
-    this.Styles.AddRange [
-      Style()
-        .Selector(_.OfType<TextEditor>().Name("MigrationContent"))
-        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
-        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
-    ]
+  do base.Content <- TxtEditor.Readonly(content).Name("MigrationContent")
 
 let migrationListView(migrations: MigrationStatus[]) : Control =
   if migrations.Length = 0 then
@@ -211,12 +167,13 @@ let dryRunListView(currentShow, migrations: Migration[]) : Control =
 
 let migrationDisplay(migration: Migration) : Control =
   Grid()
+    .Classes("MigrationDisplayGrid")
     .ColumnDefinitions("*,4,*")
     .RowDefinitions("Auto,*")
     .Children(
       LabeledField.Vertical("Migration Name", migration.name).Column(0),
       GridSplitter()
-        .Classes("MigrationDisplaySplitter")
+        .Classes("VerticalDivider")
         .Column(1)
         .ResizeDirectionColumns()
         .IsEnabled(false),
@@ -237,7 +194,7 @@ let malformedSource
   (content: string, reason: string, name: string voption)
   : Control =
   StackPanel()
-    .Classes("MigrondiExceptionView_MalformedSource")
+    .Classes("MigrondiExceptionView_MalformedSource", "SpacedStackPanel")
     .Children(
       LabeledField.Horizontal("Reason", reason),
       LabeledField.Vertical("Content", content),
@@ -248,13 +205,13 @@ let malformedSource
 
 let sourceNotFoundDisplay(path: string, name: string) : Control =
   StackPanel()
-    .Classes("MigrondiExceptionView_SourceNotFound")
+    .Classes("MigrondiExceptionView_SourceNotFound", "SpacedStackPanel")
     .Children(
       LabeledField.Horizontal("Path", path),
       LabeledField.Horizontal("Name", name)
     )
 
-type MigrondiExceptionView(error: exn) as this =
+type MigrondiExceptionView(error: exn) =
   inherit UserControl()
 
   let errorText =
@@ -272,7 +229,7 @@ type MigrondiExceptionView(error: exn) as this =
 
     base.Content <-
       StackPanel()
-        .Classes("MigrondiExceptionView_Grid")
+        .Classes("MigrondiExceptionView_Grid", "SpacedStackPanel")
         .Children(
           TextBlock()
             .Classes("MigrondiExceptionView_Header")
@@ -296,40 +253,6 @@ type MigrondiExceptionView(error: exn) as this =
                 .Text(errorText)
             )
         )
-
-    this.StyleUp()
-
-
-  member this.StyleUp() =
-    this.Styles.AddRange [
-      Style()
-        .Selector(_.OfType<StackPanel>().Class("MigrondiExceptionView_Grid"))
-        .SetStackLayoutSpacing(8)
-      Style()
-        .Selector(_.OfType<TextBlock>().Class("MigrondiExceptionView_Header"))
-        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
-        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
-      Style()
-        .Selector(_.OfType<Expander>().Class("MigrondiExceptionView_Expander"))
-        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
-        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
-      Style()
-        .Selector(_.OfType<TextBlock>().Class("MigrondiExceptionView_ErrorText"))
-        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
-        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
-        .SetTextBlockForeground("Red" |> SolidColorBrush.Parse)
-      Style()
-        .Selector(_.OfType<GridSplitter>().Class("MigrationDisplaySplitter"))
-        .SetPanelBackground("Black" |> SolidColorBrush.Parse)
-        .SetLayoutableMargin(Thickness(8, 0))
-        .SetBorderCornerRadius(CornerRadius(5))
-      Style()
-        .Selector(_.OfType<StackPanel>().Class("MigrondiExceptionView_MalformedSource"))
-        .SetStackLayoutSpacing(8)
-      Style()
-        .Selector(_.OfType<StackPanel>().Class("MigrondiExceptionView_SourceNotFound"))
-        .SetStackLayoutSpacing(8)
-    ]
 
 type MigrationsPanel
   (
@@ -363,14 +286,76 @@ type MigrationsPanel
   do
     base.Classes.Add("MigrationsPanel")
     base.Content <- ScrollViewer().Content(content |> AVal.toBinding)
-    this.StyleUp()
+    this.ApplyStyles()
 
 
-  member this.StyleUp() =
+  member private this.ApplyStyles() =
     this.Styles.AddRange [
+      // Shared styles
+      Style()
+        .Selector(_.OfType<GridSplitter>().Class("VerticalDivider"))
+        .SetPanelBackground("Black" |> SolidColorBrush.Parse)
+        .SetLayoutableMargin(Thickness(8, 0))
+        .SetBorderCornerRadius(CornerRadius(5))
+
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("SpacedStackPanel"))
+        .SetStackLayoutSpacing(8)
+
+      // MigrationStatusView styles
+      Style()
+        .Selector(_.OfType<MigrationStatusView>().Class("MigrationStatus"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+        .SetLayoutableMargin(Thickness(0, 4))
+
+      Style()
+        .Selector(_.OfType<Expander>().Class("MigrationStatusExpander"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("MigrationStatusHeader"))
+        .SetStackLayoutOrientation(Layout.Orientation.Horizontal)
+
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("StatusText_Applied"))
+        .SetTextBlockForeground("Green" |> SolidColorBrush.Parse)
+
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("StatusText_Pending"))
+        .SetTextBlockForeground("OrangeRed" |> SolidColorBrush.Parse)
+
+      // DryRunView styles
+      Style()
+        .Selector(_.OfType<TextEditor>().Name("MigrationContent"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+
+      // MigrondiExceptionView styles
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("MigrondiExceptionView_Header"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+
+      Style()
+        .Selector(_.OfType<Expander>().Class("MigrondiExceptionView_Expander"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+
+      Style()
+        .Selector(
+          _.OfType<TextBlock>().Class("MigrondiExceptionView_ErrorText")
+        )
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+        .SetTextBlockForeground("Red" |> SolidColorBrush.Parse)
+
+      // MigrationsPanel styles
       Style()
         .Selector(_.OfType<StackPanel>().Class("DryRunListView"))
         .SetStackLayoutSpacing(12)
+
       Style()
         .Selector(_.OfType<TextBlock>().Class("DryRunHeader"))
         .SetTextBlockFontWeight(FontWeight.Bold)

@@ -2,7 +2,9 @@
 
 open System
 
+open Avalonia
 open Avalonia.Controls
+open Avalonia.Styling
 open FSharp.Data.Adaptive
 open NXUI.Extensions
 open Navs.Avalonia
@@ -90,7 +92,7 @@ let checkBox(dryRun: _ cval) =
 
 
 type MigrationsRunnerToolbar
-  (onRunMigrationsRequested: RunMigrationKind * int -> unit) =
+  (onRunMigrationsRequested: RunMigrationKind * int -> unit) as this =
   inherit UserControl()
   let dryRun = cval false
   let steps = cval 1M
@@ -103,13 +105,45 @@ type MigrationsRunnerToolbar
       1
 
   do
+    base.Classes.Add("MigrationsRunnerToolbar")
     base.Content <-
       StackPanel()
-        .OrientationHorizontal()
-        .Spacing(8)
+        .Classes("MigrationsRunnerToolbarPanel")
         .Children(
           applyPendingButton(dryRun, onRunMigrationsRequested, getIntValue),
           rollbackButton(dryRun, onRunMigrationsRequested, getIntValue),
           checkBox(dryRun),
           numericUpDown(steps)
         )
+    this.ApplyStyles()
+
+  member private this.ApplyStyles() =
+    this.Styles.AddRange [
+      // Main toolbar panel styles
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("MigrationsRunnerToolbarPanel"))
+        .SetStackLayoutOrientation(Layout.Orientation.Horizontal)
+        .SetStackLayoutSpacing(8)
+        .SetLayoutableMargin(Thickness(0, 4, 0, 8))
+
+      // Button styles
+      Style()
+        .Selector(_.OfType<UserControl>().Name("ApplyPendingButton"))
+        .SetLayoutableMargin(Thickness(0, 0, 4, 0))
+
+      Style()
+        .Selector(_.OfType<UserControl>().Name("RollbackButton"))
+        .SetLayoutableMargin(Thickness(0, 0, 8, 0))
+
+      // CheckBox styles
+      Style()
+        .Selector(_.OfType<CheckBox>())
+        .SetLayoutableMargin(Thickness(0, 0, 8, 0))
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Center)
+
+      // NumericUpDown styles
+      Style()
+        .Selector(_.OfType<NumericUpDown>())
+        .SetLayoutableWidth(120)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Center)
+    ]
