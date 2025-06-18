@@ -2,8 +2,10 @@
 
 open System
 open Avalonia.Controls
+open Avalonia.Styling
 open Avalonia.Controls.Templates
 open Avalonia.Media
+open AvaloniaEdit
 
 open NXUI.Extensions
 
@@ -13,6 +15,7 @@ open Migrondi.Core
 
 open MigrondiUI.Components.Fields
 open MigrondiUI.Components.TextEditor
+open Avalonia
 
 
 [<Struct>]
@@ -27,7 +30,7 @@ type CurrentShow =
   | DryRun of RunMigrationKind
   | ExceptionThrown of exn
 
-type MigrationStatusView(migrationStatus: MigrationStatus) =
+type MigrationStatusView(migrationStatus: MigrationStatus) as this =
   inherit UserControl()
 
   let migration =
@@ -44,60 +47,90 @@ type MigrationStatusView(migrationStatus: MigrationStatus) =
     DateTimeOffset.FromUnixTimeMilliseconds migration.timestamp
     |> _.ToString("G")
 
-  let migrationContent =
-    Grid()
-      .ColumnDefinitions("*,4,*")
-      .Children(
-        LabeledField
-          .Vertical("Migrate Up", TxtEditor.Readonly migration.upContent)
-          .Column(0),
-        GridSplitter()
-          .Column(1)
-          .ResizeDirectionColumns()
-          .IsEnabled(false)
-          .Background("Black" |> SolidColorBrush.Parse)
-          .MarginX(8)
-          .CornerRadius(5),
-        LabeledField
-          .Vertical("Migrate Down", TxtEditor.Readonly migration.downContent)
-          .Column(2)
-      )
-
   do
+    base.Classes.Add("MigrationStatus")
+
     base.Content <-
       Expander()
         .Header(
           StackPanel()
+            .Classes("MigrationStatusHeader")
             .Children(
-              TextBlock().Text(migration.name),
-              TextBlock()
-                .Text($" [{status}]")
-                .Foreground(
-                  match migrationStatus with
-                  | Applied _ -> "Green"
-                  | Pending _ -> "OrangeRed"
-                  |> SolidColorBrush.Parse
-                ),
-              TextBlock().Text($" - {strDate}")
+              TextBlock().Classes("MigrationName").Text(migration.name),
+              TextBlock().Classes($"StatusText_{status}").Text($" [{status}]"),
+              TextBlock().Classes("MigrationDate").Text($" - {strDate}")
             )
-            .OrientationHorizontal()
         )
         .Content(
           StackPanel()
+            .Classes("MigrationContent")
             .Children(
               LabeledField.Horizontal(
                 "Manual Transaction:",
                 $" %b{migration.manualTransaction}"
               ),
-              migrationContent
+              Grid()
+                .Classes("MigrationContentGrid")
+                .ColumnDefinitions("*,4,*")
+                .Children(
+                  LabeledField
+                    .Vertical(
+                      "Migrate Up",
+                      TxtEditor.Readonly migration.upContent
+                    )
+                    .Column(0),
+                  GridSplitter()
+                    .Classes("Divider")
+                    .Column(1)
+                    .ResizeDirectionColumns()
+                    .IsEnabled(false),
+                  LabeledField
+                    .Vertical(
+                      "Migrate Down",
+                      TxtEditor.Readonly migration.downContent
+                    )
+                    .Column(2)
+                )
             )
-            .Spacing(8)
         )
-        .HorizontalAlignmentStretch()
-        .VerticalAlignmentStretch()
-        .MarginY(4)
 
-type DryRunView(show: RunMigrationKind, migration: Migration) =
+    this.StyleUp()
+
+
+  member this.StyleUp() =
+    this.Styles.AddRange [
+      Style()
+        .Selector(_.OfType<Expander>().Class("MigrationStatus"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+        .SetLayoutableMargin(Thickness(0, 4))
+
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("MigrationStatusHeader"))
+        .SetStackLayoutOrientation(Layout.Orientation.Horizontal)
+
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("StatusText_Applied"))
+        .SetTextBlockForeground("Green" |> SolidColorBrush.Parse)
+
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("StatusText_Pending"))
+        .SetTextBlockForeground("OrangeRed" |> SolidColorBrush.Parse)
+
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("MigrationContent"))
+        .SetStackLayoutSpacing(8)
+
+      Style()
+        .Selector(_.OfType<GridSplitter>().Class("Divider"))
+        .SetPanelBackground("Black" |> SolidColorBrush.Parse)
+        .SetLayoutableMargin(Thickness(8, 0))
+        .SetBorderCornerRadius(CornerRadius(5))
+    ]
+
+
+
+type DryRunView(show: RunMigrationKind, migration: Migration) as this =
   inherit UserControl()
 
   let content =
@@ -114,12 +147,17 @@ type DryRunView(show: RunMigrationKind, migration: Migration) =
       $"-- ----------START TRANSACTION----------\n{content}\n-- ----------COMMIT TRANSACTION----------"
 
   do
-    base.Content <-
-      TxtEditor
-        .Readonly(content)
-        .Name("MigrationContent")
-        .HorizontalAlignmentStretch()
-        .VerticalAlignmentStretch()
+    base.Content <- TxtEditor.Readonly(content).Name("MigrationContent")
+
+    this.StyleUp()
+
+  member this.StyleUp() =
+    this.Styles.AddRange [
+      Style()
+        .Selector(_.OfType<TextEditor>().Name("MigrationContent"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+    ]
 
 let migrationListView(migrations: MigrationStatus[]) : Control =
   if migrations.Length = 0 then
@@ -155,7 +193,7 @@ let dryRunListView(currentShow, migrations: Migration[]) : Control =
         | DryDown -> "Rollback Migrations"
 
       StackPanel()
-        .Spacing(12)
+        .Classes("DryRunListView")
         .Children(
           TextBlock().Classes("DryRunHeader").Text
             $"This is a simulation {direction}. The database will not be affected:",
@@ -178,12 +216,10 @@ let migrationDisplay(migration: Migration) : Control =
     .Children(
       LabeledField.Vertical("Migration Name", migration.name).Column(0),
       GridSplitter()
+        .Classes("MigrationDisplaySplitter")
         .Column(1)
         .ResizeDirectionColumns()
-        .IsEnabled(false)
-        .Background("Black" |> SolidColorBrush.Parse)
-        .MarginX(8)
-        .CornerRadius(5),
+        .IsEnabled(false),
       LabeledField
         .Vertical("Manual Transaction", $"{migration.manualTransaction}")
         .Column(2),
@@ -202,7 +238,6 @@ let malformedSource
   : Control =
   StackPanel()
     .Classes("MigrondiExceptionView_MalformedSource")
-    .Spacing(8)
     .Children(
       LabeledField.Horizontal("Reason", reason),
       LabeledField.Vertical("Content", content),
@@ -214,13 +249,12 @@ let malformedSource
 let sourceNotFoundDisplay(path: string, name: string) : Control =
   StackPanel()
     .Classes("MigrondiExceptionView_SourceNotFound")
-    .Spacing(8)
     .Children(
       LabeledField.Horizontal("Path", path),
       LabeledField.Horizontal("Name", name)
     )
 
-type MigrondiExceptionView(error: exn) =
+type MigrondiExceptionView(error: exn) as this =
   inherit UserControl()
 
   let errorText =
@@ -234,16 +268,15 @@ type MigrondiExceptionView(error: exn) =
     | _ -> error.Message
 
   do
+    base.Classes.Add("MigrondiExceptionView")
+
     base.Content <-
       StackPanel()
         .Classes("MigrondiExceptionView_Grid")
-        .Spacing(8)
         .Children(
           TextBlock()
             .Classes("MigrondiExceptionView_Header")
-            .Text("An error occurred while processing the migration:")
-            .HorizontalAlignmentStretch()
-            .VerticalAlignmentStretch(),
+            .Text("An error occurred while processing the migration:"),
           (match error with
            | :? MigrationApplicationFailed as me ->
              migrationDisplay me.Migration
@@ -255,18 +288,48 @@ type MigrondiExceptionView(error: exn) =
              malformedSource(me.Content, me.Reason, ValueSome me.SourceName)
            | _ -> TextBlock().Text "No Error details available." :> Control),
           Expander()
+            .Classes("MigrondiExceptionView_Expander")
             .Header("Caught Exception (for more details check the app logs):")
             .Content(
               TextBlock()
                 .Classes("MigrondiExceptionView_ErrorText")
                 .Text(errorText)
-                .HorizontalAlignmentStretch()
-                .VerticalAlignmentStretch()
-                .Foreground(SolidColorBrush.Parse "Red")
             )
-            .HorizontalAlignmentStretch()
-            .VerticalAlignmentStretch()
         )
+
+    this.StyleUp()
+
+
+  member this.StyleUp() =
+    this.Styles.AddRange [
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("MigrondiExceptionView_Grid"))
+        .SetStackLayoutSpacing(8)
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("MigrondiExceptionView_Header"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+      Style()
+        .Selector(_.OfType<Expander>().Class("MigrondiExceptionView_Expander"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("MigrondiExceptionView_ErrorText"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+        .SetTextBlockForeground("Red" |> SolidColorBrush.Parse)
+      Style()
+        .Selector(_.OfType<GridSplitter>().Class("MigrationDisplaySplitter"))
+        .SetPanelBackground("Black" |> SolidColorBrush.Parse)
+        .SetLayoutableMargin(Thickness(8, 0))
+        .SetBorderCornerRadius(CornerRadius(5))
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("MigrondiExceptionView_MalformedSource"))
+        .SetStackLayoutSpacing(8)
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("MigrondiExceptionView_SourceNotFound"))
+        .SetStackLayoutSpacing(8)
+    ]
 
 type MigrationsPanel
   (
@@ -275,7 +338,7 @@ type MigrationsPanel
     ?lastDryRun: Migration[] aval,
     ?migrationsView: MigrationStatus[] -> Control,
     ?dryRunView: CurrentShow * Migration[] -> Control
-  ) =
+  ) as this =
   inherit UserControl()
 
   let migrationsView =
@@ -300,3 +363,15 @@ type MigrationsPanel
   do
     base.Classes.Add("MigrationsPanel")
     base.Content <- ScrollViewer().Content(content |> AVal.toBinding)
+    this.StyleUp()
+
+
+  member this.StyleUp() =
+    this.Styles.AddRange [
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("DryRunListView"))
+        .SetStackLayoutSpacing(12)
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("DryRunHeader"))
+        .SetTextBlockFontWeight(FontWeight.Bold)
+    ]

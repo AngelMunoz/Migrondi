@@ -13,16 +13,15 @@ module private Styles =
     member this.HorizontalFieldStyles() =
       this.Styles.AddRange [
         Style()
-          .Selector(fun s ->
-            s.OfType<StackPanel>().Class("LabeledField_Horizontal"))
+          .Selector(_.OfType<StackPanel>().Class("LabeledField_Horizontal"))
           .SetStackLayoutOrientation(Avalonia.Layout.Orientation.Horizontal)
           .SetStackLayoutSpacing(4)
         Style()
-          .Selector(fun s -> s.OfType<TextBlock>().Class("LabeledField_Label"))
+          .Selector(_.OfType<TextBlock>().Class("LabeledField_Label"))
           .SetTextBlockFontWeight(Avalonia.Media.FontWeight.Bold)
           .SetTextBlockFontSize(14)
         Style()
-          .Selector(fun s -> s.OfType<TextBlock>().Class("LabeledField_Text"))
+          .Selector(_.OfType<TextBlock>().Class("LabeledField_Text"))
           .SetTextBlockFontSize(12.)
       ]
 
@@ -31,16 +30,15 @@ module private Styles =
     member this.VerticalFieldStyles() =
       this.Styles.AddRange [
         Style()
-          .Selector(fun s ->
-            s.OfType<StackPanel>().Class("LabeledField_Vertical"))
+          .Selector(_.OfType<StackPanel>().Class("LabeledField_Vertical"))
           .SetStackLayoutOrientation(Avalonia.Layout.Orientation.Vertical)
           .SetStackLayoutSpacing(4)
         Style()
-          .Selector(fun s -> s.OfType<TextBlock>().Class("LabeledField_Label"))
+          .Selector(_.OfType<TextBlock>().Class("LabeledField_Label"))
           .SetTextBlockFontWeight(Avalonia.Media.FontWeight.Bold)
           .SetTextBlockFontSize(14)
         Style()
-          .Selector(fun s -> s.OfType<TextBlock>().Class("LabeledField_Text"))
+          .Selector(_.OfType<TextBlock>().Class("LabeledField_Text"))
           .SetTextBlockFontSize(12.)
       ]
 
