@@ -7,8 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="TestHelpers.fs" />
     <Compile Include="MigrationRunnerToolbarTests.fs" />
     <Compile Include="ProjectDetailsTests.fs" />
+    <Compile Include="EditableMigrationTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

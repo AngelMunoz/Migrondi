@@ -2,8 +2,10 @@
 
 open System
 
+open Avalonia
 open Avalonia.Controls
 open Avalonia.Media
+open Avalonia.Styling
 open IcedTasks
 open Migrondi.Core
 open NXUI.Extensions
@@ -22,6 +24,7 @@ let saveMigrationBtn(onSaveRequested: unit -> Async<unit>) =
   let enable = cval true
 
   Button()
+    .Classes("Primary")
     .Content("Save")
     .IsEnabled(enable |> AVal.toBinding)
     .OnClickHandler(fun _ _ ->
@@ -36,6 +39,7 @@ let removeMigrationBtn(onRemoveRequested: unit -> Async<unit>) =
   let enable = cval true
 
   Button()
+    .Classes("Danger")
     .Content("Remove 🗑️")
     .IsEnabled(enable |> AVal.toBinding)
     .OnClickHandler(fun _ _ ->
@@ -51,7 +55,7 @@ type EditableMigrationView
     migrationStatus: MigrationStatus,
     onSaveRequested: Migration -> Async<bool>,
     onRemoveRequested: unit -> Async<unit>
-  ) =
+  ) as this =
   inherit UserControl()
 
   let migration, upContent, downContent, readonly =
@@ -84,6 +88,7 @@ type EditableMigrationView
 
   let migrationContent =
     Grid()
+      .Classes("MigrationContentGrid")
       .ColumnDefinitions("*,4,*")
       .Children(
         LabeledField
@@ -93,12 +98,10 @@ type EditableMigrationView
           )
           .Column(0),
         GridSplitter()
+          .Classes("VerticalDivider")
           .Column(1)
           .ResizeDirectionColumns()
-          .IsEnabled(false)
-          .Background("Black" |> SolidColorBrush.Parse)
-          .MarginX(8)
-          .CornerRadius(5),
+          .IsEnabled(false),
         LabeledField
           .Vertical(
             "Migrate Down",
@@ -145,31 +148,37 @@ type EditableMigrationView
   let centerTextBlock(txt: TextBlock) = txt.VerticalAlignmentCenter()
 
   do
+    base.Classes.Add("EditableMigrationView")
+
     base.Content <-
       Expander()
+        .Classes("EditableMigrationExpander")
         .Header(
           StackPanel()
-            .Spacing(8)
+            .Classes("EditableMigrationHeader")
             .Children(
-              TextBlock().Text(migrationName) |> centerTextBlock,
-              TextBlock()
-                .Text(status |> AVal.toBinding)
-                .Foreground(
-                  match migrationStatus with
-                  | Applied _ -> "Green"
-                  | Pending _ -> "OrangeRed"
-                  |> SolidColorBrush.Parse
-                )
+              TextBlock().Classes("MigrationNameText").Text(migrationName)
               |> centerTextBlock,
-              TextBlock().Text(strDate) |> centerTextBlock,
+              TextBlock()
+                .Classes(
+                  [|
+                    "MigrationStatusText"
+                    match migrationStatus with
+                    | Applied _ -> "AppliedForeground"
+                    | Pending _ -> "PendingForeground"
+                  |]
+                )
+                .Text(status |> AVal.toBinding)
+              |> centerTextBlock,
+              TextBlock().Classes("MigrationDateText").Text(strDate)
+              |> centerTextBlock,
               saveBtn,
               removeBtn
             )
-            .OrientationHorizontal()
-            .VerticalAlignmentCenter()
         )
         .Content(
           StackPanel()
+            .Classes("EditableMigrationPanel")
             .Children(
               LabeledField.Horizontal(
                 "Manual Transaction:",
@@ -177,8 +186,61 @@ type EditableMigrationView
               ),
               migrationContent
             )
-            .Spacing(8)
         )
-        .HorizontalAlignmentStretch()
-        .VerticalAlignmentStretch()
-        .MarginY(4)
+
+    this.ApplyStyles()
+
+  member private this.ApplyStyles() =
+    this.Styles.AddRange [
+      // StackPanel styles
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("EditableMigrationHeader"))
+        .SetStackLayoutOrientation(Layout.Orientation.Horizontal)
+        .SetStackLayoutSpacing(8)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Center)
+
+      Style()
+        .Selector(_.OfType<StackPanel>().Class("EditableMigrationPanel"))
+        .SetStackLayoutSpacing(8)
+
+      // Expander styles
+      Style()
+        .Selector(_.OfType<Expander>().Class("EditableMigrationExpander"))
+        .SetLayoutableHorizontalAlignment(Layout.HorizontalAlignment.Stretch)
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Stretch)
+        .SetLayoutableMargin(Thickness(0, 4))
+
+      // TextBlock styles
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("MigrationNameText"))
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Center)
+
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("MigrationStatusText"))
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Center)
+
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("AppliedForeground"))
+        .SetTextBlockForeground("Green" |> SolidColorBrush.Parse)
+
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("PendingForeground"))
+        .SetTextBlockForeground("OrangeRed" |> SolidColorBrush.Parse)
+
+      Style()
+        .Selector(_.OfType<TextBlock>().Class("MigrationDateText"))
+        .SetLayoutableVerticalAlignment(Layout.VerticalAlignment.Center)
+
+      // GridSplitter styles
+      let backgroundColor =
+        if this.ActualThemeVariant = ThemeVariant.Dark then
+          "Gray" |> SolidColorBrush.Parse
+        else
+          "LightGray" |> SolidColorBrush.Parse
+
+      Style()
+        .Selector(_.OfType<GridSplitter>().Class("VerticalDivider"))
+        .SetPanelBackground(backgroundColor)
+        .SetLayoutableMargin(Thickness(8, 0))
+        .SetBorderCornerRadius(CornerRadius(5))
+    ]
