@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <Compile Include="MigrationRunnerToolbarTests.fs" />
+    <Compile Include="ProjectDetailsTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
