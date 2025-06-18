@@ -1,3 +1,5 @@
+module MigrondiUI.Program
+
 open System
 
 open Serilog
