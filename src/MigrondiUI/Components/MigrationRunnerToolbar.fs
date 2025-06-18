@@ -106,6 +106,7 @@ type MigrationsRunnerToolbar
 
   do
     base.Classes.Add("MigrationsRunnerToolbar")
+
     base.Content <-
       StackPanel()
         .Classes("MigrationsRunnerToolbarPanel")
@@ -115,6 +116,7 @@ type MigrationsRunnerToolbar
           checkBox(dryRun),
           numericUpDown(steps)
         )
+
     this.ApplyStyles()
 
   member private this.ApplyStyles() =

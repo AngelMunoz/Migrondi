@@ -3,10 +3,6 @@
 open Avalonia
 open Avalonia.Headless
 
-
-open Avalonia.Controls.ApplicationLifetimes
-
-
 type TestAppBuilder() =
 
   static member BuildAvaloniaApp() =
