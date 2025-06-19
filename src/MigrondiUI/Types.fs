@@ -35,7 +35,6 @@ type Project =
   | Local of LocalProject
   | Virtual of VirtualProject
 
-
 module Json =
   open JDeck
 

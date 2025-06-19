@@ -34,6 +34,7 @@
     <PackageReference Include="Avalonia" Version="11.3.1" />
     <PackageReference Include="Avalonia.Controls.ItemsRepeater" Version="11.1.5" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.1" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.0" />
     <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.3.1" />
 
@@ -43,7 +44,7 @@
 
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
     <PackageReference Include="AvaloniaEdit.TextMate" Version="11.3.0" />
-    <PackageReference Include="Semi.Avalonia" Version="11.2.1.8" />
+    <PackageReference Include="SukiUI" Version="6.0.2" />
     <PackageReference Include="TextMateSharp.Grammars" Version="1.0.69" />
 
     <PackageReference Include="CLIWrap" Version="3.9.0" />

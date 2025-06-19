@@ -221,6 +221,109 @@ type LayoutableExtensions =
 
     this
 
+[<AutoOpen>]
+module SukiUIExtensions =
+  open Avalonia.Collections
+  open SukiUI
+  open SukiUI.Enums
+  open SukiUI.Controls
+
+
+  type SukiWindow with
+    member inline this.BackgroundStyle(style: SukiBackgroundStyle) =
+      this.SetCurrentValue(SukiWindow.BackgroundStyleProperty, style)
+      this
+
+
+    member inline this.MenuItems([<ParamArray>] menuItems: MenuItem array) =
+      this.SetCurrentValue(
+        SukiWindow.MenuItemsProperty,
+        AvaloniaList(menuItems)
+      )
+
+      this
+
+    member inline this.MenuItems(menuItems: IBinding) =
+      let descriptor =
+        SukiWindow.MenuItemsProperty.Bind().WithMode(BindingMode.OneWay)
+
+      this[descriptor] <- menuItems
+      this
+
+    member inline this.LogoContent(logo: Control) =
+      this.SetCurrentValue(SukiWindow.LogoContentProperty, logo)
+      this
+
+    member inline this.RightWindowTitleBarControls
+      ([<ParamArray>] controls: Control array)
+      =
+      this.SetCurrentValue(
+        SukiWindow.RightWindowTitleBarControlsProperty,
+        Controls(controls)
+      )
+
+      this
+
+    member inline this.Hosts([<ParamArray>] controls: Control array) =
+      this.SetCurrentValue(SukiWindow.HostsProperty, Controls(controls))
+
+      this
+
+  type SukiSideMenu with
+
+    member inline this.MenuItems
+      ([<ParamArray>] menuItems: SukiSideMenuItem array)
+      =
+      this.SetCurrentValue(SukiSideMenu.ItemsSourceProperty, menuItems)
+
+      this
+
+    member inline this.IsSearchEnabled(isSearchEnabled: bool) =
+      this.SetCurrentValue(
+        SukiSideMenu.IsSearchEnabledProperty,
+        isSearchEnabled
+      )
+
+      this
+
+    member inline this.HeaderContent(header: Control) =
+      this.SetCurrentValue(SukiSideMenu.HeaderContentProperty, header)
+      this
+
+    member inline this.FooterContent(footer: Control) =
+      this.SetCurrentValue(SukiSideMenu.FooterContentProperty, footer)
+      this
+
+
+  type SukiSideMenuItem with
+    member inline this.Header(header: string) =
+      this.SetCurrentValue(SukiSideMenuItem.HeaderProperty, header)
+      this
+
+    member inline this.Icon(icon: Control) =
+      this.SetCurrentValue(SukiSideMenuItem.IconProperty, icon)
+      this
+
+    member inline this.IsContentMovable(isContentMovable: bool) =
+      this.SetCurrentValue(
+        SukiSideMenuItem.IsContentMovableProperty,
+        isContentMovable
+      )
+
+      this
+
+    member inline this.IsTopMenuExpanded(isTopMenuExpanded: bool) =
+      this.SetCurrentValue(
+        SukiSideMenuItem.IsTopMenuExpandedProperty,
+        isTopMenuExpanded
+      )
+
+      this
+
+    member inline this.PageContent(pageContent: Control) =
+      this.SetCurrentValue(SukiSideMenuItem.PageContentProperty, pageContent)
+      this
+
 
 type NavigationError<'View> with
   member this.StringError() =

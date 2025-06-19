@@ -13,6 +13,13 @@ open Navs.Avalonia
 open MigrondiUI
 open Microsoft.Extensions.Logging
 
+open SukiUI
+open SukiUI.Controls
+open SukiUI.Enums
+open SukiUI.Dialogs
+open SukiUI.Toasts
+open MigrondiUI.Views.Routes
+
 Log.Logger <-
   LoggerConfiguration()
 #if DEBUG
@@ -25,9 +32,18 @@ Log.Logger <-
 
 let loggerFactory = (new LoggerFactory()).AddSerilog Log.Logger
 
-let BuildMainWindow(routes: Routes) =
+let BuildMainWindow(dialogManager, toastManager) =
   let win =
-    Window().Content(routes).MinWidth(800).MinHeight(640).Title "MigrondiUI"
+    (new SukiWindow())
+      .BackgroundStyle(SukiBackgroundStyle.Bubble)
+      .Hosts(
+        SukiDialogHost(Manager = dialogManager),
+        SukiToastHost(Manager = toastManager)
+      )
+      .MinWidth(800)
+      .MinHeight(640)
+      .Title
+      "MigrondiUI"
 #if DEBUG
   win.AttachDevTools()
 #endif
@@ -48,9 +64,24 @@ let Orchestrate() =
     let logger = loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>()
     VirtualFs.getVirtualFs(logger, vProjects)
 
-  (lProjects, vProjects, vfs, migrondiui)
-  |> Views.Routes.GetRoutes loggerFactory
-  |> BuildMainWindow
+  let dialogManager: ISukiDialogManager = SukiDialogManager()
+  let toastManager: ISukiToastManager = new SukiToastManager()
+
+  let window = BuildMainWindow(dialogManager, toastManager)
+
+  let host =
+    MigrondiUIAppHost {
+      lf = loggerFactory
+      lProjects = lProjects
+      vProjects = vProjects
+      vfs = vfs
+      vMigrondiFactory = migrondiui
+      dialogManager = dialogManager
+      toastManager = toastManager
+      window = window
+    }
+
+  window.Content host :> Window
 
 
 type App() as this =
@@ -60,8 +91,8 @@ type App() as this =
 
   override this.Initialize() =
     this.Styles.Add(Themes.Fluent.FluentTheme())
-    this.Styles.Load("avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml")
-    this.Styles.Add(Semi.Avalonia.SemiTheme())
+    this.Styles.Load "avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml"
+    this.Styles.Add(SukiTheme(ThemeColor = SukiColor.Blue))
 
 [<EntryPoint; STAThread>]
 let main argv =
