@@ -24,8 +24,7 @@ open MigrondiUI
 open MigrondiUI.Projects
 open MigrondiUI.Components.NewVirtualProjectForm
 open MigrondiUI.VirtualFs
-open MigrondiUI.Components
-
+open SukiUI.Controls
 
 type LandingViewState =
   | NewProject
@@ -266,7 +265,7 @@ let repositoryList onProjectSelected (projects: Project list aval) : Control =
 let toolbar(viewState, setLandingState) : Control =
   StackPanel()
     .OrientationHorizontal()
-    .Spacing(10)
+    .Spacing(8)
     .Children(
       ContentControl()
         .Content(
@@ -472,11 +471,14 @@ let View
   view
     .Name("Landing")
     .Content(
-      DockPanel()
-        .LastChildFill(true)
+      Grid()
+        .RowDefinitions("Auto,*")
+        .RowSpacing(4)
         .Children(
-          toolbar(vm.ViewState, vm.SetLandingState).DockTop(),
-          viewContent(viewContentProps).DockTop()
+          toolbar(vm.ViewState, vm.SetLandingState)
+            .MarginBottom(4)
+            .MarginTop(8)
+            .MarginX(12),
+          GlassCard().Content(viewContent(viewContentProps)).Row(1)
         )
-        .Margin(10)
     )
