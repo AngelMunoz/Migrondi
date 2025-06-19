@@ -1,20 +1,23 @@
-module MigrondiUI.Components.CreateVirtualProjectView
+module MigrondiUI.Components.NewVirtualProjectForm
 
+open Avalonia
 open Avalonia.Controls
 open NXUI.Extensions
 open FSharp.Data.Adaptive
 open MigrondiUI.Components.Fields
 open Migrondi.Core
 open Avalonia.Controls.Templates
-
+open Avalonia.Layout
+open Avalonia.Media
+open Avalonia.Styling
 open Navs.Avalonia
 open MigrondiUI.Projects
 
-type CreateVirtualProjectView
+type NewVirtualProjectForm
   (
     onCreateVirtualProject: NewVirtualProjectArgs -> unit,
     onImportLocalProject: unit -> unit
-  ) =
+  ) as this =
   inherit UserControl()
 
   let name = cval ""
@@ -31,6 +34,7 @@ type CreateVirtualProjectView
 
   let driverCombo =
     ComboBox()
+      .Classes("FieldBox")
       .ItemsSource(driverOptions)
       .SelectedIndex(0)
       .ItemTemplate(
@@ -43,21 +47,25 @@ type CreateVirtualProjectView
   let form =
     let nameTextBox =
       TextBox()
+        .Classes("FieldBox")
         .Text(name.Value)
         .OnTextChangedHandler(fun tb _ -> name.setValue tb.Text)
 
     let descriptionTextBox =
       TextBox()
+        .Classes("FieldBox")
         .Text(description.Value)
         .OnTextChangedHandler(fun tb _ -> description.setValue tb.Text)
 
     let connectionTextBox =
       TextBox()
+        .Classes("FieldBox")
         .Text(connection.Value)
         .OnTextChangedHandler(fun tb _ -> connection.setValue tb.Text)
 
     let createBtn =
       Button()
+        .Classes("Primary")
         .Content("Create")
         .IsEnabled(
           (name, connection)
@@ -74,10 +82,10 @@ type CreateVirtualProjectView
           })
 
     Grid()
-      .Classes("CreateVirtualProjectForm")
+      .Classes("NewVirtualProjectForm")
       .RowDefinitions("Auto,Auto,Auto,Auto")
       .ColumnDefinitions("*,*")
-      .VerticalAlignmentTop()
+      .VerticalAlignment(VerticalAlignment.Top)
       .Children(
         LabeledField
           .Vertical("Project Name:", nameTextBox)
@@ -122,7 +130,7 @@ type CreateVirtualProjectView
 
   let content =
     Grid()
-      .Classes("CreateVirtualProjectView")
+      .Classes("NewVirtualProjectView")
       .RowDefinitions("Auto,Auto,Auto")
       .Children(
         importLocalBtn.Row(0).HorizontalAlignmentCenter().Margin(10),
@@ -132,4 +140,23 @@ type CreateVirtualProjectView
 
   do
     base.Content <- content
-    base.Name <- nameof CreateVirtualProjectView
+    base.Name <- nameof NewVirtualProjectForm
+    this.ApplyStyles()
+
+  member private this.ApplyStyles() =
+    this.Styles.AddRange [
+      Style()
+        .Selector(_.OfType<Grid>().Class("NewVirtualProjectForm"))
+        .SetLayoutableMargin(Thickness(8.0))
+
+      Style()
+        .Selector(_.Class("FieldBox"))
+        .SetLayoutableHorizontalAlignment(HorizontalAlignment.Stretch)
+        .SetBorderCornerRadius(CornerRadius(3.0))
+        .SetLayoutableHeight(42.0)
+
+      Style()
+        .Selector(_.OfType<Button>())
+        .SetLayoutableHorizontalAlignment(HorizontalAlignment.Right)
+        .SetLayoutableMargin(Thickness(0.0, 8.0, 0.0, 0.0))
+    ]

@@ -19,7 +19,7 @@
     <Compile Include="Components/MigrationRunnerToolbar.fs" />
     <Compile Include="Components/EditableMigration.fs" />
     <Compile Include="Components/VirtualProjectForm.fs" />
-    <Compile Include="Components/CreateVirtualProjectComponent.fs" />
+    <Compile Include="Components/NewVirtualProjectForm.fs" />
     <Compile Include="Views/Landing.fs" />
     <Compile Include="Views/LocalProjectDetails.fs" />
     <Compile Include="Views/VirtualProjectDetails.fs" />
