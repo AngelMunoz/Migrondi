@@ -53,11 +53,15 @@ let Orchestrate() =
   |> BuildMainWindow
 
 
-type App() =
+type App() as this =
   inherit Application()
 
+  do this.RequestedThemeVariant <- Styling.ThemeVariant.Default
+
   override this.Initialize() =
+    this.Styles.Add(Themes.Fluent.FluentTheme())
     this.Styles.Load("avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml")
+    this.Styles.Add(Semi.Avalonia.SemiTheme())
 
 [<EntryPoint; STAThread>]
 let main argv =
@@ -65,5 +69,4 @@ let main argv =
   AppBuilder
     .Configure<App>()
     .UsePlatformDetect()
-    .UseFluentTheme(Styling.ThemeVariant.Default)
     .StartWithClassicDesktopLifetime(Orchestrate, argv)

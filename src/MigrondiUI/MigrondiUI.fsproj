@@ -43,6 +43,7 @@
 
     <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
     <PackageReference Include="AvaloniaEdit.TextMate" Version="11.3.0" />
+    <PackageReference Include="Semi.Avalonia" Version="11.2.1.8" />
     <PackageReference Include="TextMateSharp.Grammars" Version="1.0.69" />
 
     <PackageReference Include="CLIWrap" Version="3.9.0" />
