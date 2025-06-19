@@ -22,8 +22,9 @@ open Navs.Avalonia
 open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Projects
-open MigrondiUI.Components.CreateVirtualProjectView
+open MigrondiUI.Components.NewVirtualProjectForm
 open MigrondiUI.VirtualFs
+open MigrondiUI.Components
 
 
 type LandingViewState =
@@ -348,7 +349,7 @@ let newProjectView
                 handleCreateNewLocalProject
               )
             | "Virtual" ->
-              CreateVirtualProjectView(
+              NewVirtualProjectForm(
                 handleCreateVirtualProject,
                 fun () -> handleSelectLocalProject(ImportToVirtual)
               )
