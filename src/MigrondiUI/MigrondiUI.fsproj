@@ -21,6 +21,7 @@
     <Compile Include="Components/VirtualProjectForm.fs" />
     <Compile Include="Components/NewVirtualProjectForm.fs" />
     <Compile Include="Views/Landing.fs" />
+    <Compile Include="Views/NewProject.fs" />
     <Compile Include="Views/LocalProjectDetails.fs" />
     <Compile Include="Views/VirtualProjectDetails.fs" />
     <Compile Include="Views/Routes.fs" />

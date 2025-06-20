@@ -13,6 +13,7 @@ open Navs.Avalonia
 
 open MigrondiUI.MigrondiExt
 open SukiUI.Controls
+open SukiUI.Theme
 
 [<NoComparison; NoEquality>]
 type AppEnvironment = {
@@ -23,7 +24,7 @@ type AppEnvironment = {
   vMigrondiFactory: Migrondi.Core.MigrondiConfig * string * Guid -> IMigrondiUI
   dialogManager: SukiUI.Dialogs.ISukiDialogManager
   toastManager: SukiUI.Toasts.ISukiToastManager
-  window: SukiUI.Controls.SukiWindow
+  window: SukiWindow
 }
 
 
@@ -32,12 +33,27 @@ let private landingView appEnvironment =
         lf = lf
         lProjects = lProjects
         vProjects = vProjects
-        vfs = vfs
       } =
     appEnvironment
 
   let logger = lf.CreateLogger<Landing.LandingVM>()
-  Landing.View(Landing.LandingVM(logger, lProjects, vProjects, vfs), logger)
+  Landing.View(Landing.LandingVM(logger, lProjects, vProjects), logger)
+
+let private newProjectView appEnvironment =
+  let {
+        lf = lf
+        lProjects = lProjects
+        vProjects = vProjects
+        vfs = vfs
+      } =
+    appEnvironment
+
+  let logger = lf.CreateLogger<NewProject.NewProjectVM>()
+
+  NewProject.View(
+    (NewProject.NewProjectVM(logger, lProjects, vProjects, vfs)),
+    logger
+  )
 
 let private projectDetailsView appEnvironment =
   let { lf = lf; lProjects = projects } = appEnvironment
@@ -72,7 +88,7 @@ type MigrondiUIAppHost(env: AppEnvironment) =
     Routes(logger = routesLogger)
       .Children(
         Route("landing", "/", landingView env),
-        Route("new-project", "/projects/new", landingView env),
+        Route("new-project", "/projects/new", newProjectView env),
         Route(
           "local-project-details",
           "/projects/local/:projectId<guid>",
@@ -86,26 +102,44 @@ type MigrondiUIAppHost(env: AppEnvironment) =
       )
 
   let sideMenu =
-    SukiSideMenu()
+    SukiSideMenu(IsMenuExpanded = false)
       .HeaderContent(
         Border()
+          .HorizontalAlignmentCenter()
           .MarginX(8)
-          .Child(TextBlock().Classes("h3", "Primary").Text("Migrondi Projects"))
+          .Child(
+            StackPanel()
+              .HorizontalAlignmentCenter()
+              .Spacing(4)
+              .Children(
+                TextBlock()
+                  .Classes("h4", "Title")
+                  .Text("Migrondi UI")
+                  .HorizontalAlignmentCenter(),
+                TextBlock()
+                  .Classes("h6", "Caption")
+                  .Text("Migrations Management Tool")
+                  .HorizontalAlignmentCenter()
+              )
+          )
       )
       .FooterContent(
         Border()
+          .HorizontalAlignmentCenter()
           .MarginX(8)
           .Child(
-            TextBlock().Classes("h4", "Caption").Text("Powered by MigrondiUI")
+            TextBlock().Classes("h5", "Caption").Text("Powered by Migrondi")
           )
       )
       .MenuItems(
         SukiSideMenuItem()
           .Tag(ProjectList)
+          .Icon(PathIcon(Data = SukiUI.Content.Icons.Menu))
           .Header("Projects")
           .PageContent(content),
         SukiSideMenuItem()
           .Tag(NewProject)
+          .Icon(PathIcon(Data = SukiUI.Content.Icons.Plus))
           .Header("New Project")
           .PageContent(content)
       )

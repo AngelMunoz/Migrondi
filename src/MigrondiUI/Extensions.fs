@@ -227,6 +227,8 @@ module SukiUIExtensions =
   open SukiUI
   open SukiUI.Enums
   open SukiUI.Controls
+  open SukiUI.Theme
+  open Avalonia.Media
 
 
   type SukiWindow with
@@ -324,6 +326,15 @@ module SukiUIExtensions =
       this.SetCurrentValue(SukiSideMenuItem.PageContentProperty, pageContent)
       this
 
+  type Button with
+
+    member inline this.Icon(icon: StreamGeometry) =
+      this.SetCurrentValue(ButtonExtensions.IconProperty, PathIcon(Data = icon))
+      this
+
+    member inline this.ShowProgress(showProgress: bool) =
+      this.SetCurrentValue(ButtonExtensions.ShowProgressProperty, showProgress)
+      this
 
 type NavigationError<'View> with
   member this.StringError() =
