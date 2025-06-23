@@ -1,7 +1,7 @@
 open System
 open System.IO
 
-open System.CommandLine.Builder
+open System.CommandLine
 open FSharp.SystemCommandLine
 
 open Serilog
@@ -10,7 +10,6 @@ open Serilog.Extensions.Logging
 
 open Migrondi.Commands
 open Migrondi.Env
-open Migrondi.Middleware
 
 [<EntryPoint>]
 let main argv =
@@ -46,18 +45,12 @@ let main argv =
     description
       "A dead simple SQL migrations runner, apply or rollback migrations at your ease"
 
-    usePipeline(fun pipeline ->
+    configure(fun pipeline ->
       // enable passing configuration flags before the actual commands
-      pipeline.Command.TreatUnmatchedTokensAsErrors <- false
-
-      pipeline
-        .EnableDirectives(true)
-        // run the setup database for select commands
-        .AddMiddleware(Middleware.SetupDatabase appEnv)
-      |> ignore
+      pipeline.RootCommand.TreatUnmatchedTokensAsErrors <- false
     )
 
-    setHandler id
+    noAction
 
     addCommands [
       Commands.Init appEnv

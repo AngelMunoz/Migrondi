@@ -3,51 +3,82 @@ namespace Migrondi.Env
 open System
 open System.IO
 
+open Microsoft.Extensions.Logging
+
+open System.CommandLine
+open System.CommandLine.Parsing
+open FSharp.SystemCommandLine
+
 open Migrondi.Core
 open Migrondi.Core.Database
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Serialization
 
-open Microsoft.Extensions.Logging
-
 module internal Configuration =
-  open System.CommandLine
+
 
   let configParser (values: string[]) =
-    let rootCommand =
-      RootCommand("migrondi-config", TreatUnmatchedTokensAsErrors = false)
 
     let connectionOption =
-      Option<string>("--connection", "The connection string to the database.")
+      Input.option<string> "--connection"
+      |> Input.aliases [ "-c" ]
+      |> Input.desc "The connection string to the database."
 
     let migrationsOption =
-      Option<string>("--migrations", "The path to the migrations directory.")
+      Input.option<string> "--migrations"
+      |> Input.aliases [ "-m" ]
+      |> Input.desc "The path to the migrations directory."
 
     let tableNameOption =
-      Option<string>(
-        "--table-name",
-        "The name of the table that will store the migrations."
-      )
+      Input.option<string> "--table-name"
+      |> Input.aliases [ "-t" ]
+      |> Input.desc "The name of the table that will store the migrations."
+
 
     let driverOption =
-      Option<string>(
-        "--driver",
-        "The driver that will be used to connect to the database."
+      let op = Option<string> "--driver"
+
+      op.AcceptOnlyFromAmong("mssql", "sqlite", "postgresql", "mysql")
+      |> Input.ofOption
+      |> Input.aliases [ "-d" ]
+      |> Input.desc "The driver that will be used to connect to the database."
+
+
+    let mutable cO = None
+    let mutable mO = None
+    let mutable tNO = None
+    let mutable dO = None
+
+
+    rootCommand values {
+      description "Migrondi Configuration Parser"
+
+      configure(fun cfg ->
+        cfg.RootCommand.TreatUnmatchedTokensAsErrors <- false
       )
-        .AddCompletions("mssql", "sqlite", "postgresql", "mysql")
 
-    rootCommand.AddOption(connectionOption)
-    rootCommand.AddOption(migrationsOption)
-    rootCommand.AddOption(tableNameOption)
-    rootCommand.AddOption(driverOption)
-    let result = rootCommand.Parse(values)
+      inputs(connectionOption, migrationsOption, tableNameOption, driverOption)
 
+      setAction(fun (c: string, m: string, t: string, d: string) ->
+        let binder v =
+          match v with
+          | null
+          | "" -> None
+          | v -> Some v
+
+        cO <- binder c
+        mO <- binder m
+        tNO <- binder t
+        dO <- binder d
+      )
+    }
+    |> ignore
 
     {|
-      connection = result.GetValueForOption(connectionOption) |> Option.ofObj
-      migrations = result.GetValueForOption(migrationsOption) |> Option.ofObj
-      tableName = result.GetValueForOption(tableNameOption) |> Option.ofObj
-      driver = result.GetValueForOption(driverOption) |> Option.ofObj
+      connection = cO
+      migrations = mO
+      tableName = tNO
+      driver = dO
     |}
 
   let augmentFromEnvironment

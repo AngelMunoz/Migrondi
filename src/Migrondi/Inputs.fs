@@ -13,29 +13,25 @@ open Migrondi.Core
 module Init =
 
   let path =
-    Input.ArgumentMaybe<DirectoryInfo>(
-      "path",
-      "path inizialize a migrondi configuration file"
-    )
+    Input.argumentMaybe<DirectoryInfo> "path"
+    |> Input.desc "path to initialize a migrondi configuration file"
 
 [<RequireQualifiedAccess>]
 module SharedArguments =
 
   let name description =
     let description = defaultArg description "Friendly name of the migration"
-    Input.Argument<string>("name", description)
+    Input.argument<string> "name" |> Input.desc description
 
   let amount =
-    Input.ArgumentMaybe<int>(
-      "amount",
-      "Amount of migrations to run against the database"
-    )
+    Input.argumentMaybe<int> "amount"
+    |> Input.desc "Amount of migrations to run against the database"
 
   let isDry =
-    Input.OptionMaybe<bool>(
-      [ "-d"; "--dry" ],
+    Input.optionMaybe<bool> "--dry"
+    |> Input.alias "-d"
+    |> Input.desc
       "Signals migrondi to not run against the database and prints the migrations that would be run into the screen"
-    )
 
 [<RequireQualifiedAccess>]
 module ListArgs =
@@ -50,11 +46,12 @@ module ListArgs =
         | _ -> None
 
       Option<MigrationType option>(
+        "kind",
         [| "-k"; "--kind" |],
-        parseArgument = parseArgument,
+        CustomParser = parseArgument,
         Description = ""
       )
-        .FromAmong([| "up"; "down" |])
+        .AcceptOnlyFromAmong([| "up"; "down" |])
 
 
-    op |> Input.OfOption
+    Input.ofOption op

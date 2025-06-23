@@ -87,7 +87,7 @@ type DatabaseAsyncTests() =
   [<TestMethod>]
   member _.``Find Migration should find a migration by name``() =
     task {
-      let! operation = asyncResult {
+      let! operation = taskResult {
 
         let insertStuff () =
           use connection =
