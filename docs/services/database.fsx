@@ -5,13 +5,14 @@ category: Core
 categoryindex: 3
 index: 3
 ---
-The database service requires a `MigrondiConfiguration` object, as we use the information from the driver and connection string to stablish a connection to the database.
+The database service requires a `MigrondiConfiguration` object, as we use information from the driver and connection string to establish a connection to the database.
 *)
 
-#r "nuget: Migrondi.Core, 1.0.0-beta-012"
+#r "../../src/Migrondi.Core/bin/Debug/net8.0/Migrondi.Core.dll"
+#r "nuget: Microsoft.Extensions.Logging.Console, 9.0.0"
+#r "nuget: FsToolkit.ErrorHandling"
 
 open Migrondi.Core
-open Migrondi.Core.Database
 open Microsoft.Extensions.Logging
 
 let logger =
@@ -26,77 +27,88 @@ let config = {
       driver = MigrondiDriver.Mssql
 }
 
-// create a new instance of the database handler
-let db: IMiDatabaseHandler = MiDatabaseHandler(logger, config)
-
 (**
-Before working with the database service, you need call the `SetupDatabase()` call to ensure that the migrations table exists.
+The database service is used internally by the main Migrondi service. You typically don't need to use it directly.
 
-Currently, the queries to execute the setup are not exposed, so if you create your own `IMiDatabaseHandler` implementation, you need to be sure you're creating the correct tracking mechanism for the migrations. In our default case it is just tables in the database but keep it in mind.
-*)
-
-db.SetupDatabase()
-
-(**
-Once the database is setup, you can start working with migrations.
-
-You will notice that the `IMiDatabaseHandler` interface returns `MigrationRecord` objects which may be confusing with `Migration` objects.
+When working with the database service through the main IMigrondi interface, you'll notice that it returns `MigrationRecord` objects which may be confusing with `Migration` objects.
 
 The `MigrationRecord` object is a representation of the migration that is stored in the database, while the `Migration` object is a representation of the migration file. While they store similar information, their usage and purpose is different.
-
 *)
 
-// Find what was the last migration applied
-let migrations = db.FindLastApplied()
-
-// this method returns an option in case there's no migration applied.
-
-
 (**
-In order to obtain the migrations in the database you can call the `ListMigrations()` method. It has no parameters and returns a list of `MigrationRecord` objects.
-*)
-let existingMigrations = db.ListMigrations()
-
-(**
-For cases where you want to check if a particular migration has been applied, you can use the `FindMigration(name)` method. It returns an option with the `MigrationRecord` object if it exists.
-
-Keep in mind that the default behavior is to store the name of the migration including the timesamp e.g.
+When you list migrations using the main service, you get records from the database that show which migrations have been applied.
 *)
 
-let foundMigration = db.FindMigration("initial-tables_1708216610033")
+// Example of what MigrationRecord contains:
+type MyMigrationRecord = {
+  id: int64
+  name: string
+  timestamp: int64
+}
 
 (**
-> ***NOTE***: Keep in mind that if you are using a custom implementation of the `IMiDatabaseHandler` interface, you need to ensure that the `MigrationRecord` object stores the name properly as well.
+Keep in mind that the default behavior is to store the name of the migration including the timestamp e.g.
+`1708216610033_initial-tables`
+*)
 
-Applying and Rolling back migrations is fairly straight forward as well. The general mechanism is to simply iterate over the migration objects, run their SQL content and then store a `MigrationRecord` object in the database.
+(**
+## Database Internals
 
-A brief example of how we do that internally is as follows:
+Internally, when applying migrations, Migrondi works by:
+1. Starting a database transaction
+2. Executing the migration SQL content
+3. If successful, inserting a MigrationRecord into the migrations table
+4. Committing the transaction
 
+If any step fails, the entire transaction is rolled back to ensure consistency.
+
+The general mechanism is similar to this pattern using raw ADO.NET:
 *)
 
 open System.Data
-open RepoDb
+open System.Data.Common
 
 let toRun: Migration list = []
-let connection: IDbConnection = null // get it from somewhere
+let connection: IDbConnection = null // obtained internally from config
+let tableName = "__migrondi_migrations"
+
+use transaction = connection.BeginTransaction()
 
 for migration in toRun do
   let content = migration.upContent
   // run the content against the database
-  connection.ExecuteNonQuery($"{content};;") |> ignore
+  use cmd = connection.CreateCommand()
+  cmd.Transaction <- transaction
+  cmd.CommandText <- content
+  cmd.ExecuteNonQuery() |> ignore
 
-  connection.Insert(
-    tableName = config.tableName,
-    entity = {|
-      name = migration.name
-      timestamp = migration.timestamp
-    |},
-    fields = Field.From("name", "timestamp")
-  )
-  |> ignore
+  // insert migration record
+  use insertCmd = connection.CreateCommand()
+
+  insertCmd.CommandText <-
+    $"""
+    INSERT INTO "{tableName}" (name, timestamp)
+    VALUES (@name, @timestamp)
+    """
+
+  insertCmd.Transaction <- transaction
+
+  let nameParam = insertCmd.CreateParameter()
+  nameParam.ParameterName <- "@name"
+  nameParam.Value <- migration.name
+  insertCmd.Parameters.Add(nameParam) |> ignore
+
+  let timestampParam = insertCmd.CreateParameter()
+  timestampParam.ParameterName <- "@timestamp"
+  timestampParam.Value <- migration.timestamp
+  insertCmd.Parameters.Add(timestampParam) |> ignore
+
+  insertCmd.ExecuteNonQuery() |> ignore
+
+transaction.Commit()
 
 (**
-The rollback process is similar, but instead of running the `upContent` we run the `downContent` and then remove the `MigrationRecord` from the database rather than inserting.
+The rollback process is similar, but instead of running `upContent` we run `downContent` and then remove the `MigrationRecord` from the database rather than inserting.
 
-In your case you would need to ensure that the `IMiDatabaseHandler` implementation you are using save the `MigrationRecord` objects properly as well as applying the the migration content to your data source.
+All of this is handled automatically by the IMigrondi service - you don't need to manage transactions directly unless you're implementing your own database handler.
 *)

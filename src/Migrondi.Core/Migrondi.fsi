@@ -5,7 +5,6 @@ open System.Threading.Tasks
 open System.Runtime.InteropServices
 
 open Microsoft.Extensions.Logging
-
 open Migrondi.Core
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Database
@@ -20,7 +19,6 @@ open System.Threading
 type IMigrondi =
 
   abstract member Initialize: unit -> unit
-
 
   abstract member InitializeAsync: [<Optional>] ?cancellationToken: CancellationToken -> Task
 
@@ -177,10 +175,18 @@ type Migrondi =
   internal new:
     config: MigrondiConfig * database: IMiDatabaseHandler * fileSystem: IMiFileSystem * logger: ILogger -> Migrondi
 
-  static member MigrondiFactory:
-    config: MigrondiConfig * rootDirectory: string * [<Optional>] ?logger: ILogger<IMigrondi> -> IMigrondi
-
-  [<Experimental "This API is under preview, and may change in the future">]
+  /// <summary>
+  /// Generates a new Migrondi service with default implementations.
+  /// Optionally, you can provide a custom file system implementation.
+  /// </summary>
+  /// <param name="config">A configuration object to be able to find the connection string for the database.</param>
+  /// <param name="rootDirectory">The root directory path for the project.</param>
+  /// <param name="logger">An optional logger for diagnostics.</param>
+  /// <param name="miFileSystem">An optional custom file system implementation.</param>
+  /// <returns>A new Migrondi service</returns>
+  /// <remarks>
+  /// When <c>miFileSystem</c> is not provided, a default implementation using the local file system is used.
+  /// </remarks>
   static member MigrondiFactory:
     config: MigrondiConfig *
     rootDirectory: string *

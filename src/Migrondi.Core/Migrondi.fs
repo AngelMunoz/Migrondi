@@ -5,14 +5,12 @@ open System.Collections.Generic
 open System.Threading.Tasks
 open System.Runtime.InteropServices
 
-
 open Migrondi.Core
 open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Database
 open System.Threading
 open Microsoft.Extensions.Logging
-
 
 open IcedTasks
 
@@ -160,7 +158,6 @@ module internal MigrondiserviceImpl =
       | None -> None
     )
     |> Array.sortByDescending(_.timestamp)
-
 
   let runUp
     (db: IMiDatabaseHandler)
@@ -438,7 +435,6 @@ module internal MigrondiserviceImpl =
   let dryRunDownAsync
     (db: IMiDatabaseHandler)
     (fs: IMiFileSystem)
-    (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -508,15 +504,15 @@ module internal MigrondiserviceImpl =
   let defaultLoggerFactory =
     lazy
       LoggerFactory.Create(fun builder ->
-       builder
+        builder
 #if DEBUG
-         .SetMinimumLevel(LogLevel.Debug)
+          .SetMinimumLevel(LogLevel.Debug)
 #else
-         .SetMinimumLevel(LogLevel.Information)
+          .SetMinimumLevel(LogLevel.Information)
 #endif
-         .AddSimpleConsole()
-       |> ignore
-     )
+          .AddSimpleConsole()
+        |> ignore
+      )
 
 [<Class>]
 type Migrondi
@@ -545,54 +541,10 @@ type Migrondi
     (
       config: MigrondiConfig,
       rootDirectory: string,
-      [<Optional>] ?logger: ILogger<IMigrondi>
-    ) : IMigrondi =
-
-    let logger =
-      defaultArg
-        logger
-        (MigrondiserviceImpl.defaultLoggerFactory.Value.CreateLogger<IMigrondi>())
-
-    let config = {
-      config with
-          connection = MigrondiserviceImpl.getConnectionStr rootDirectory config
-    }
-
-    let database = MiDatabaseHandler(logger, config)
-    let serializer = MigrondiSerializer()
-
-    let projectRoot =
-      let rootDirectory = IO.Path.GetFullPath(rootDirectory)
-
-      if IO.Path.EndsInDirectorySeparator rootDirectory then
-        Uri(rootDirectory, UriKind.Absolute)
-      else
-        Uri(
-          $"{rootDirectory}{IO.Path.DirectorySeparatorChar}",
-          UriKind.Absolute
-        )
-
-    let migrationsDir =
-      if IO.Path.EndsInDirectorySeparator config.migrations then
-        Uri(config.migrations, UriKind.Relative)
-      else
-        Uri(
-          $"{config.migrations}{IO.Path.DirectorySeparatorChar}",
-          UriKind.Relative
-        )
-
-    let fileSystem =
-      MiFileSystem(logger, serializer, serializer, projectRoot, migrationsDir)
-
-    Migrondi(config, database, fileSystem, logger)
-
-  static member MigrondiFactory
-    (
-      config: MigrondiConfig,
-      rootDirectory: string,
       [<Optional>] ?logger: ILogger<IMigrondi>,
       [<Optional>] ?miFileSystem: IMiFileSystem
     ) : IMigrondi =
+
     let logger =
       defaultArg
         logger
@@ -726,7 +678,6 @@ type Migrondi
       MigrondiserviceImpl.dryRunDownAsync
         database
         fileSystem
-        logger
         config
         amount
         token
@@ -740,10 +691,8 @@ type Migrondi
 
     member _.MigrationsListAsync([<Optional>] ?cancellationToken) =
       let token = defaultArg cancellationToken CancellationToken.None
-
       MigrondiserviceImpl.migrationsListAsync database fileSystem config token
 
     member _.ScriptStatusAsync(arg1: string, [<Optional>] ?cancellationToken) =
       let token = defaultArg cancellationToken CancellationToken.None
-
       MigrondiserviceImpl.scriptStatusAsync database fileSystem arg1 token
