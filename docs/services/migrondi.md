@@ -77,7 +77,7 @@ migrondi.InitializeAsync() |> Async.AwaitTask
 
 This creates the migrations tracking table if it doesn't exist. It's safe to call multiple times - it won't recreate an existing table.
 
- ## Creating Migrations
+## Creating Migrations
 
 Create new migration files with `RunNew`:
 
@@ -319,11 +319,13 @@ When creating migrations with `RunNew`, the current time is used for the timesta
 Migrondi supports two migration file formats and automatically detects which format your migrations use:
 
 **V1 Format (current)**:
+
 - Filename: `{timestamp}_{name}.sql`
 - Required headers: `-- MIGRONDI:NAME={name}` and `-- MIGRONDI:TIMESTAMP={timestamp}`
 - Optional header: `-- MIGRONDI:ManualTransaction=true`
 
 **V0 Format (deprecated)**:
+
 - Filename: `{name}_{timestamp}.sql`
 - Content marker: `-- ---------- MIGRONDI:UP:{timestamp} ----------`
 
