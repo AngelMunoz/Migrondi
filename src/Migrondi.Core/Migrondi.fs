@@ -546,7 +546,7 @@ type Migrondi
     (
       config: MigrondiConfig,
       rootDirectory: string,
-      [<Optional>] ?logger: ILogger<IMigrondi>,
+      [<Optional>] ?logger: ILogger,
       [<Optional>] ?migrationSource: IMiMigrationSource
     ) : IMigrondi =
 

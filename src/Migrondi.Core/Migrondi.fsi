@@ -188,7 +188,7 @@ type Migrondi =
   static member MigrondiFactory:
     config: MigrondiConfig *
     rootDirectory: string *
-    [<Optional>] ?logger: ILogger<IMigrondi> *
+    [<Optional>] ?logger: ILogger *
     [<Optional>] ?migrationSource: IMiMigrationSource ->
       IMigrondi
 

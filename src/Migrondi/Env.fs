@@ -247,6 +247,6 @@ type internal AppEnv
 
     let db = MiDatabaseHandler(logger, config)
 
-    let migrondi = Migrondi(config, db, fs, logger)
+    let migrondi = Migrondi.MigrondiFactory(config, cwd, logger = logger)
 
     AppEnv(logger, serializer, serializer, fs, db, migrondi, jsonOutput, config)
