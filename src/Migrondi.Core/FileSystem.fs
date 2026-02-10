@@ -70,7 +70,8 @@ module PhysicalMigrationSourceImpl =
         SourceNotFound(uri.LocalPath |> Path.GetFileName, uri.LocalPath)
       )
 
-  let readContentAsync (logger: ILogger, uri: Uri, token: CancellationToken) = cancellableTask {
+  let readContentAsync (logger: ILogger, uri: Uri) = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
     logger.LogDebug("Reading content from {Path}", uri.LocalPath)
 
     try
@@ -90,8 +91,9 @@ module PhysicalMigrationSourceImpl =
     file.Directory.Create()
     File.WriteAllText(uri.LocalPath, content)
 
-  let writeContentAsync (logger: ILogger, uri: Uri, content: string, token: CancellationToken) = cancellableTask {
+  let writeContentAsync (logger: ILogger, uri: Uri, content: string) = cancellableTask {
     logger.LogDebug("Writing content to {Path}", uri.LocalPath)
+    let! token = CancellableTask.getCancellationToken()
     let file = FileInfo(uri.LocalPath)
     file.Directory.Create()
 
@@ -111,7 +113,7 @@ module PhysicalMigrationSourceImpl =
       | _ -> None
     )
 
-  let listFilesAsync (logger: ILogger, locationUri: Uri, _token: CancellationToken) = cancellableTask {
+  let listFilesAsync (logger: ILogger, locationUri: Uri) = cancellableTask {
     logger.LogDebug("Listing files in {Path}", locationUri.LocalPath)
     let directory = DirectoryInfo(locationUri.LocalPath)
 
@@ -131,7 +133,7 @@ module PhysicalMigrationSourceImpl =
 
         member _.ReadContentAsync(uri: Uri, ?cancellationToken) =
           let token = defaultArg cancellationToken CancellationToken.None
-          readContentAsync (logger, uri, token)
+          readContentAsync (logger, uri) token
 
         member _.WriteContent(uri: Uri, content: string) =
           writeContent(logger, uri, content)
@@ -140,13 +142,13 @@ module PhysicalMigrationSourceImpl =
           (uri: Uri, content: string, ?cancellationToken)
           =
           let token = defaultArg cancellationToken CancellationToken.None
-          writeContentAsync (logger, uri, content, token)
+          writeContentAsync (logger, uri, content) token
 
         member _.ListFiles(locationUri: Uri) = listFiles(logger, locationUri)
 
         member _.ListFilesAsync(locationUri: Uri, ?cancellationToken) =
           let token = defaultArg cancellationToken CancellationToken.None
-          listFilesAsync (logger, locationUri, token)
+          listFilesAsync (logger, locationUri) token
     }
 
 [<Interface>]
@@ -216,14 +218,13 @@ module PhysicalFileSystemImpl =
       serializer: IMiConfigurationSerializer,
       logger: ILogger,
       projectRoot: Uri,
-      readFrom: string<RelativeUserPath>,
-      token: CancellationToken
+      readFrom: string<RelativeUserPath>
     ) =
     cancellableTask {
       let path = Uri(projectRoot, UMX.untag readFrom)
       logger.LogDebug("Reading configuration from {Path}", path.ToString())
 
-      let! contents = source.ReadContentAsync(path, cancellationToken = token)
+      let! contents = source.ReadContentAsync path
 
       try
         return serializer.Decode contents
@@ -258,8 +259,7 @@ module PhysicalFileSystemImpl =
       logger: ILogger,
       config: MigrondiConfig,
       projectRoot: Uri,
-      writeTo: string<RelativeUserPath>,
-      token: CancellationToken
+      writeTo: string<RelativeUserPath>
     ) =
     cancellableTask {
       let path = Uri(projectRoot, UMX.untag writeTo)
@@ -270,8 +270,7 @@ module PhysicalFileSystemImpl =
         writeTo
       )
 
-      do!
-        source.WriteContentAsync(path, serializer.Encode config, cancellationToken = token)
+      do! source.WriteContentAsync(path, serializer.Encode config)
     }
 
   let readMigration
@@ -303,8 +302,7 @@ module PhysicalFileSystemImpl =
       serializer: IMiMigrationSerializer,
       logger: ILogger,
       migrationsDir: Uri,
-      migrationName: string<RelativeUserPath>,
-      token: CancellationToken
+      migrationName: string<RelativeUserPath>
     ) =
     cancellableTask {
       let path = Uri(migrationsDir, UMX.untag migrationName)
@@ -315,7 +313,7 @@ module PhysicalFileSystemImpl =
         migrationName
       )
 
-      let! contents = source.ReadContentAsync(path, cancellationToken = token)
+      let! contents = source.ReadContentAsync path
 
       try
         return serializer.DecodeText contents
@@ -351,8 +349,7 @@ module PhysicalFileSystemImpl =
       logger: ILogger,
       migration: Migration,
       migrationsDir: Uri,
-      migrationName: string<RelativeUserPath>,
-      token: CancellationToken
+      migrationName: string<RelativeUserPath>
     ) =
     cancellableTask {
       let path = Uri(migrationsDir, UMX.untag migrationName)
@@ -364,8 +361,7 @@ module PhysicalFileSystemImpl =
         migrationName
       )
 
-      do!
-        source.WriteContentAsync(path, serializer.EncodeText migration, cancellationToken = token)
+      do! source.WriteContentAsync(path, serializer.EncodeText migration)
     }
 
   let listMigrations
@@ -411,10 +407,10 @@ module PhysicalFileSystemImpl =
       serializer: IMiMigrationSerializer,
       logger: ILogger,
       projectRoot: Uri,
-      migrationsDir: string<RelativeUserDirectoryPath>,
-      token: CancellationToken
+      migrationsDir: string<RelativeUserDirectoryPath>
     ) =
     cancellableTask {
+      let! token = CancellableTask.getCancellationToken()
       let path = Uri(projectRoot, UMX.untag migrationsDir)
 
       logger.LogDebug(
@@ -423,15 +419,16 @@ module PhysicalFileSystemImpl =
         migrationsDir
       )
 
-      let! uris = source.ListFilesAsync(path, cancellationToken = token)
+      let! uris = source.ListFilesAsync path
 
       let! files =
         uris
         |> Seq.map(fun uri -> async {
+          let! token' = Async.CancellationToken
           let name = uri.Segments |> Array.last
 
           let! content =
-            source.ReadContentAsync(uri, cancellationToken = token)
+            source.ReadContentAsync(uri, cancellationToken = token')
             |> Async.AwaitTask
 
           return name, content
@@ -491,8 +488,8 @@ type internal MiFileSystem
          migrationSerializer,
          logger,
          projectRootUri,
-         UMX.tag arg1,
-         token)
+         UMX.tag arg1)
+        token
 
     member _.ReadConfiguration(readFrom) =
       PhysicalFileSystemImpl.readConfiguration(
@@ -507,12 +504,12 @@ type internal MiFileSystem
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.readConfigurationAsync
-        (source,
+        (migrationSource,
          configurationSerializer,
          logger,
          projectRootUri,
-         UMX.tag readFrom,
-         token)
+         UMX.tag readFrom)
+        token
 
     member _.ReadMigration readFrom =
       PhysicalFileSystemImpl.readMigration(
@@ -527,12 +524,12 @@ type internal MiFileSystem
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.readMigrationAsync
-        (source,
+        (migrationSource,
          migrationSerializer,
          logger,
          migrationsWorkingDir,
-         UMX.tag readFrom,
-         token)
+         UMX.tag readFrom)
+        token
 
     member _.WriteConfiguration(config: MigrondiConfig, writeTo) : unit =
       PhysicalFileSystemImpl.writeConfiguration(
@@ -550,13 +547,13 @@ type internal MiFileSystem
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.writeConfigurationAsync
-        (source,
+        (migrationSource,
          configurationSerializer,
          logger,
          config,
          projectRootUri,
-         UMX.tag writeTo,
-         token)
+         UMX.tag writeTo)
+        token
 
     member _.WriteMigration(arg1: Migration, arg2) : unit =
       PhysicalFileSystemImpl.writeMigration(
@@ -574,10 +571,10 @@ type internal MiFileSystem
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.writeMigrationAsync
-        (source,
+        (migrationSource,
          migrationSerializer,
          logger,
          arg1,
          migrationsWorkingDir,
-         UMX.tag arg2,
-         token)
+         UMX.tag arg2)
+        token

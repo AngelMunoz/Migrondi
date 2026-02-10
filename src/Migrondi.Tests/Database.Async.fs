@@ -426,7 +426,7 @@ type DatabaseAsyncTests() =
       ]
 
       let! thrown =
-        Assert.ThrowsExceptionAsync<AggregateException>(
+        Assert.ThrowsExactlyAsync<AggregateException>(
           Func<Task>(fun _ -> task {
             do!
               databaseEnv.ApplyMigrationsAsync(runnableMigrations)
@@ -487,7 +487,7 @@ type DatabaseAsyncTests() =
       ]
 
       let! thrown =
-        Assert.ThrowsExceptionAsync<AggregateException>(
+        Assert.ThrowsExactlyAsync<AggregateException>(
           Func<Task>(fun _ -> task {
             do!
               databaseEnv.RollbackMigrationsAsync(runnableMigrations)

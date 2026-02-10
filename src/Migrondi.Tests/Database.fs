@@ -492,7 +492,7 @@ type DatabaseTests() =
     ]
 
     let thrown =
-      Assert.ThrowsException<MigrationApplicationFailed>(
+      Assert.ThrowsExactly<MigrationApplicationFailed>(
         Action(fun () ->
           databaseEnv.ApplyMigrations(runnableMigrations) |> ignore
         )
@@ -536,7 +536,7 @@ type DatabaseTests() =
     ]
 
     let thrown =
-      Assert.ThrowsException<MigrationRollbackFailed>(
+      Assert.ThrowsExactly<MigrationRollbackFailed>(
         Action(fun () ->
           databaseEnv.RollbackMigrations(runnableMigrations) |> ignore
         )
