@@ -1,13 +1,13 @@
 namespace Migrondi.Tests.Database
 
 open System
+open System.Data
 open System.Threading.Tasks
 
 open Microsoft.VisualStudio.TestTools.UnitTesting
 
 open Microsoft.Extensions.Logging
 
-open RepoDb
 
 open FsToolkit.ErrorHandling
 
@@ -59,16 +59,26 @@ type DatabaseAsyncTests() =
         use connection =
           MigrationsImpl.getConnection(config.connection, config.driver)
 
-        return!
-          connection.ExecuteQuery<string>(
-            $"SELECT name FROM sqlite_master WHERE type='table' AND name='{config.tableName}';"
-          )
-          |> Seq.tryHead
-          |> Result.requireSome "Table not found"
+        use cmd = connection.CreateCommand()
+
+
+        if connection.State <> ConnectionState.Open then
+          connection.Open()
+
+        cmd.CommandText <-
+          $"SELECT name FROM sqlite_master WHERE type='table' AND name='{config.tableName}';"
+
+        use! reader = cmd.ExecuteReaderAsync()
+
+        if reader.Read() then
+          let tableNameStr = reader.GetString(0)
+          return tableNameStr
+        else
+          return! Error "Table not found"
       }
 
       match operation with
-      | Ok value -> Assert.AreEqual(config.tableName, value)
+      | Ok value -> Assert.AreEqual<string>(config.tableName, value)
       | Error err -> Assert.Fail($"Failed to Setup the Database: %s{err}")
 
     }
@@ -77,7 +87,7 @@ type DatabaseAsyncTests() =
   [<TestMethod>]
   member _.``Find Migration should find a migration by name``() =
     task {
-      let! operation = asyncResult {
+      let! operation = taskResult {
 
         let insertStuff () =
           use connection =
@@ -108,10 +118,10 @@ type DatabaseAsyncTests() =
 
       match operation with
       | Ok(one, two, three, four) ->
-        Assert.AreEqual("test_1", one.name)
-        Assert.AreEqual("test_2", two.name)
-        Assert.AreEqual("test_3", three.name)
-        Assert.AreEqual("test_4", four.name)
+        Assert.AreEqual<string>("test_1", one.name)
+        Assert.AreEqual<string>("test_2", two.name)
+        Assert.AreEqual<string>("test_3", three.name)
+        Assert.AreEqual<string>("test_4", four.name)
       | Error err -> Assert.Fail($"Failed to Find the Migration: %s{err}")
     }
     :> Task
@@ -167,7 +177,7 @@ type DatabaseAsyncTests() =
       }
 
       match operation with
-      | Ok value -> Assert.AreEqual("test_4", value.name)
+      | Ok value -> Assert.AreEqual<string>("test_4", value.name)
       | Error err ->
         Assert.Fail(
           $"A migration was not found though there should be one: %s{err}"
@@ -191,7 +201,7 @@ type DatabaseAsyncTests() =
       }
 
       match operation with
-      | Ok value -> Assert.AreEqual(0, value.Count)
+      | Ok value -> Assert.AreEqual<int>(0, value.Count)
       | Error err ->
         Assert.Fail(
           $"Migrations were found though there shouldn't be any: %s{err}"
@@ -227,11 +237,11 @@ type DatabaseAsyncTests() =
       // the test has to account for the order as well, not just the size of the list
       match operation with
       | Ok value ->
-        Assert.AreEqual(4, value.Count)
-        Assert.AreEqual("test_4", value[0].name)
-        Assert.AreEqual("test_3", value[1].name)
-        Assert.AreEqual("test_2", value[2].name)
-        Assert.AreEqual("test_1", value[3].name)
+        Assert.AreEqual<int>(4, value.Count)
+        Assert.AreEqual<string>("test_4", value[0].name)
+        Assert.AreEqual<string>("test_3", value[1].name)
+        Assert.AreEqual<string>("test_2", value[2].name)
+        Assert.AreEqual<string>("test_1", value[3].name)
       | Error err ->
         Assert.Fail(
           $"Migrations were not found though there should be some: %s{err}"
@@ -264,21 +274,31 @@ type DatabaseAsyncTests() =
 
           let msg = "There should not be records in this table"
 
-          do!
-            connection.QueryAll<{| name: string |}>(tableName = "test_1")
-            |> Result.requireEmpty msg
+          let checkTableIsEmpty (conn: IDbConnection) (tblName: string) = result {
+            if conn.State <> ConnectionState.Open then
+              conn.Open()
 
-          do!
-            connection.QueryAll<{| name: string |}>(tableName = "test_2")
-            |> Result.requireEmpty msg
+            use cmd = conn.CreateCommand()
+            cmd.CommandText <- $"SELECT COUNT(*) FROM \"{tblName}\""
 
-          do!
-            connection.QueryAll<{| name: string |}>(tableName = "test_3")
-            |> Result.requireEmpty msg
+            match cmd.ExecuteScalar() with
+            | null -> return! Error $"Could not get count for table {tblName}"
+            | countVal ->
+              let c = Convert.ToInt64(countVal)
 
-          do!
-            connection.QueryAll<{| name: string |}>(tableName = "test_4")
-            |> Result.requireEmpty msg
+              if c = 0L then
+                return () // Empty
+              else
+                return! Error msg // Not empty because msg is "There should not be records in this table"
+          }
+
+          do! checkTableIsEmpty connection "test_1"
+
+          do! checkTableIsEmpty connection "test_2"
+
+          do! checkTableIsEmpty connection "test_3"
+
+          do! checkTableIsEmpty connection "test_4"
         }
 
         do!
@@ -291,12 +311,12 @@ type DatabaseAsyncTests() =
 
       match operation with
       | Ok(migrations, lastApplied) ->
-        Assert.AreEqual(4, migrations.Count)
-        Assert.AreEqual("test_4", migrations[0].name)
-        Assert.AreEqual("test_3", migrations[1].name)
-        Assert.AreEqual("test_2", migrations[2].name)
-        Assert.AreEqual("test_1", migrations[3].name)
-        Assert.AreEqual("test_4", lastApplied.name)
+        Assert.AreEqual<int>(4, migrations.Count)
+        Assert.AreEqual<string>("test_4", migrations[0].name)
+        Assert.AreEqual<string>("test_3", migrations[1].name)
+        Assert.AreEqual<string>("test_2", migrations[2].name)
+        Assert.AreEqual<string>("test_1", migrations[3].name)
+        Assert.AreEqual<string>("test_4", lastApplied.name)
       | Error err ->
         Assert.Fail($"Failed to find the last applied migration: %s{err}")
     }
@@ -318,7 +338,7 @@ type DatabaseAsyncTests() =
           |> Async.Ignore
 
         // rollback two
-        let! afterMigrationRollback =
+        let! rolledBackMigrations =
           databaseEnv.RollbackMigrationsAsync(
             // Rollback the last two migrations
             sampleMigrations |> List.rev |> List.take 2
@@ -332,23 +352,27 @@ type DatabaseAsyncTests() =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
-          let! _ =
-            try
-              connection.QueryAll<{| name: string |}>(tableName = "test_3")
-              |> ignore
+          // Helper to check if a table is missing
+          let checkTableMissing (conn: IDbConnection) (tblName: string) = result {
+            use cmd = conn.CreateCommand()
 
-              Error "Table 'test_3' should not exist"
-            with ex ->
-              Ok(ex.Message)
+            cmd.CommandText <-
+              $"SELECT name FROM sqlite_master WHERE type='table' AND name='{tblName}'"
 
-          and! _ =
-            try
-              connection.QueryAll<{| name: string |}>(tableName = "test_4")
-              |> ignore
+            use reader = cmd.ExecuteReader()
 
-              Error "Table 'test_4' should not exist"
-            with ex ->
-              Ok(ex.Message)
+            if reader.Read() then // Table found
+              return! Error $"Table '{tblName}' should not exist"
+            else // Table not found
+              return ()
+          }
+
+          if connection.State <> ConnectionState.Open then
+            connection.Open()
+
+          do! checkTableMissing connection "test_3"
+
+          do! checkTableMissing connection "test_4"
 
           return ()
         }
@@ -357,15 +381,16 @@ type DatabaseAsyncTests() =
           queryMigratedTables
           |> Result.mapError(fun err -> String.Join("\n", err))
 
-        return (afterMigrationRollback, lastApplied)
+
+        return (rolledBackMigrations, lastApplied)
       }
 
       match operation with
-      | Ok(migrations, lastApplied) ->
-        Assert.AreEqual(2, migrations.Count)
-        Assert.AreEqual("test_2", migrations[0].name)
-        Assert.AreEqual("test_1", migrations[1].name)
-        Assert.AreEqual("test_2", lastApplied.name)
+      | Ok(rolledBackMigrations, lastApplied) ->
+        Assert.AreEqual<int>(2, rolledBackMigrations.Count)
+        Assert.AreEqual<string>("test_4", rolledBackMigrations[0].name)
+        Assert.AreEqual<string>("test_3", rolledBackMigrations[1].name)
+        Assert.AreEqual<string>("test_2", lastApplied.name)
       | Error err ->
         Assert.Fail($"Failed to find the last applied migration: %s{err}")
     }
@@ -401,7 +426,7 @@ type DatabaseAsyncTests() =
       ]
 
       let! thrown =
-        Assert.ThrowsExceptionAsync<AggregateException>(
+        Assert.ThrowsExactlyAsync<AggregateException>(
           Func<Task>(fun _ -> task {
             do!
               databaseEnv.ApplyMigrationsAsync(runnableMigrations)
@@ -424,7 +449,7 @@ type DatabaseAsyncTests() =
       Assert.AreEqual(failingMigration, thrown.Migration)
 
       match! databaseEnv.FindLastAppliedAsync() with
-      | Some migration -> Assert.AreEqual("test_2", migration.name)
+      | Some migration -> Assert.AreEqual<string>("test_2", migration.name)
       | None -> Assert.Fail("Failed to find the last applied migration")
     }
     :> Task
@@ -434,8 +459,6 @@ type DatabaseAsyncTests() =
     ()
     =
     task {
-
-
       let sampleMigrations = DatabaseData.createTestMigrations 4
 
       // pre-fill the database
@@ -464,7 +487,7 @@ type DatabaseAsyncTests() =
       ]
 
       let! thrown =
-        Assert.ThrowsExceptionAsync<AggregateException>(
+        Assert.ThrowsExactlyAsync<AggregateException>(
           Func<Task>(fun _ -> task {
             do!
               databaseEnv.RollbackMigrationsAsync(runnableMigrations)
@@ -487,7 +510,7 @@ type DatabaseAsyncTests() =
       Assert.AreEqual(failingMigration, thrown.Migration)
 
       match! databaseEnv.FindLastAppliedAsync() with
-      | Some migration -> Assert.AreEqual("test_3", migration.name)
+      | Some migration -> Assert.AreEqual<string>("test_3", migration.name)
       | None -> Assert.Fail("Failed to find the last applied migration")
     }
     :> Task

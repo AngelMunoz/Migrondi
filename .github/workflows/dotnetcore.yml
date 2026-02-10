@@ -2,12 +2,24 @@ name: .NET Core
 
 on:
   push:
-    branches: [main]
+    branches: [main, vnext]
   pull_request:
-    branches: [main]
+    branches: [main, vnext]
 
 jobs:
   build:
+    runs-on: ubuntu-latest
+    name: Build dotnet 10.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup dotnet
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet restore
+      - run: dotnet build src/Migrondi -f net10.0 --configuration Release --no-restore
+      - run: dotnet test src/Migrondi.Tests --no-restore
+  buildnet8:
     runs-on: ubuntu-latest
     name: Build dotnet 8.0
     steps:
@@ -15,19 +27,25 @@ jobs:
       - name: Setup dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
       - run: dotnet restore
-      - run: dotnet build src/Migrondi -f net8.0 --configuration Release --no-restore
-      - run: dotnet test src/Migrondi.Tests --no-restore
-  buildnet6:
+      - run: dotnet build src/Migrondi.Core -f net8.0 --configuration Release --no-restore
+      - run: dotnet test src/Migrondi.Tests -f net8.0 --no-restore
+  buildnet9:
     runs-on: ubuntu-latest
-    name: Build dotnet 6.0
+    name: Build dotnet 9.0
     steps:
       - uses: actions/checkout@v4
       - name: Setup dotnet
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "6.0.x"
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
       - run: dotnet restore
-      - run: dotnet build src/Migrondi.Core -f net6.0 --configuration Release --no-restore
-      - run: dotnet test src/Migrondi.Tests -f net6.0 --no-restore
+      - run: dotnet build src/Migrondi.Core -f net9.0 --configuration Release --no-restore
+      - run: dotnet test src/Migrondi.Tests -f net9.0 --no-restore

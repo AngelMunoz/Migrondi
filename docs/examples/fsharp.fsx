@@ -11,7 +11,8 @@ This example adds the most simple way to get started, the default migrondi behav
 To begin we need to add the Migrondi.Core package to the script, this can be done by adding the following line to the top of the script:
 
 *)
-#r "nuget: Migrondi.Core, 1.0.0-beta-010"
+#r "../../src/Migrondi.Core/bin/Debug/net8.0/Migrondi.Core.dll"
+#r "nuget: Microsoft.Extensions.Logging.Console, 9.0.0"
 
 open Migrondi.Core
 
@@ -41,7 +42,7 @@ migrondi.RunNew(
 (**
 For operations that require database access like listing, up, down, and similar
 We need to initialize the database, which is jargon to say we need to create the required tables, initialize the driver and so on.
-we use [RepoDB](https://repodb.net/) under the hood, so we need to initialize the database before we can run any operations.
+This creates the migrations tracking table in the database.
 *)
 migrondi.Initialize()
 

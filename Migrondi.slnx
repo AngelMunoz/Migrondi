@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Migrondi.Core/Migrondi.Core.fsproj" />
+    <Project Path="src/Migrondi.Tests/Migrondi.Tests.fsproj" />
+    <Project Path="src/Migrondi/Migrondi.fsproj" />
+  </Folder>
+</Solution>

@@ -5,15 +5,12 @@ open System.Collections.Generic
 open System.Threading.Tasks
 open System.Runtime.InteropServices
 
-
 open Migrondi.Core
 open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
 open Migrondi.Core.Database
 open System.Threading
 open Microsoft.Extensions.Logging
-
-open FsToolkit.ErrorHandling
 
 open IcedTasks
 
@@ -25,124 +22,34 @@ type IMigrondi =
   abstract member InitializeAsync:
     [<Optional>] ?cancellationToken: CancellationToken -> Task
 
-  /// <summary>
-  /// Creates a new migration file with
-  /// the default naming convention and returns it
-  /// </summary>
-  /// <param name="friendlyName">
-  /// The friendly name of the migration, usually this comes from
-  /// the user's input
-  /// </param>
-  /// <param name="upContent">
-  /// The content of the up migration
-  /// </param>
-  /// <param name="downContent">
-  /// The content of the down migration
-  /// </param>
-  /// <returns>
-  /// The newly created migration as a record
-  /// </returns>
   abstract member RunNew:
     friendlyName: string *
     [<Optional>] ?upContent: string *
-    [<Optional>] ?downContent: string ->
+    [<Optional>] ?downContent: string *
+    [<Optional>] ?manualTransaction: bool ->
       Migration
 
-  /// <summary>
-  /// Creates a new migration file with
-  /// the default naming convention and returns it
-  /// </summary>
-  /// <param name="friendlyName">
-  /// The friendly name of the migration, usually this comes from
-  /// the user's input
-  /// </param>
-  /// <param name="upContent">
-  /// The content of the up migration
-  /// </param>
-  /// <param name="downContent">
-  /// The content of the down migration
-  /// </param>
-  /// <param name="cancellationToken">
-  /// A cancellation token to cancel the operation
-  /// </param>
-  /// <returns>
-  /// The newly created migration as a record
-  /// </returns>
   abstract member RunNewAsync:
     friendlyName: string *
     [<Optional>] ?upContent: string *
     [<Optional>] ?downContent: string *
+    [<Optional>] ?manualTransaction: bool *
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration>
 
-
-  /// <summary>
-  /// Runs all pending migrations against the database
-  /// </summary>
-  /// <param name="amount">The amount of migrations to apply</param>
-  /// <returns>
-  /// A list of all migrations that were applied including previously applied ones
-  /// </returns>
-  /// <remarks>
-  /// This method coordinates between the source scripts and the database
-  /// </remarks>
   abstract member RunUp:
     [<Optional>] ?amount: int -> IReadOnlyList<MigrationRecord>
 
-  /// <summary>
-  /// Reverts all migrations that were previously applied
-  /// </summary>
-  /// <param name="amount">The amount of migrations to roll back</param>
-  /// <returns>
-  /// A list of all migrations that were reverted including previously applied ones
-  /// </returns>
-  /// <remarks>
-  /// This method coordinates between the source scripts and the database
-  /// </remarks>
   abstract member RunDown:
     [<Optional>] ?amount: int -> IReadOnlyList<MigrationRecord>
 
-  /// <summary>
-  /// Makes a list of the pending migrations that would be applied
-  /// </summary>
-  /// <param name="amount">The amount of migrations to apply</param>
-  /// <returns>
-  /// A list of all migrations that would be applied
-  /// </returns>
   abstract member DryRunUp: [<Optional>] ?amount: int -> Migration IReadOnlyList
 
-  /// <summary>
-  /// Makes a list of the pending migrations that would be reverted
-  /// </summary>
-  /// <param name="amount">The amount of migrations to roll back</param>
-  /// <returns>
-  /// A list of all migrations that would be reverted
-  /// </returns>
   abstract member DryRunDown:
     [<Optional>] ?amount: int -> Migration IReadOnlyList
 
-  /// <summary>
-  /// Makes a list of all migrations and their status
-  /// </summary>
-  /// <returns>
-  /// A list of all migrations and their status
-  /// </returns>
-  /// <remarks>
-  /// This method coordinates between the source scripts and the database
-  /// </remarks>
   abstract member MigrationsList: unit -> MigrationStatus IReadOnlyList
 
-  /// <summary>
-  /// Takes a relative path to the migrations dir to a migration file
-  /// and returns its status
-  /// </summary>
-  /// <param name="migrationPath">The relative path to the migration file</param>
-  /// <returns>
-  /// The status of the migration
-  /// </returns>
-  /// <remarks>
-  /// This method coordinates between the source scripts and the database
-  /// </remarks>
   abstract member ScriptStatus: migrationPath: string -> MigrationStatus
 
   abstract member RunUpAsync:
@@ -173,7 +80,48 @@ type IMigrondi =
     string * [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationStatus>
 
-module private MigrondiserviceImpl =
+module internal MigrondiserviceImpl =
+
+  let internal getConnectionStr (rootPath: string) (config: MigrondiConfig) =
+    match config.driver with
+    | MigrondiDriver.Sqlite ->
+      let prefix = "Data Source="
+
+      let idx =
+        config.connection.IndexOf(prefix, StringComparison.OrdinalIgnoreCase)
+
+      if idx >= 0 then
+        let afterPrefix = config.connection.Substring(idx + prefix.Length)
+        let semiIdx = afterPrefix.IndexOf(';')
+
+        let dbPath, rest =
+          if semiIdx >= 0 then
+            afterPrefix.Substring(0, semiIdx), afterPrefix.Substring(semiIdx)
+          else
+            afterPrefix, ""
+
+        let dbPathTrimmed = dbPath.Trim()
+
+        let isWindowsRooted (path: string) =
+          path.Length >= 3
+          && Char.IsLetter(path[0])
+          && path[1] = ':'
+          && (path[2] = '\\' || path[2] = '/')
+
+        if
+          System.IO.Path.IsPathRooted(dbPathTrimmed)
+          || isWindowsRooted dbPathTrimmed
+        then
+          config.connection
+        else
+          let rootedPath = System.IO.Path.Combine(rootPath, dbPathTrimmed)
+
+          config.connection.Substring(0, idx + prefix.Length)
+          + rootedPath
+          + rest
+      else
+        config.connection
+    | _ -> config.connection
 
   let obtainPendingUp
     (migrations: IReadOnlyList<Migration>)
@@ -192,7 +140,7 @@ module private MigrondiserviceImpl =
       | Some _ -> None
       | None -> Some migration
     )
-    |> Array.sortBy(fun migration -> migration.timestamp)
+    |> Array.sortBy(_.timestamp)
 
   let obtainPendingDown
     (migrations: IReadOnlyList<Migration>)
@@ -211,8 +159,7 @@ module private MigrondiserviceImpl =
       | Some _ -> Some migration
       | None -> None
     )
-    |> Array.sortByDescending(fun migration -> migration.timestamp)
-
+    |> Array.sortByDescending(_.timestamp)
 
   let runUp
     (db: IMiDatabaseHandler)
@@ -226,14 +173,14 @@ module private MigrondiserviceImpl =
 
     logger.LogDebug(
       "Applied migrations: {Migrations}",
-      (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+      (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
     )
 
     let pendingMigrations = obtainPendingUp migrations appliedMigrations
 
     logger.LogDebug(
       "Pending migrations: {Migrations}",
-      (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+      (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
     )
 
     let migrationsToRun =
@@ -263,14 +210,14 @@ module private MigrondiserviceImpl =
 
     logger.LogDebug(
       "Applied migrations: {Migrations}",
-      (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+      (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
     )
 
     let pendingMigrations = obtainPendingDown migrations appliedMigrations
 
     logger.LogDebug(
       "Rolling back migrations: {Migrations}",
-      (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+      (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
     )
 
     let migrationsToRun =
@@ -386,14 +333,14 @@ module private MigrondiserviceImpl =
 
       logger.LogDebug(
         "Applied migrations: {Migrations}",
-        (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+        (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
       )
 
       let pendingMigrations = obtainPendingUp migrations appliedMigrations
 
       logger.LogDebug(
         "Pending migrations: {Migrations}",
-        (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+        (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
       )
 
       let migrationsToRun =
@@ -430,14 +377,14 @@ module private MigrondiserviceImpl =
 
       logger.LogDebug(
         "Applied migrations: {Migrations}",
-        (appliedMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+        (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
       )
 
       let pendingMigrations = obtainPendingDown migrations appliedMigrations
 
       logger.LogDebug(
         "Rolling back migrations: {Migrations}",
-        (pendingMigrations |> Seq.map(fun m -> m.name) |> String.concat ", ")
+        (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
       )
 
       let migrationsToRun =
@@ -490,7 +437,6 @@ module private MigrondiserviceImpl =
   let dryRunDownAsync
     (db: IMiDatabaseHandler)
     (fs: IMiFileSystem)
-    (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
     =
@@ -559,9 +505,16 @@ module private MigrondiserviceImpl =
 
   let defaultLoggerFactory =
     lazy
-      (LoggerFactory.Create(fun builder ->
-        builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
-      ))
+      LoggerFactory.Create(fun builder ->
+        builder
+#if DEBUG
+          .SetMinimumLevel(LogLevel.Debug)
+#else
+          .SetMinimumLevel(LogLevel.Information)
+#endif
+          .AddSimpleConsole()
+        |> ignore
+      )
 
 [<Class>]
 type Migrondi
@@ -572,25 +525,29 @@ type Migrondi
     logger: ILogger
   ) =
 
-  let getMigration (name, timestamp, upContent, downContent) = {
-    name = name
-    timestamp = timestamp
-    upContent =
-      defaultArg
-        upContent
-        "-- Add your SQL migration code below. You can delete this line but do not delete the comments above.\n\n"
-    downContent =
-      defaultArg
-        downContent
-        "-- Add your SQL rollback code below. You can delete this line but do not delete the comment above.\n\n"
-    manualTransaction = false
-  }
+  let getMigration
+    (name, timestamp, upContent, downContent, manualTransaction)
+    =
+    {
+      name = name
+      timestamp = timestamp
+      upContent =
+        defaultArg
+          upContent
+          "-- Add your SQL migration code below. You can delete this line but do not delete the comments above.\n\n"
+      downContent =
+        defaultArg
+          downContent
+          "-- Add your SQL rollback code below. You can delete this line but do not delete comment above.\n\n"
+      manualTransaction = defaultArg manualTransaction false
+    }
 
   static member MigrondiFactory
     (
       config: MigrondiConfig,
       rootDirectory: string,
-      ?logger: ILogger<IMigrondi>
+      [<Optional>] ?logger: ILogger,
+      [<Optional>] ?migrationSource: IMiMigrationSource
     ) : IMigrondi =
 
     let logger =
@@ -598,8 +555,13 @@ type Migrondi
         logger
         (MigrondiserviceImpl.defaultLoggerFactory.Value.CreateLogger<IMigrondi>())
 
-    let database = new MiDatabaseHandler(logger, config)
-    let serializer = new MigrondiSerializer()
+    let config = {
+      config with
+          connection = MigrondiserviceImpl.getConnectionStr rootDirectory config
+    }
+
+    let database = MiDatabaseHandler(logger, config)
+    let serializer = MigrondiSerializer()
 
     let projectRoot =
       let rootDirectory = IO.Path.GetFullPath(rootDirectory)
@@ -622,10 +584,16 @@ type Migrondi
         )
 
     let fileSystem =
-      MiFileSystem(logger, serializer, serializer, projectRoot, migrationsDir)
+      MiFileSystem(
+        logger,
+        serializer,
+        serializer,
+        projectRoot,
+        migrationsDir,
+        ?source = migrationSource
+      )
 
     Migrondi(config, database, fileSystem, logger)
-
 
   interface IMigrondi with
 
@@ -639,12 +607,14 @@ type Migrondi
       (
         friendlyName,
         [<Optional>] ?upContent,
-        [<Optional>] ?downContent
+        [<Optional>] ?downContent,
+        [<Optional>] ?manualTransaction
       ) : Migration =
       let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-      let name = $"{friendlyName}_{timestamp}.sql"
+      let name = $"{timestamp}_{friendlyName}.sql"
 
-      let migration = getMigration(name, timestamp, upContent, downContent)
+      let migration =
+        getMigration(name, timestamp, upContent, downContent, manualTransaction)
 
       fileSystem.WriteMigration(migration, name)
       migration
@@ -654,14 +624,24 @@ type Migrondi
         friendlyName,
         [<Optional>] ?upContent,
         [<Optional>] ?downContent,
+        [<Optional>] ?manualTransaction,
         [<Optional>] ?cancellationToken
       ) =
       let token = defaultArg cancellationToken CancellationToken.None
 
       task {
         let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-        let name = $"{friendlyName}_{timestamp}.sql"
-        let migration = getMigration(name, timestamp, upContent, downContent)
+        let name = $"{timestamp}_{friendlyName}.sql"
+
+        let migration =
+          getMigration(
+            name,
+            timestamp,
+            upContent,
+            downContent,
+            manualTransaction
+          )
+
         do! fileSystem.WriteMigrationAsync(migration, name, token)
 
         return migration
@@ -697,10 +677,8 @@ type Migrondi
         token
 
     member _.RunDownAsync
-      (
-        [<Optional>] ?amount,
-        [<Optional>] ?cancellationToken
-      ) =
+      ([<Optional>] ?amount, [<Optional>] ?cancellationToken)
+      =
       let token = defaultArg cancellationToken CancellationToken.None
 
       MigrondiserviceImpl.runDownAsync
@@ -712,35 +690,28 @@ type Migrondi
         token
 
     member _.DryRunDownAsync
-      (
-        [<Optional>] ?amount,
-        [<Optional>] ?cancellationToken
-      ) =
+      ([<Optional>] ?amount, [<Optional>] ?cancellationToken)
+      =
       let token = defaultArg cancellationToken CancellationToken.None
 
       MigrondiserviceImpl.dryRunDownAsync
         database
         fileSystem
-        logger
         config
         amount
         token
 
     member _.DryRunUpAsync
-      (
-        [<Optional>] ?amount,
-        [<Optional>] ?cancellationToken
-      ) =
+      ([<Optional>] ?amount, [<Optional>] ?cancellationToken)
+      =
       let token = defaultArg cancellationToken CancellationToken.None
 
       MigrondiserviceImpl.dryRunUpAsync database fileSystem config amount token
 
     member _.MigrationsListAsync([<Optional>] ?cancellationToken) =
       let token = defaultArg cancellationToken CancellationToken.None
-
       MigrondiserviceImpl.migrationsListAsync database fileSystem config token
 
     member _.ScriptStatusAsync(arg1: string, [<Optional>] ?cancellationToken) =
       let token = defaultArg cancellationToken CancellationToken.None
-
       MigrondiserviceImpl.scriptStatusAsync database fileSystem arg1 token

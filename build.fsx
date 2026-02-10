@@ -161,13 +161,13 @@ module Steps =
   }
 
   let build = Step.create "build" {
-    do! Operations.dotnet "build src/Perla/Perla.fsproj --no-restore"
+    do! Operations.dotnet "build src/Migrondi/Migrondi.fsproj --no-restore"
   }
 
   let format = Step.create "format" { do! Operations.fantomas "format" }
 
   let test = Step.create "tests" {
-    do! Operations.dotnet "test tests/Perla.Tests --no-restore"
+    do! Operations.dotnet "test tests/Migrondi.Tests --no-restore"
   }
 
   let pushNugets = Step.create "nuget" {

@@ -5,7 +5,6 @@ open System.IO
 open System.Threading.Tasks
 open Microsoft.VisualStudio.TestTools.UnitTesting
 
-open FSharp.UMX
 
 open Microsoft.Extensions.Logging
 
@@ -121,7 +120,7 @@ type FileSystemTests() =
       let path = MigrondiConfigData.fsMigrondiConfigPath rootDir.FullName
       File.ReadAllText path
 
-    Assert.AreEqual(expected, actual)
+    Assert.AreEqual<string>(expected, actual)
 
   [<TestMethod>]
   member _.``Can read a migrondi.json file``() =
@@ -159,7 +158,7 @@ type FileSystemTests() =
         let path = MigrondiConfigData.fsMigrondiConfigPath rootDir.FullName
         File.ReadAllTextAsync path
 
-      Assert.AreEqual(expected, actual)
+      Assert.AreEqual<string>(expected, actual)
     }
     :> Task
 
@@ -231,7 +230,11 @@ type FileSystemTests() =
       )
 
     match validations with
-    | Ok validations -> validations |> List.iter Assert.AreEqual
+    | Ok validations ->
+      validations
+      |> List.iter(fun (expected, actual) ->
+        Assert.AreEqual<string>(expected, actual)
+      )
     | Error errs ->
       let errors = String.Join('\n', errs)
       Assert.Fail("Could not validate files:\n" + errors)
@@ -281,7 +284,11 @@ type FileSystemTests() =
         })
 
       match validations with
-      | Ok validations -> validations |> List.iter Assert.AreEqual
+      | Ok validations ->
+        validations
+        |> List.iter(fun (expected, actual) ->
+          Assert.AreEqual<string>(expected, actual)
+        )
       | Error errs ->
         let errors = String.Join('\n', errs)
         Assert.Fail("Could not validate files:\n" + errors)
@@ -405,7 +412,7 @@ type FileSystemTests() =
             false
         )
         |> List.ofSeq
-        |> List.traverseResultA(fun (err) ->
+        |> List.traverseResultA(fun err ->
           let err = err :?> MalformedSource
 
           Error
@@ -452,7 +459,7 @@ type FileSystemTests() =
             false
         )
         |> List.ofSeq
-        |> List.traverseResultA(fun (err) ->
+        |> List.traverseResultA(fun err ->
           let err = err :?> MalformedSource
 
           Error
@@ -512,7 +519,7 @@ type FileSystemTests() =
             false
         )
         |> List.ofSeq
-        |> List.traverseResultA(fun (err) ->
+        |> List.traverseResultA(fun err ->
           let err = err :?> MalformedSource
 
           Error

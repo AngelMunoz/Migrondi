@@ -1,6 +1,5 @@
 namespace Migrondi.Commands
 
-open System
 open System.IO
 
 open FSharp.SystemCommandLine
@@ -11,10 +10,10 @@ open Migrondi.Inputs
 open Migrondi.Handlers
 
 [<RequireQualifiedAccess>]
-module ArgumentMapper =
+module internal ArgumentMapper =
 
 
-  let inline Init (appEnv: AppEnv) (dir: DirectoryInfo option) =
+  let Init (appEnv: AppEnv) (dir: DirectoryInfo option) =
     let path =
       match dir with
       | Some directory -> directory
@@ -22,20 +21,20 @@ module ArgumentMapper =
 
     path, appEnv.FileSystem, appEnv.Logger
 
-  let inline Up (appEnv: AppEnv) (amount: int option, isDry: bool option) =
+  let Up (appEnv: AppEnv) (amount: int option, isDry: bool option) =
     match isDry with
     | Some true -> Migrations.runDryUp(amount, appEnv.Logger, appEnv.Migrondi)
     | Some false
     | None -> Migrations.runUp(amount, appEnv.Logger, appEnv.Migrondi)
 
-  let inline Down (appEnv: AppEnv) (amount: int option, isDry: bool option) =
+  let Down (appEnv: AppEnv) (amount: int option, isDry: bool option) =
     match isDry with
     | Some true -> Migrations.runDryDown(amount, appEnv.Logger, appEnv.Migrondi)
     | Some false
     | None -> Migrations.runDown(amount, appEnv.Logger, appEnv.Migrondi)
 
-  let inline New (appEnv: AppEnv) (name: string) =
-    name, appEnv.Logger, appEnv.Migrondi
+  let inline New (appEnv: AppEnv) (name: string, manualTransaction: bool option) =
+    name, manualTransaction, appEnv.Logger, appEnv.Migrondi
 
   let inline List (appEnv: AppEnv) (kind: MigrationType option) =
     appEnv.JsonOutput,
@@ -48,7 +47,19 @@ module ArgumentMapper =
     name, appEnv.Logger, appEnv.Migrondi
 
 [<RequireQualifiedAccess>]
-module Commands =
+module internal Commands =
+  open Microsoft.Extensions.Logging
+
+  let setup (appEnv: AppEnv) =
+    let db = appEnv.Database
+
+    try
+      db.SetupDatabase()
+    with :? SetupDatabaseFailed as ex ->
+      appEnv.Logger.LogError("Database was not setup", ex)
+      reraise()
+
+    appEnv
 
   let Init appEnv = command "init" {
     description
@@ -56,8 +67,8 @@ module Commands =
 
     addAlias "setup"
 
-    inputs(Init.path)
-    setHandler(ArgumentMapper.Init appEnv >> Init.handler)
+    inputs Init.path
+    setAction(ArgumentMapper.Init appEnv >> Init.handler)
   }
 
   let New appEnv = command "new" {
@@ -66,8 +77,8 @@ module Commands =
 
     addAlias "create"
 
-    inputs(SharedArguments.name None)
-    setHandler(ArgumentMapper.New appEnv >> Migrations.newMigration)
+    inputs(SharedArguments.name None, SharedArguments.manualTransaction)
+    setAction(ArgumentMapper.New appEnv >> Migrations.newMigration)
   }
 
   let Up appEnv = command "up" {
@@ -75,7 +86,7 @@ module Commands =
     addAlias "apply"
 
     inputs(SharedArguments.amount, SharedArguments.isDry)
-    setHandler(ArgumentMapper.Up appEnv)
+    setAction((setup >> ArgumentMapper.Up) appEnv)
   }
 
   let Down appEnv = command "down" {
@@ -83,7 +94,7 @@ module Commands =
     addAlias "rollback"
 
     inputs(SharedArguments.amount, SharedArguments.isDry)
-    setHandler(ArgumentMapper.Down appEnv)
+    setAction((setup >> ArgumentMapper.Down) appEnv)
   }
 
   let List appEnv = command "list" {
@@ -92,8 +103,11 @@ module Commands =
 
     addAlias "show"
 
-    inputs(ListArgs.MigrationKind)
-    setHandler(ArgumentMapper.List appEnv >> Migrations.listMigrations)
+    inputs ListArgs.MigrationKind
+
+    setAction(
+      (setup >> ArgumentMapper.List) appEnv >> Migrations.listMigrations
+    )
   }
 
   let Status appEnv = command "status" {
@@ -103,5 +117,8 @@ module Commands =
     addAlias "show-state"
 
     inputs(SharedArguments.name(Some "Name of the migration file"))
-    setHandler(ArgumentMapper.Status appEnv >> Migrations.migrationStatus)
+
+    setAction(
+      (setup >> ArgumentMapper.Status) appEnv >> Migrations.migrationStatus
+    )
   }

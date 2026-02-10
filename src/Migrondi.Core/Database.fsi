@@ -1,7 +1,7 @@
 namespace Migrondi.Core.Database
 
 open System.Collections.Generic
-open System.Data
+open System.Data.Common
 open System.Runtime.InteropServices
 open System.Threading
 open System.Threading.Tasks
@@ -17,7 +17,7 @@ open Migrondi.Core
 /// This service also provides both sync and async methods to list, apply and rollback migrations.
 /// </summary>
 [<Interface>]
-type IMiDatabaseHandler =
+type internal IMiDatabaseHandler =
 
   /// <summary>
   /// Creates the required tables in the database.
@@ -138,10 +138,10 @@ type IMiDatabaseHandler =
 
 module internal MigrationsImpl =
 
-  val getConnection: connectionString: string * driver: MigrondiDriver -> IDbConnection
+  val getConnection: connectionString: string * driver: MigrondiDriver -> DbConnection
 
 [<Class>]
-type MiDatabaseHandler =
+type internal MiDatabaseHandler =
 
   /// <summary>
   /// Generates a new database service, this can be further customized by passing in a custom logger

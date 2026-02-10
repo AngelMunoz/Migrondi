@@ -1,17 +1,15 @@
 open System
 open System.IO
 
-open System.CommandLine.Builder
+open System.CommandLine
 open FSharp.SystemCommandLine
 
 open Serilog
 open Serilog.Formatting.Compact
 open Serilog.Extensions.Logging
 
-open Migrondi.Core
 open Migrondi.Commands
 open Migrondi.Env
-open Migrondi.Middleware
 
 [<EntryPoint>]
 let main argv =
@@ -30,7 +28,7 @@ let main argv =
       config.MinimumLevel.Information() |> ignore
 
     if useJson then
-      config.WriteTo.Console(new RenderedCompactJsonFormatter()) |> ignore
+      config.WriteTo.Console(RenderedCompactJsonFormatter()) |> ignore
     else
       config.WriteTo.Console() |> ignore
 
@@ -41,22 +39,18 @@ let main argv =
   let logger = loggerFactory.CreateLogger("Migrondi")
 
   let cwd = $"{Environment.CurrentDirectory}{Path.DirectorySeparatorChar}"
-  let appEnv = AppEnv.BuildDefault(cwd, logger, useJson)
-
+  let appEnv = AppEnv.BuildDefault(cwd, logger, useJson, argv)
 
   rootCommand argv {
     description
       "A dead simple SQL migrations runner, apply or rollback migrations at your ease"
 
-    usePipeline(fun pipeline ->
-      pipeline
-        .EnableDirectives(true)
-        // run the setup database for select commands
-        .AddMiddleware(Middleware.SetupDatabase appEnv)
-      |> ignore
+    configure(fun pipeline ->
+      // enable passing configuration flags before the actual commands
+      pipeline.RootCommand.TreatUnmatchedTokensAsErrors <- false
     )
 
-    setHandler id
+    noAction
 
     addCommands [
       Commands.Init appEnv

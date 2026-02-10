@@ -1,10 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <IsPackable>false</IsPackable>
     <GenerateProgramFile>false</GenerateProgramFile>
     <IsTestProject>true</IsTestProject>
-    <EnableMSTestRunner>true</EnableMSTestRunner>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Library.fs" />
@@ -12,10 +11,11 @@
     <Compile Include="FileSystem.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="Database.Async.fs" />
+    <Compile Include="Migrondi.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="MSTest" Version="3.2.1" />
+    <PackageReference Include="MSTest" Version="4.1.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />

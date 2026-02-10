@@ -3,20 +3,13 @@ namespace Migrondi.Core.Database
 open System
 open System.Collections.Generic
 open System.Data
-open Microsoft.Data.SqlClient
-open Microsoft.Data.Sqlite
+open System.Data.Common
+
 open System.Runtime.InteropServices
 open System.Threading
 open System.Threading.Tasks
 
-open MySqlConnector
-open Npgsql
-
-open RepoDb
-open RepoDb.Enumerations
 open Microsoft.Extensions.Logging
-
-open FsToolkit.ErrorHandling
 
 open Migrondi.Core
 
@@ -24,7 +17,7 @@ open IcedTasks
 
 
 [<Interface>]
-type IMiDatabaseHandler =
+type internal IMiDatabaseHandler =
 
   /// <summary>
   /// Creates the required tables in the database.
@@ -151,7 +144,6 @@ type IMiDatabaseHandler =
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationRecord IReadOnlyList>
 
-
 [<RequireQualifiedAccess>]
 module Queries =
   let createTable driver tableName =
@@ -183,35 +175,46 @@ CREATE TABLE dbo.%s{tableName}(
 );
 GO"""
 
-module internal MigrationsImpl =
+  let getFirstResultQuery (tableName, driver) =
+    match driver with
+    | MigrondiDriver.Sqlite
+    | MigrondiDriver.Postgresql
+    | MigrondiDriver.Mysql ->
+      $"SELECT id, name, timestamp FROM %s{tableName} ORDER BY timestamp DESC LIMIT 1"
+    | MigrondiDriver.Mssql ->
+      $"SELECT TOP 1 id, name, timestamp FROM %s{tableName} ORDER BY timestamp DESC"
+
+  let getAllResultsQuery tableName =
+    $"SELECT id, name, timestamp FROM {tableName} ORDER BY timestamp DESC"
+
+  let getResultsByNamesQuery tableName (namePlaceholders: string) =
+    $"SELECT id, name, timestamp FROM {tableName} WHERE name IN ({namePlaceholders}) ORDER BY timestamp DESC"
+
+module MigrationsImpl =
 
   let getConnection (connectionString: string, driver: MigrondiDriver) =
     match driver with
     | MigrondiDriver.Mssql ->
-      new SqlConnection(connectionString) :> IDbConnection
-    | MigrondiDriver.Sqlite -> new SqliteConnection(connectionString)
-    | MigrondiDriver.Mysql -> new MySqlConnection(connectionString)
-    | MigrondiDriver.Postgresql -> new NpgsqlConnection(connectionString)
-
-  let initializeDriver (driver: MigrondiDriver) =
-    let setup = GlobalConfiguration.Setup()
-
-    match driver with
-    | MigrondiDriver.Sqlite -> setup.UseSqlite()
-    | MigrondiDriver.Mssql -> setup.UseSqlServer()
-    | MigrondiDriver.Postgresql -> setup.UsePostgreSql()
-    | MigrondiDriver.Mysql -> setup.UseMySqlConnector()
-    |> ignore
+      new Microsoft.Data.SqlClient.SqlConnection(connectionString)
+      :> DbConnection
+    | MigrondiDriver.Sqlite ->
+      new Microsoft.Data.Sqlite.SqliteConnection(connectionString)
+    | MigrondiDriver.Mysql ->
+      new MySql.Data.MySqlClient.MySqlConnection(connectionString)
+    | MigrondiDriver.Postgresql -> new Npgsql.NpgsqlConnection(connectionString)
 
   let setupDatabase
-    (connection: IDbConnection)
+    (connection: DbConnection) // Changed IDbConnection to DbConnection
     (driver: MigrondiDriver)
     (tableName: string)
     =
-    initializeDriver driver
+    if connection.State <> ConnectionState.Open then
+      connection.Open()
 
     try
-      connection.ExecuteNonQuery(Queries.createTable driver tableName) |> ignore
+      use command = connection.CreateCommand()
+      command.CommandText <- Queries.createTable driver tableName
+      command.ExecuteNonQuery() |> ignore
     with ex ->
       if
         ex.Message.Contains(
@@ -224,37 +227,67 @@ module internal MigrationsImpl =
         reriseCustom(SetupDatabaseFailed)
 
 
-  let findMigration (connection: IDbConnection) tableName name =
-    let queryParams = QueryGroup([ QueryField("name", name) ])
+  let findMigration (connection: DbConnection) tableName name =
 
-    connection.Query<MigrationRecord>(
-      tableName = tableName,
-      where = queryParams
-    )
-    |> Seq.tryHead
+    use command = connection.CreateCommand()
 
-  let findLastApplied (connection: IDbConnection) tableName =
+    command.CommandText <-
+      $"SELECT id, name, timestamp FROM {tableName} WHERE name = @name"
 
-    connection.QueryAll<MigrationRecord>(
-      tableName = tableName,
-      orderBy = [
-        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
-      ]
-    )
-    |> Seq.tryHead
+    let param = command.CreateParameter()
+    param.ParameterName <- "@name"
+    param.Value <- name
+    command.Parameters.Add(param) |> ignore // Added |> ignore
 
-  let listMigrations (connection: IDbConnection) (tableName: string) =
-    connection.QueryAll<MigrationRecord>(
-      tableName = tableName,
-      orderBy = [
-        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
-      ]
-    )
-    |> Seq.toList
+    use reader = command.ExecuteReader()
+
+    if reader.Read() then
+      Some {
+        id = reader.GetInt32(0) // Assuming id is int, adjust if different
+        name = reader.GetString(1)
+        timestamp = reader.GetInt64(2)
+      }
+    else
+      None
+
+  let findLastApplied (connection: DbConnection) driver tableName =
+    use command = connection.CreateCommand()
+    command.CommandText <- Queries.getFirstResultQuery(tableName, driver)
+
+    use reader = command.ExecuteReader()
+
+    if reader.Read() then
+      Some {
+        id = reader.GetInt32(0)
+        name = reader.GetString(1)
+        timestamp = reader.GetInt64(2)
+      }
+    else
+      None
+
+  let listMigrations
+    (connection: DbConnection)
+    (tableName: string)
+    : MigrationRecord list = // Changed IDbConnection to DbConnection and return type
+    use command = connection.CreateCommand()
+
+    command.CommandText <-
+      $"SELECT id, name, timestamp FROM {tableName} ORDER BY timestamp DESC"
+
+    use reader = command.ExecuteReader()
+
+    [ // Using list comprehension
+      while reader.Read() do
+        {
+          id = reader.GetInt32(0)
+          name = reader.GetString(1)
+          timestamp = reader.GetInt64(2)
+        }
+    ]
 
   let runQuery
-    (logger: ILogger, connection: IDbConnection, tableName)
-    (migration, content, isUp)
+    (logger: ILogger, connection: DbConnection, tableName: string) // Changed to DbConnection
+    (migration: Migration, content: string, isUp: bool)
     =
     logger.LogDebug(
       "Applying migration {Name} with content: {Content}",
@@ -266,24 +299,36 @@ module internal MigrationsImpl =
       logger.LogDebug("Executing migration in manual transaction mode")
 
       try
-        connection.ExecuteNonQuery($"{content};;") |> ignore
+        if connection.State <> ConnectionState.Open then
+          connection.Open()
+
+        use command = connection.CreateCommand()
+        command.CommandText <- content
+        command.ExecuteNonQuery() |> ignore
 
         if isUp then
-          connection.Insert(
-            tableName = tableName,
-            entity = {|
-              name = migration.name
-              timestamp = migration.timestamp
-            |},
-            fields = Field.From("name", "timestamp")
-          )
-          |> ignore
+          use insertCmd = connection.CreateCommand()
+
+          insertCmd.CommandText <-
+            $"INSERT INTO {tableName} (name, timestamp) VALUES (@name, @timestamp)"
+
+          let nameParam = insertCmd.CreateParameter()
+          nameParam.ParameterName <- "@name"
+          nameParam.Value <- migration.name
+          insertCmd.Parameters.Add(nameParam) |> ignore
+          let tsParam = insertCmd.CreateParameter()
+          tsParam.ParameterName <- "@timestamp"
+          tsParam.Value <- migration.timestamp
+          insertCmd.Parameters.Add(tsParam) |> ignore
+          insertCmd.ExecuteNonQuery() |> ignore
         else
-          connection.Delete(
-            tableName = tableName,
-            where = QueryGroup([ QueryField("name", migration.name) ])
-          )
-          |> ignore
+          use deleteCmd = connection.CreateCommand()
+          deleteCmd.CommandText <- $"DELETE FROM {tableName} WHERE name = @name"
+          let nameParam = deleteCmd.CreateParameter()
+          nameParam.ParameterName <- "@name"
+          nameParam.Value <- migration.name
+          deleteCmd.Parameters.Add(nameParam) |> ignore
+          deleteCmd.ExecuteNonQuery() |> ignore
       with ex ->
         logger.LogError(
           "Failed to execute migration {Name} due: {Message}",
@@ -296,30 +341,42 @@ module internal MigrationsImpl =
         else
           raise(MigrationRollbackFailed migration)
     else
-      use transaction = connection.EnsureOpen().BeginTransaction()
+      if connection.State <> ConnectionState.Open then
+        connection.Open()
+
+      use transaction = connection.BeginTransaction()
 
       try
-        connection.ExecuteNonQuery($"{content};;", transaction = transaction)
-        |> ignore
+        use command = connection.CreateCommand()
+        command.CommandText <- content
+        command.Transaction <- transaction // Assign transaction
+        command.ExecuteNonQuery() |> ignore
 
         if isUp then
-          connection.Insert(
-            tableName = tableName,
-            entity = {|
-              name = migration.name
-              timestamp = migration.timestamp
-            |},
-            fields = Field.From("name", "timestamp"),
-            transaction = transaction
-          )
-          |> ignore
+          use insertCmd = connection.CreateCommand()
+
+          insertCmd.CommandText <-
+            $"INSERT INTO {tableName} (name, timestamp) VALUES (@name, @timestamp)"
+
+          insertCmd.Transaction <- transaction // Assign transaction
+          let nameParam = insertCmd.CreateParameter()
+          nameParam.ParameterName <- "@name"
+          nameParam.Value <- migration.name
+          insertCmd.Parameters.Add(nameParam) |> ignore
+          let tsParam = insertCmd.CreateParameter()
+          tsParam.ParameterName <- "@timestamp"
+          tsParam.Value <- migration.timestamp
+          insertCmd.Parameters.Add(tsParam) |> ignore
+          insertCmd.ExecuteNonQuery() |> ignore
         else
-          connection.Delete(
-            tableName = tableName,
-            where = QueryGroup([ QueryField("name", migration.name) ]),
-            transaction = transaction
-          )
-          |> ignore
+          use deleteCmd = connection.CreateCommand()
+          deleteCmd.CommandText <- $"DELETE FROM {tableName} WHERE name = @name"
+          deleteCmd.Transaction <- transaction // Assign transaction
+          let nameParam = deleteCmd.CreateParameter()
+          nameParam.ParameterName <- "@name"
+          nameParam.Value <- migration.name
+          deleteCmd.Parameters.Add(nameParam) |> ignore
+          deleteCmd.ExecuteNonQuery() |> ignore
 
         transaction.Commit()
       with ex ->
@@ -337,7 +394,7 @@ module internal MigrationsImpl =
           raise(MigrationRollbackFailed migration)
 
   let applyMigrations
-    (connection: IDbConnection)
+    (connection: DbConnection) // Changed to DbConnection
     (logger: ILogger)
     tableName
     (migrations: Migration list)
@@ -357,16 +414,25 @@ module internal MigrationsImpl =
 
       executeMigration(migration, content, true)
 
-    connection.QueryAll<MigrationRecord>(
-      tableName = tableName,
-      orderBy = [
-        OrderField.Descending(fun (record: MigrationRecord) -> record.timestamp)
-      ]
-    )
-    |> Seq.toList
+    // Replace RepoDB QueryAll with ADO.NET
+    use command = connection.CreateCommand()
+
+    command.CommandText <-
+      $"SELECT id, name, timestamp FROM {tableName} ORDER BY timestamp DESC"
+
+    use reader = command.ExecuteReader()
+
+    [ // Using list comprehension
+      while reader.Read() do
+        {
+          id = reader.GetInt32(0)
+          name = reader.GetString(1)
+          timestamp = reader.GetInt64(2)
+        }
+    ]
 
   let rollbackMigrations
-    (connection: IDbConnection)
+    (connection: DbConnection) // Changed to DbConnection
     (logger: ILogger)
     tableName
     (migrations: Migration list)
@@ -374,20 +440,37 @@ module internal MigrationsImpl =
     let executeMigration = runQuery(logger, connection, tableName)
 
     let rolledBack =
-      connection.Query<MigrationRecord>(
-        tableName = tableName,
-        where =
-          QueryField(
-            "name",
-            Operation.In,
-            migrations |> Seq.map(fun m -> m.name)
-          ),
-        orderBy = [
-          OrderField.Descending(fun (record: MigrationRecord) ->
-            record.timestamp
-          )
+      let migrationNames = migrations |> List.map(_.name)
+
+      if List.isEmpty migrationNames then
+        []
+      else
+        use command = connection.CreateCommand()
+
+        let namePlaceholders =
+          String.Join(",", migrationNames |> List.mapi(fun i _ -> $"@name{i}"))
+
+        command.CommandText <-
+          Queries.getResultsByNamesQuery tableName namePlaceholders
+
+        migrationNames
+        |> List.iteri(fun i name ->
+          let param = command.CreateParameter()
+          param.ParameterName <- $"@name{i}"
+          param.Value <- name
+          command.Parameters.Add(param) |> ignore
+        )
+
+        use reader = command.ExecuteReader()
+
+        [
+          while reader.Read() do
+            {
+              id = reader.GetInt32(0)
+              name = reader.GetString(1)
+              timestamp = reader.GetInt64(2)
+            }
         ]
-      )
 
 
     for migration in migrations do
@@ -408,20 +491,17 @@ module internal MigrationsImpl =
 module MigrationsAsyncImpl =
 
   let setupDatabaseAsync
-    (connection: IDbConnection)
+    (connection: DbConnection) // Changed IDbConnection to DbConnection
     (driver: MigrondiDriver)
     (tableName: string)
     =
     cancellableTask {
-      MigrationsImpl.initializeDriver driver
       let! token = CancellableTask.getCancellationToken()
 
       try
-        let! _ =
-          connection.ExecuteNonQueryAsync(
-            Queries.createTable driver tableName,
-            cancellationToken = token
-          )
+        use command = connection.CreateCommand()
+        command.CommandText <- Queries.createTable driver tableName
+        do! command.ExecuteNonQueryAsync(token) :> Task
 
         return ()
       with ex ->
@@ -436,57 +516,74 @@ module MigrationsAsyncImpl =
           reriseCustom(SetupDatabaseFailed)
     }
 
-  let findMigrationAsync (connection: IDbConnection) tableName name = cancellableTask {
-    let! token = CancellableTask.getCancellationToken()
-    let queryParams = QueryGroup([ QueryField("name", name) ])
+  let findMigrationAsync (connection: DbConnection) tableName name = cancellableTask { // Changed signature
+    let! token = CancellableTask.getCancellationToken() // Get token from context
+    use command = connection.CreateCommand()
 
-    let! result =
-      connection.QueryAsync<MigrationRecord>(
-        tableName = tableName,
-        where = queryParams,
-        cancellationToken = token
-      )
+    command.CommandText <-
+      $"SELECT id, name, timestamp FROM %s{tableName} WHERE name = @name"
 
-    return result |> Seq.tryHead
+    let param = command.CreateParameter()
+    param.ParameterName <- "@name"
+    param.Value <- name
+    command.Parameters.Add(param) |> ignore
+
+    use! reader = command.ExecuteReaderAsync(token) // Use token
+    let! result = reader.ReadAsync(token) // Use token
+
+    if result then
+      return
+        Some {
+          id = reader.GetInt32(0)
+          name = reader.GetString(1)
+          timestamp = reader.GetInt64(2)
+        }
+    else
+      return None
   }
 
-  let findLastAppliedAsync (connection: IDbConnection) tableName = cancellableTask {
-    let! token = CancellableTask.getCancellationToken()
+  let findLastAppliedAsync (connection: DbConnection) tableName = cancellableTask { // Changed signature
+    let! token = CancellableTask.getCancellationToken() // Get token from context
+    use command = connection.CreateCommand()
 
-    let! result =
-      connection.QueryAllAsync<MigrationRecord>(
-        tableName = tableName,
-        orderBy = [
-          OrderField.Descending(fun (record: MigrationRecord) ->
-            record.timestamp
-          )
-        ],
-        cancellationToken = token
-      )
+    command.CommandText <-
+      $"SELECT id, name, timestamp FROM %s{tableName} ORDER BY timestamp DESC LIMIT 1"
 
-    return result |> Seq.tryHead
+    use! reader = command.ExecuteReaderAsync(token) // Use token
+
+    if reader.Read() then
+      return
+        Some {
+          id = reader.GetInt32(0)
+          name = reader.GetString(1)
+          timestamp = reader.GetInt64(2)
+        }
+    else
+      return None
   }
 
-  let listMigrationsAsync (connection: IDbConnection) (tableName: string) = cancellableTask {
-    let! token = CancellableTask.getCancellationToken()
+  let listMigrationsAsync (connection: DbConnection) (tableName: string) = cancellableTask { // Changed signature
+    let! token = CancellableTask.getCancellationToken() // Get token from context
+    use command = connection.CreateCommand()
 
-    let! result =
-      connection.QueryAllAsync<MigrationRecord>(
-        tableName = tableName,
-        orderBy = [
-          OrderField.Descending(fun (record: MigrationRecord) ->
-            record.timestamp
-          )
-        ],
-        cancellationToken = token
-      )
+    command.CommandText <-
+      $"SELECT id, name, timestamp FROM %s{tableName} ORDER BY timestamp DESC"
 
-    return result |> Seq.toList
+    use! reader = command.ExecuteReaderAsync(token) // Use token
+
+    return [ // Using list comprehension
+      while reader.Read() do
+        {
+          id = reader.GetInt32(0)
+          name = reader.GetString(1)
+          timestamp = reader.GetInt64(2)
+        }
+    ]
   }
 
   let runQueryAsync
-    (logger: ILogger, connection: IDbConnection, tableName)
-    (migration, content, isUp)
+    (logger: ILogger, connection: DbConnection, tableName: string) // Changed to DbConnection
+    (migration: Migration, content: string, isUp: bool)
     =
     cancellableTask {
       logger.LogDebug(
@@ -501,34 +598,41 @@ module MigrationsAsyncImpl =
         logger.LogDebug("Executing migration in manual transaction mode")
 
         try
-          do!
-            connection.ExecuteNonQueryAsync(
-              $"%s{content};;",
-              cancellationToken = token
-            )
-            :> Task
+          if connection.State <> ConnectionState.Open then
+            do! connection.OpenAsync(token)
 
-          do!
-            if isUp then
-              connection.InsertAsync(
-                tableName = tableName,
-                entity = {|
-                  name = migration.name
-                  timestamp = migration.timestamp
-                |},
-                fields = Field.From("name", "timestamp"),
-                cancellationToken = token
-              )
-              :> Task
-            else
-              connection.DeleteAsync(
-                tableName = tableName,
-                where = QueryGroup([ QueryField("name", migration.name) ]),
-                cancellationToken = token
-              )
-              :> Task
+          use command = connection.CreateCommand()
+          command.CommandText <- content
+          do! command.ExecuteNonQueryAsync(token) :> Task
 
-          return ()
+          if isUp then
+            use insertCmd = connection.CreateCommand()
+
+            insertCmd.CommandText <-
+              $"INSERT INTO {tableName} (name, timestamp) VALUES (@name, @timestamp)"
+
+            let nameParam = insertCmd.CreateParameter()
+            nameParam.ParameterName <- "@name"
+            nameParam.Value <- migration.name
+            insertCmd.Parameters.Add(nameParam) |> ignore
+            let tsParam = insertCmd.CreateParameter()
+            tsParam.ParameterName <- "@timestamp"
+            tsParam.Value <- migration.timestamp
+            insertCmd.Parameters.Add(tsParam) |> ignore
+            do! insertCmd.ExecuteNonQueryAsync(token) :> Task
+            return ()
+          else
+            use deleteCmd = connection.CreateCommand()
+
+            deleteCmd.CommandText <-
+              $"DELETE FROM {tableName} WHERE name = @name"
+
+            let nameParam = deleteCmd.CreateParameter()
+            nameParam.ParameterName <- "@name"
+            nameParam.Value <- migration.name
+            deleteCmd.Parameters.Add(nameParam) |> ignore
+            do! deleteCmd.ExecuteNonQueryAsync(token) :> Task
+            return ()
         with ex ->
           logger.LogError(
             "Failed to execute migration {Name} due: {Message}",
@@ -541,40 +645,50 @@ module MigrationsAsyncImpl =
           else
             raise(MigrationRollbackFailed migration)
       else
-        use transaction = connection.EnsureOpen().BeginTransaction()
+        if connection.State <> ConnectionState.Open then
+          do! connection.OpenAsync(token)
+        // BeginTransaction is synchronous.
+        use! transaction = connection.BeginTransactionAsync(token)
 
         try
-          do!
-            connection.ExecuteNonQueryAsync(
-              $"{content};;",
-              transaction = transaction,
-              cancellationToken = token
-            )
-            :> Task
+          use command = connection.CreateCommand()
+          command.CommandText <- content
+          command.Transaction <- transaction
+          do! command.ExecuteNonQueryAsync(token) :> Task
 
-          do!
-            if isUp then
-              connection.InsertAsync(
-                tableName = tableName,
-                entity = {|
-                  name = migration.name
-                  timestamp = migration.timestamp
-                |},
-                fields = Field.From("name", "timestamp"),
-                transaction = transaction,
-                cancellationToken = token
-              )
-              :> Task
-            else
-              connection.DeleteAsync(
-                tableName = tableName,
-                where = QueryGroup([ QueryField("name", migration.name) ]),
-                transaction = transaction,
-                cancellationToken = token
-              )
-              :> Task
+          if isUp then
+            use insertCmd = connection.CreateCommand()
 
-          return transaction.Commit()
+            insertCmd.CommandText <-
+              $"INSERT INTO {tableName} (name, timestamp) VALUES (@name, @timestamp)"
+
+            insertCmd.Transaction <- transaction
+            let nameParam = insertCmd.CreateParameter()
+            nameParam.ParameterName <- "@name"
+            nameParam.Value <- migration.name
+            insertCmd.Parameters.Add(nameParam) |> ignore
+            let tsParam = insertCmd.CreateParameter()
+            tsParam.ParameterName <- "@timestamp"
+            tsParam.Value <- migration.timestamp
+            insertCmd.Parameters.Add(tsParam) |> ignore
+            do! insertCmd.ExecuteNonQueryAsync(token) :> Task
+            ()
+          else
+            use deleteCmd = connection.CreateCommand()
+
+            deleteCmd.CommandText <-
+              $"DELETE FROM {tableName} WHERE name = @name"
+
+            deleteCmd.Transaction <- transaction
+            let nameParam = deleteCmd.CreateParameter()
+            nameParam.ParameterName <- "@name"
+            nameParam.Value <- migration.name
+            deleteCmd.Parameters.Add(nameParam) |> ignore
+            do! deleteCmd.ExecuteNonQueryAsync(token) :> Task
+            ()
+
+          do! transaction.CommitAsync(token)
+          return ()
         with ex ->
           logger.LogError(
             "Failed to execute migration {Name} due: {Message}",
@@ -582,7 +696,7 @@ module MigrationsAsyncImpl =
             ex.Message
           )
 
-          transaction.Rollback()
+          do! transaction.RollbackAsync(token)
 
           if isUp then
             raise(MigrationApplicationFailed migration)
@@ -591,7 +705,7 @@ module MigrationsAsyncImpl =
     }
 
   let applyMigrationsAsync
-    (connection: IDbConnection)
+    (connection: DbConnection) // Changed to DbConnection
     (logger: ILogger)
     tableName
     (migrations: Migration list)
@@ -613,32 +727,66 @@ module MigrationsAsyncImpl =
 
         do! executeMigration(migration, content, true)
 
-      let! result =
-        connection.QueryAllAsync<MigrationRecord>(
-          tableName = tableName,
-          orderBy = [
-            OrderField.Descending(fun (record: MigrationRecord) ->
-              record.timestamp
-            )
-          ],
-          cancellationToken = token
-        )
+      // Replace RepoDB QueryAllAsync with ADO.NET
+      use command = connection.CreateCommand()
 
-      return result |> Seq.toList
+      command.CommandText <- Queries.getAllResultsQuery tableName
+
+      use! reader = command.ExecuteReaderAsync(token)
+
+      return [ // Using list comprehension
+        while reader.Read() do
+          {
+            id = reader.GetInt32(0)
+            name = reader.GetString(1)
+            timestamp = reader.GetInt64(2)
+          }
+      ]
     }
 
   let rollbackMigrationsAsync
-    (connection: IDbConnection)
+    (connection: DbConnection) // Changed to DbConnection
     (logger: ILogger)
     tableName
-    (migrations: Migration list)
+    (migrationsToRollback: Migration list) // Renamed for clarity
     =
     cancellableTask {
       let! token = CancellableTask.getCancellationToken()
-
       let executeMigration = runQueryAsync(logger, connection, tableName)
 
-      for migration in migrations do
+      // Get the records from DB *before* rolling them back to return them
+      let migrationNames = migrationsToRollback |> List.map(_.name)
+      let mutable rolledBackRecords = [] // Default to empty list
+
+      if not(List.isEmpty migrationNames) then
+        use command = connection.CreateCommand()
+
+        let namePlaceholders =
+          String.Join(",", migrationNames |> List.mapi(fun i _ -> $"@name{i}"))
+
+        command.CommandText <-
+          Queries.getResultsByNamesQuery tableName namePlaceholders
+
+        migrationNames
+        |> List.iteri(fun i name ->
+          let param = command.CreateParameter()
+          param.ParameterName <- $"@name{i}"
+          param.Value <- name
+          command.Parameters.Add(param) |> ignore
+        )
+
+        use! reader = command.ExecuteReaderAsync(token)
+
+        rolledBackRecords <- [
+          while reader.Read() do
+            {
+              id = reader.GetInt32(0)
+              name = reader.GetString(1)
+              timestamp = reader.GetInt64(2)
+            }
+        ]
+
+      for migration in migrationsToRollback do
         let content = migration.downContent
 
         if String.IsNullOrWhiteSpace(content) then
@@ -651,22 +799,11 @@ module MigrationsAsyncImpl =
 
         do! executeMigration(migration, content, false)
 
-      let! result =
-        connection.QueryAllAsync<MigrationRecord>(
-          tableName = tableName,
-          orderBy = [
-            OrderField.Descending(fun (record: MigrationRecord) ->
-              record.timestamp
-            )
-          ],
-          cancellationToken = token
-        )
-
-      return result |> Seq.toList
+      return rolledBackRecords // Return the records that were present before rollback
     }
 
 [<Class>]
-type MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
+type internal MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
 
   interface IMiDatabaseHandler with
 
@@ -674,17 +811,26 @@ type MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
 
+      if connection.State <> ConnectionState.Open then
+        connection.Open()
+
       MigrationsImpl.setupDatabase connection config.driver config.tableName
 
     member _.FindLastApplied() : MigrationRecord option =
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
 
-      MigrationsImpl.findLastApplied connection config.tableName
+      if connection.State <> ConnectionState.Open then
+        connection.Open()
+
+      MigrationsImpl.findLastApplied connection config.driver config.tableName
 
     member _.ApplyMigrations(migrations: Migration seq) =
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
+
+      if connection.State <> ConnectionState.Open then
+        connection.Open()
 
       migrations
       |> Seq.toList
@@ -695,42 +841,61 @@ type MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
 
+      if connection.State <> ConnectionState.Open then
+        connection.Open()
+
       MigrationsImpl.findMigration connection config.tableName name
 
     member _.ListMigrations() =
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
 
+      if connection.State <> ConnectionState.Open then
+        connection.Open()
+
       MigrationsImpl.listMigrations connection config.tableName
+      :> MigrationRecord IReadOnlyList // Added cast to IReadOnlyList
 
     member _.RollbackMigrations(migrations: Migration seq) =
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
+
+      if connection.State <> ConnectionState.Open then
+        connection.Open()
 
       migrations
       |> Seq.toList
       |> MigrationsImpl.rollbackMigrations connection logger config.tableName
       :> MigrationRecord IReadOnlyList
 
-    member _.FindLastAppliedAsync([<Optional>] ?cancellationToken) =
+    member _.FindLastAppliedAsync([<Optional>] ?cancellationToken) = task {
+      // Token for the outer task block is implicitly passed to cancellableTask
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
 
       let token = defaultArg cancellationToken CancellationToken.None
 
-      MigrationsAsyncImpl.findLastAppliedAsync connection config.tableName token
+      if connection.State <> ConnectionState.Open then
+        do! connection.OpenAsync(token)
 
+      return!
+        MigrationsAsyncImpl.findLastAppliedAsync
+          connection
+          config.tableName
+          token
+    }
 
     member _.ApplyMigrationsAsync
-      (
-        migrations: Migration seq,
-        [<Optional>] ?cancellationToken
-      ) =
+      (migrations: Migration seq, [<Optional>] ?cancellationToken)
+      =
       task {
         let token = defaultArg cancellationToken CancellationToken.None
 
         use connection =
           MigrationsImpl.getConnection(config.connection, config.driver)
+
+        if connection.State <> ConnectionState.Open then
+          do! connection.OpenAsync(token)
 
         let computation =
           migrations
@@ -745,15 +910,16 @@ type MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
       }
 
     member _.RollbackMigrationsAsync
-      (
-        migrations: Migration seq,
-        [<Optional>] ?cancellationToken
-      ) =
+      (migrations: Migration seq, [<Optional>] ?cancellationToken)
+      =
       task {
         let token = defaultArg cancellationToken CancellationToken.None
 
         use connection =
           MigrationsImpl.getConnection(config.connection, config.driver)
+
+        if connection.State <> ConnectionState.Open then
+          do! connection.OpenAsync(token)
 
         let computation =
           migrations
@@ -767,37 +933,53 @@ type MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
         return result :> IReadOnlyList<MigrationRecord>
       }
 
-    member _.SetupDatabaseAsync([<Optional>] ?cancellationToken) =
+    member _.SetupDatabaseAsync([<Optional>] ?cancellationToken) = task {
+
       let token = defaultArg cancellationToken CancellationToken.None
 
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
 
+      if connection.State <> ConnectionState.Open then
+        do! connection.OpenAsync(token)
 
-      MigrationsAsyncImpl.setupDatabaseAsync
-        connection
-        config.driver
-        config.tableName
-        token
+      return!
+        MigrationsAsyncImpl.setupDatabaseAsync
+          connection
+          config.driver
+          config.tableName
+          token
+    }
 
 
-    member _.FindMigrationAsync(name: string, [<Optional>] ?cancellationToken) =
-      let token = defaultArg cancellationToken CancellationToken.None
+    member _.FindMigrationAsync(name: string, [<Optional>] ?cancellationToken) = task {
 
+      // Token for the outer task block is implicitly passed to cancellableTask
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
 
-      MigrationsAsyncImpl.findMigrationAsync
-        connection
-        config.tableName
-        name
-        token
+      let token = defaultArg cancellationToken CancellationToken.None
+
+      if connection.State <> ConnectionState.Open then
+        do! connection.OpenAsync(token)
+
+      return!
+        MigrationsAsyncImpl.findMigrationAsync
+          connection
+          config.tableName
+          name
+          token
+    }
 
     member _.ListMigrationsAsync([<Optional>] ?cancellationToken) = task {
-      let token = defaultArg cancellationToken CancellationToken.None
-
+      // Token for the outer task block is implicitly passed to cancellableTask
       use connection =
         MigrationsImpl.getConnection(config.connection, config.driver)
+
+      let token = defaultArg cancellationToken CancellationToken.None
+
+      if connection.State <> ConnectionState.Open then
+        do! connection.OpenAsync(token)
 
       let! result =
         MigrationsAsyncImpl.listMigrationsAsync

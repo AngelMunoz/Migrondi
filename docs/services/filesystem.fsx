@@ -1,98 +1,136 @@
 (**
 ---
-title: FileSystem Service
+title: Custom Migration Source
 category: Core
 categoryindex: 3
 index: 2
 ---
 
-The `IMiFileSystem` object is one of the most likely object to replace if you're implementing your own storage mechanism. It is used to read and write files.
-
+The `IMiMigrationSource` interface is the primary extension point for implementing custom storage mechanisms. It allows you to provide raw migration and configuration content from any source (HTTP, S3, In-Memory, etc.), while the library handles all internal logic for parsing and managing migrations.
 *)
 
-#r "nuget: Migrondi.Core, 1.0.0-beta-010"
+#r "../../src/Migrondi.Core/bin/Debug/net8.0/Migrondi.Core.dll"
+#r "nuget: Microsoft.Extensions.Logging.Console, 9.0.0"
 
 open System
-open Migrondi.Core.FileSystem
-open Migrondi.Core.Serialization
+open System.Threading
+open System.Threading.Tasks
 open Microsoft.Extensions.Logging
+open System.Runtime.InteropServices
+open Migrondi.Core
+open Migrondi.Core.FileSystem
 
 let logger =
   // create a sample logger, you can provide your own
   LoggerFactory.Create(fun builder -> builder.AddConsole() |> ignore)
   |> fun x -> x.CreateLogger("FileSystem")
 
-let serializer = MigrondiSerializer()
-
-let rootDir = Uri("https://my-storage.com/project-a/", UriKind.Absolute)
-let migrationsDir = Uri("./migrations/", UriKind.Relative)
+// Example URIs for documentation purposes
+let rootDir = Uri("https://example.com/project/", UriKind.Absolute)
+let migrationsDir = Uri("migrations/", UriKind.Relative)
 
 (**
-> ***NOTE***: Please keep in mind that URI objects treat trailing shashes differently, since we're using them to represent directories. The `Uri` object must contain the trailing slash from the `rootDir` and `migrationsDir` objects.
+> ***NOTE***: Please keep in mind that URI objects treat trailing slashes differently, since we're using them to represent directories. The `Uri` object must contain the trailing slash from the `rootDir` and `migrationsDir` objects.
 > If you fail to ensure the trailing slash is there, the library will not work as expected.
 *)
 
-let fs: IMiFileSystem =
-  MiFileSystem(logger, serializer, serializer, rootDir, migrationsDir)
-
 (**
-In order to list the migrations in the file system, you can call the `ListMigrations(targetDirectory)` method.
+## URI-based Path Handling
+
+Migrondi uses URIs internally to represent both local and remote paths. This abstraction allows you to implement sources that work with:
+- Local file system (using file:// URIs)
+- Cloud storage (using http:// or https:// URIs)
+- Virtual file systems
+- Databases as file storage
+
+The migration source is used by the internal file system service. You can provide your own implementation via the `source` parameter in `MigrondiFactory`.
 *)
 
-fs.ListMigrations("./")
-
 (**
-Internally this will build the URI from the `rootDir` and `migrationsDir` objects, and then list the files in the directory.
+## Custom Migration Sources
 
-So you have to keep into consideration how will you take external paths and convert them into URIs to be used by the library.
-This is mainly an implementation detail, but it's important to keep in mind when you're implementing your own `IMiFileSystem` object.
-A simplified way to list the migrations internally that we currently do is similar to the following:
+To implement a custom storage backend, you implement the `IMiMigrationSource` interface. This interface deals strictly with raw strings and URIs, ensuring you don't have to worry about the internal migration format or serialization.
+
+Using an object expression is the recommended way to implement this interface:
 *)
 
-// usually "readFrom" is the content of config.migrationsDir
-let listMigrations (readFrom: string) =
-  let path = Uri(rootDir, readFrom)
-  let dir = IO.DirectoryInfo(path.LocalPath)
-  // list all files in the directory
-  // filter out the ones that are migrations (we have a specific schema for the file name)
-  // for each found file, decode the text and return  migration object otherwise return an error
-  []
+let createCustomSource (logger: ILogger) =
+  { new IMiMigrationSource with
+      member _.ReadContent(uri: Uri) =
+        logger.LogDebug("Reading content from {Path}", uri.ToString())
+        // Implement your sync read logic here
+        "SQL CONTENT"
+
+      member _.ReadContentAsync
+        (uri: Uri, [<Optional>] ?cancellationToken: CancellationToken)
+        =
+        task {
+          logger.LogDebug(
+            "Reading content asynchronously from {Path}",
+            uri.ToString()
+          )
+          // Implement your async read logic here
+          return "SQL CONTENT"
+        }
+
+      member _.WriteContent(uri: Uri, content: string) =
+        logger.LogDebug("Writing content to {Path}", uri.ToString())
+        // Implement your sync write logic here
+        ()
+
+      member _.WriteContentAsync
+        (
+          uri: Uri,
+          content: string,
+          [<Optional>] ?cancellationToken: CancellationToken
+        ) =
+        task {
+          logger.LogDebug(
+            "Writing content asynchronously to {Path}",
+            uri.ToString()
+          )
+          // Implement your async write logic here
+          ()
+        }
+
+      member _.ListFiles(locationUri: Uri) =
+        logger.LogDebug("Listing files in {Path}", locationUri.ToString())
+        // Return a sequence of URIs for migrations at this location
+        Seq.empty
+
+      member _.ListFilesAsync
+        (locationUri: Uri, [<Optional>] ?cancellationToken: CancellationToken)
+        =
+        task {
+          logger.LogDebug(
+            "Listing files asynchronously in {Path}",
+            locationUri.ToString()
+          )
+          // Return URIs asynchronously
+          return Seq.empty
+        }
+  }
 
 (**
-When you read a migration file specifically you can call the `ReadMigration(readFrom)` method.
+## Usage with MigrondiFactory
 
-This readFrom is the relative path to the `migrationsDir` objects including the name of the file.
-e.g.
-*)
+Once you have your custom source, you can pass it to the factory. Migrondi will wrap it in its internal file system service, providing all the listing, filtering, and parsing logic automatically.
 
-fs.ReadMigration("initial-tables_1708216610033.sql")
+```fsharp
+let config = MigrondiConfig.Default
+let mySource = createCustomSource logger
 
-(**
-This will build the URI from the `rootDir` and `migrationsDir` objects, and then read the file. Internally it looks like this:
-*)
-
-let readMigration (readFrom: string) =
-  let path = Uri(rootDir, Uri(migrationsDir, readFrom))
-  let file = IO.File.ReadAllText(path.LocalPath)
-  let migration = (serializer :> IMiMigrationSerializer).DecodeText(file)
-  migration
-
-(**
-Writing a migration is similar, and usually we don't write migrations directly, but we do it through the serializers.
-*)
-
-
-fs.WriteMigration(
-  {
-    name = "initial-tables_1708216610033"
-    timestamp = DateTimeOffset.Now.ToUnixTimeMilliseconds()
-    upContent = "CREATE TABLE users (id INT, name VARCHAR(255));"
-    downContent = "DROP TABLE users;"
-    manualTransaction = false
-  },
-  "initial-tables_1708216610033.sql"
+let migrondi = Migrondi.MigrondiFactory(
+    config,
+    rootDirectory = ".",
+    source = mySource
 )
+```
 
-(**
-In this case it just means that you need to know how you will want to store the migrations in your own backing store.
+## Benefits of the Source Abstraction
+
+By using `IMiMigrationSource` instead of implementing the full file system:
+1. **Simplified API**: You only handle raw string transfers.
+2. **Encapsulated Serialization**: You don't need to know how Migrondi encodes migrations (Regex, JSON, etc.).
+3. **Internal Consistency**: The library ensures that migrations are listed, filtered, and ordered correctly regardless of where they are stored.
 *)

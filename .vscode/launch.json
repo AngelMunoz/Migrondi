@@ -9,7 +9,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/net9.0/win-x64/Migrondi.dll",
             "args": [
                 "init"
             ],
@@ -22,7 +22,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/net9.0/win-x64/Migrondi.dll",
             "args": [
                 "new",
                 "-n",
@@ -37,11 +37,11 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/net9.0/win-x64/Migrondi.dll",
             "args": [
                 "up"
             ],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/samples/sqlite",
             "stopAtEntry": false,
             "console": "internalConsole",
         },
@@ -50,7 +50,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/net9.0/win-x64/Migrondi.dll",
             "args": [
                 "up",
                 "-t",
@@ -65,11 +65,11 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/net9.0/win-x64/Migrondi.dll",
             "args": [
                 "down"
             ],
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/samples/sqlite",
             "stopAtEntry": false,
             "console": "internalConsole",
         },
@@ -78,7 +78,7 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build",
-            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/netcoreapp3.1/Migrondi.dll",
+            "program": "${workspaceFolder}/src/Migrondi/bin/Debug/net9.0/win-x64/Migrondi.dll",
             "args": [
                 "down",
                 "-t",

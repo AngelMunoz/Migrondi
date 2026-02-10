@@ -19,15 +19,12 @@ type CoreTests() =
             "add products table",
             1686280663373L)>]
   member _.``Can extract name and timestamp from migration file name``
-    (
-      filename: string,
-      expectedName: string,
-      expectedTimestamp: int64
-    ) =
+    (filename: string, expectedName: string, expectedTimestamp: int64)
+    =
     match Migration.ExtractFromFilename filename with
     | Ok(name, timestamp) ->
-      Assert.AreEqual(expectedName, name)
-      Assert.AreEqual(expectedTimestamp, timestamp)
+      Assert.AreEqual<string>(expectedName, name)
+      Assert.AreEqual<int64>(expectedTimestamp, timestamp)
     | Error error ->
       let error = String.Join(Environment.NewLine, error)
       Assert.Fail(error)
@@ -43,15 +40,12 @@ type CoreTests() =
             "add products table",
             1686280663373L)>]
   member _.``Can extract name and timestamp from migration file path name``
-    (
-      filepath: string,
-      expectedName: string,
-      expectedTimestamp: int64
-    ) =
+    (filepath: string, expectedName: string, expectedTimestamp: int64)
+    =
     match Migration.ExtractFromPath filepath with
     | Ok(name, timestamp) ->
-      Assert.AreEqual(expectedName, name)
-      Assert.AreEqual(expectedTimestamp, timestamp)
+      Assert.AreEqual<string>(expectedName, name)
+      Assert.AreEqual<int64>(expectedTimestamp, timestamp)
     | Error error ->
       let error = String.Join(Environment.NewLine, error)
       Assert.Fail(error)

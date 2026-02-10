@@ -12,7 +12,7 @@ open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
 
 [<RequireQualifiedAccess>]
-module Init =
+module internal Init =
   let handler (path: DirectoryInfo, fs: IMiFileSystem, logger: ILogger) =
     logger.LogInformation(
       "Initializing a new migrondi project at: {PathName}.",
@@ -33,16 +33,18 @@ module Init =
 
 
 [<RequireQualifiedAccess>]
-module Migrations =
+module internal Migrations =
 
-  let newMigration (name: string, logger: ILogger, migrondi: IMigrondi) =
+  let newMigration
+    (name: string, manualTransaction: bool option, logger: ILogger, migrondi: IMigrondi)
+    =
     logger.LogInformation(
       "Creating a new migration with name: {MigrationName}.",
       name
     )
 
     try
-      let migration =  migrondi.RunNew(name)
+      let migration = migrondi.RunNew(name, ?manualTransaction = manualTransaction)
 
       logger.LogInformation(
         "Migration {MigrationName} created successfully.",
@@ -176,10 +178,8 @@ module Migrations =
       AnsiConsole.Write table
 
     let printBothMigrationsTable
-      (
-        table: Table,
-        migrations: MigrationStatus seq
-      ) =
+      (table: Table, migrations: MigrationStatus seq)
+      =
 
       table.AddColumns(
         TableColumn(Markup("[green]Status[/]")),
