@@ -36,11 +36,19 @@ type IMigrondi =
   /// <param name="downContent">
   /// The content of the down migration
   /// </param>
+  /// <param name="manualTransaction">
+  /// Whether to execute the migration without an enclosing transaction.
+  /// Useful for operations like CREATE INDEX CONCURRENTLY.
+  /// </param>
   /// <returns>
   /// The newly created migration as a record
   /// </returns>
   abstract member RunNew:
-    friendlyName: string * [<Optional>] ?upContent: string * [<Optional>] ?downContent: string -> Migration
+    friendlyName: string *
+    [<Optional>] ?upContent: string *
+    [<Optional>] ?downContent: string *
+    [<Optional>] ?manualTransaction: bool ->
+      Migration
 
   /// <summary>
   /// Creates a new migration file with
@@ -56,6 +64,10 @@ type IMigrondi =
   /// <param name="downContent">
   /// The content of the down migration
   /// </param>
+  /// <param name="manualTransaction">
+  /// Whether to execute the migration without an enclosing transaction.
+  /// Useful for operations like CREATE INDEX CONCURRENTLY.
+  /// </param>
   /// <param name="cancellationToken">
   /// A cancellation token to cancel the operation
   /// </param>
@@ -66,6 +78,7 @@ type IMigrondi =
     friendlyName: string *
     [<Optional>] ?upContent: string *
     [<Optional>] ?downContent: string *
+    [<Optional>] ?manualTransaction: bool *
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration>
 
@@ -161,37 +174,22 @@ module internal MigrondiserviceImpl =
 [<Class>]
 type Migrondi =
   /// <summary>
-  /// Generates a new Migrondi service, this can be further customized by passing in a custom database service
-  /// a custom file system service and a custom logger.
-  ///
-  /// Please keep in mind that both the file system implementation can also be async, not just synchronous
-  /// for other use cases.
-  /// </summary>
-  /// <param name="config">A configuration object to be able to find the connection string for the database.</param>
-  /// <param name="database">A database service that can be used to run migrations against the database</param>
-  /// <param name="fileSystem">A file system service that can be used to read and write migrations</param>
-  /// <param name="logger"></param>
-  /// <returns>A new Migrondi service</returns>
-  internal new:
-    config: MigrondiConfig * database: IMiDatabaseHandler * fileSystem: IMiFileSystem * logger: ILogger -> Migrondi
-
-  /// <summary>
   /// Generates a new Migrondi service with default implementations.
-  /// Optionally, you can provide a custom file system implementation.
+  /// Optionally, you can provide a custom migration source implementation (HTTP, S3, Azure Blob, etc.).
   /// </summary>
   /// <param name="config">A configuration object to be able to find the connection string for the database.</param>
   /// <param name="rootDirectory">The root directory path for the project.</param>
   /// <param name="logger">An optional logger for diagnostics.</param>
-  /// <param name="miFileSystem">An optional custom file system implementation.</param>
+  /// <param name="migrationSource">An optional custom migration source implementation (HTTP, S3, Azure Blob, etc.).</param>
   /// <returns>A new Migrondi service</returns>
   /// <remarks>
-  /// When <c>miFileSystem</c> is not provided, a default implementation using the local file system is used.
+  /// When <c>migrationSource</c> is not provided, a default implementation using the local file system is used.
   /// </remarks>
   static member MigrondiFactory:
     config: MigrondiConfig *
     rootDirectory: string *
-    [<Optional>] ?logger: ILogger<IMigrondi> *
-    [<Optional>] ?miFileSystem: IMiFileSystem ->
+    [<Optional>] ?logger: ILogger *
+    [<Optional>] ?migrationSource: IMiMigrationSource ->
       IMigrondi
 
   interface IMigrondi

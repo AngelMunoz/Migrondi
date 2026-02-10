@@ -230,7 +230,11 @@ type FileSystemTests() =
       )
 
     match validations with
-    | Ok validations -> validations |> List.iter Assert.AreEqual<string>
+    | Ok validations ->
+      validations
+      |> List.iter(fun (expected, actual) ->
+        Assert.AreEqual<string>(expected, actual)
+      )
     | Error errs ->
       let errors = String.Join('\n', errs)
       Assert.Fail("Could not validate files:\n" + errors)
@@ -280,7 +284,11 @@ type FileSystemTests() =
         })
 
       match validations with
-      | Ok validations -> validations |> List.iter Assert.AreEqual<string>
+      | Ok validations ->
+        validations
+        |> List.iter(fun (expected, actual) ->
+          Assert.AreEqual<string>(expected, actual)
+        )
       | Error errs ->
         let errors = String.Join('\n', errs)
         Assert.Fail("Could not validate files:\n" + errors)

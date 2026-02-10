@@ -138,10 +138,16 @@ type SerializationTests() =
     Assert.AreEqual<string>(MigrationData.jsonMigrationSample, encoded)
 
   [<TestMethod>]
-  member _.``Can Encode Text Migration v1``() =
-    let actual = migrationSerializer.EncodeText(MigrationData.migrationObject)
+  member _.``Can Encode Text Migration v1 with Manual Transaction``() =
+    let actual =
+      migrationSerializer.EncodeText(
+        {
+          MigrationData.migrationObject with
+              manualTransaction = true
+        }
+      )
 
-    let expected = MigrationData.textMigrationSampleV1
+    let expected = MigrationData.textMigrationSampleV1ManualTransaction
     Assert.AreEqual<string>(expected, actual)
 
   [<TestMethod>]

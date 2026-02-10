@@ -25,13 +25,15 @@ type IMigrondi =
   abstract member RunNew:
     friendlyName: string *
     [<Optional>] ?upContent: string *
-    [<Optional>] ?downContent: string ->
+    [<Optional>] ?downContent: string *
+    [<Optional>] ?manualTransaction: bool ->
       Migration
 
   abstract member RunNewAsync:
     friendlyName: string *
     [<Optional>] ?upContent: string *
     [<Optional>] ?downContent: string *
+    [<Optional>] ?manualTransaction: bool *
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration>
 
@@ -523,26 +525,29 @@ type Migrondi
     logger: ILogger
   ) =
 
-  let getMigration (name, timestamp, upContent, downContent) = {
-    name = name
-    timestamp = timestamp
-    upContent =
-      defaultArg
-        upContent
-        "-- Add your SQL migration code below. You can delete this line but do not delete the comments above.\n\n"
-    downContent =
-      defaultArg
-        downContent
-        "-- Add your SQL rollback code below. You can delete this line but do not delete the comment above.\n\n"
-    manualTransaction = false
-  }
+  let getMigration
+    (name, timestamp, upContent, downContent, manualTransaction)
+    =
+    {
+      name = name
+      timestamp = timestamp
+      upContent =
+        defaultArg
+          upContent
+          "-- Add your SQL migration code below. You can delete this line but do not delete the comments above.\n\n"
+      downContent =
+        defaultArg
+          downContent
+          "-- Add your SQL rollback code below. You can delete this line but do not delete comment above.\n\n"
+      manualTransaction = defaultArg manualTransaction false
+    }
 
   static member MigrondiFactory
     (
       config: MigrondiConfig,
       rootDirectory: string,
-      [<Optional>] ?logger: ILogger<IMigrondi>,
-      [<Optional>] ?miFileSystem: IMiFileSystem
+      [<Optional>] ?logger: ILogger,
+      [<Optional>] ?migrationSource: IMiMigrationSource
     ) : IMigrondi =
 
     let logger =
@@ -579,15 +584,14 @@ type Migrondi
         )
 
     let fileSystem =
-      defaultArg
-        miFileSystem
-        (MiFileSystem(
-          logger,
-          serializer,
-          serializer,
-          projectRoot,
-          migrationsDir
-        ))
+      MiFileSystem(
+        logger,
+        serializer,
+        serializer,
+        projectRoot,
+        migrationsDir,
+        ?source = migrationSource
+      )
 
     Migrondi(config, database, fileSystem, logger)
 
@@ -600,12 +604,17 @@ type Migrondi
       database.SetupDatabaseAsync(token)
 
     member _.RunNew
-      (friendlyName, [<Optional>] ?upContent, [<Optional>] ?downContent)
-      : Migration =
+      (
+        friendlyName,
+        [<Optional>] ?upContent,
+        [<Optional>] ?downContent,
+        [<Optional>] ?manualTransaction
+      ) : Migration =
       let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
       let name = $"{timestamp}_{friendlyName}.sql"
 
-      let migration = getMigration(name, timestamp, upContent, downContent)
+      let migration =
+        getMigration(name, timestamp, upContent, downContent, manualTransaction)
 
       fileSystem.WriteMigration(migration, name)
       migration
@@ -615,6 +624,7 @@ type Migrondi
         friendlyName,
         [<Optional>] ?upContent,
         [<Optional>] ?downContent,
+        [<Optional>] ?manualTransaction,
         [<Optional>] ?cancellationToken
       ) =
       let token = defaultArg cancellationToken CancellationToken.None
@@ -622,7 +632,16 @@ type Migrondi
       task {
         let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         let name = $"{timestamp}_{friendlyName}.sql"
-        let migration = getMigration(name, timestamp, upContent, downContent)
+
+        let migration =
+          getMigration(
+            name,
+            timestamp,
+            upContent,
+            downContent,
+            manualTransaction
+          )
+
         do! fileSystem.WriteMigrationAsync(migration, name, token)
 
         return migration

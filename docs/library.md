@@ -4,27 +4,27 @@ category: Overview
 categoryindex: 2
 ---
 
-From v1 and onwards Migrondi was built to be used as a library. This means that you can use Migrondi to run your own migrations from F# or C# code. and perhaps even extend Migrondi functionality. with your own.
+From v1 and onwards Migrondi was built to be used as a library. This means that you can use Migrondi to run your own migrations from F# or C# code and even extend Migrondi functionality with your own storage providers.
 
 ## Terminology
 
 I try to be consistent with the terminology used in the library, in case you find something out of place please let me know.
 
-- FileSystem: the file system is where migrations are stored locally, it does not necessarily mean the local file system, it could be a remote file system as well in case of custom implementations.
+- **Migration Source**: This is where your migrations are stored. While Migrondi provides a default local implementation, you can provide your own by implementing the `IMiMigrationSource` interface. This allows you to store migrations in remote locations like S3, Azure Blob, or via a Web API.
 
-  - Source or sources - source in the context of the file system represents a location that contains text, usually these would be called files, but since the file system is not necessarily local, I prefer to call them sources.
+- **Migration**: A representation of a migration "file" or source. It contains the actual SQL statements for both `Up` (apply) and `Down` (rollback) operations.
 
-- Database: The database is the one specified with the connection string in the configuration object, and is the target of all of the migrondi operations.
+- **Migration Record**: A record stored in the database that tracks which migrations have been applied. It only contains metadata (name, timestamp) to identify the migration.
 
-  - Source or sources: When we're performing reading operations, source in the context of the database represents a migration already applied to the database. If we're performing writing operations, then the source is a `Migration` object that is going to be applied to the database not a file from the file system.
+- **Database**: The target of all Migrondi operations, specified via the connection string in your configuration.
 
-- Up: Up is often referred as the operation to apply a migration to the database, this is the operation that will be performed when running `migrondi up` from the command line.
+- **Up**: The operation to apply a migration to the database.
 
-- Down: Down is often referred as the operation to revert a migration from the database, this is the operation that will be performed when running `migrondi down` from the command line.
+- **Down**: The operation to revert a migration from the database.
 
-- Pending:
-  - When we'retalking about an `UP` operation, pending means that the migration has not been applied to the database.
-  - When we're talking about a `DOWN` operation, pending means that the migration has been applied to the database.
+- **Pending**:
+  - When talking about an `UP` operation, pending means that the migration has not been applied to the database.
+  - When talking about a `DOWN` operation, pending means that the migration has been applied to the database (it's "pending" for rollback).
 
 ## URI Handling
 
@@ -50,44 +50,26 @@ First, get it from NuGet
 
 > `dotnet add package Migrondi.Core`
 
-After that most of the core is under it's own namespage e.g.
+The main entry point for the library is the `IMigrondi` interface, created via the `MigrondiFactory`.
 
-- `Migrondi.Core.Database`
-- `Migrondi.Core.Migrondi`
+```fsharp
+open Migrondi.Core
 
-The ideal is to build up a `MigrondiService` instance which will work as the main interface for your code to handle the library.
+let config = MigrondiConfig.Default
+let migrondi = Migrondi.MigrondiFactory(config, ".")
+```
 
-The service is nothing too crazy it provides basic functionality to run migrations and related operations.
+The service provides functionality to run migrations and related operations:
 
-- RunUp
-- RunDown
-- DryRunUp
-- DryRunDown
-- MigrationsList
-- ScriptStatus
+- `RunUp` / `RunUpAsync`
+- `RunDown` / `RunDownAsync`
+- `DryRunUp` / `DryRunUpAsync`
+- `DryRunDown` / `DryRunDownAsync`
+- `MigrationsList` / `MigrationsListAsync`
+- `ScriptStatus` / `ScriptStatusAsync`
 
-The same service provides also an async version of the same methods
+For more detailed information, check out:
 
-- RunUpAsync
-- RunDownAsync
-- DryRunUpAsync
-- DryRunDownAsync
-- MigrationsListAsync
-- ScriptStatusAsync
-
-While you could do this entirely on your own, there are some helper methods that you can use to get started, but for that you will need a couple of services as well.
-
-- `Migrondi.MigrondiFactory`
-
-That is a factory method that will create a new instance of the `IMigrondi` class.
-
-Feel free to check the [F# Scripts](./examples/fsharp.fsx) section to see a direct example of how to use the library in the most straight forward way.
-
-The `Migrondi.MigrondiFactory` method returns a `IMigrondi` object provides the already orchestrated services that will work on a local file system although if you want to use migrondi for something custom (e.g. across network) you could implement your own services
-
-For a more detailed information about the services check out
-
-- [Database](./services/database.fsx)
-- [FileSystem](./services/filesystem.fsx)
-- [Migrondi](./services/migrondi.md)
-- [Serialization](./services/serialization.md)
+- [Main Service API (IMigrondi)](./services/migrondi.md)
+- [Custom Migration Sources (IMiMigrationSource)](./services/filesystem.fsx)
+- [F# Scripts Examples](./examples/fsharp.fsx)

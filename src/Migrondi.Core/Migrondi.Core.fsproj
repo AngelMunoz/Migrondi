@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <Description>
       This is the core library for the Migrondi CLI, you can use this
       library to run the same functionality of Migrondi as part of your source
@@ -32,15 +32,15 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
-    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.0.0" />
-    <PackageReference Include="IcedTasks" Version="0.11.3" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.6" />
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.1.0" />
+    <PackageReference Include="IcedTasks" Version="0.11.9" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.6" />
-    <PackageReference Include="Thoth.Json.Net" Version="11.0.0" />
+    <PackageReference Include="Thoth.Json.Net" Version="12.0.0" />
     <!-- RepoDB Packages to handle SQL Servers -->
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.6" />
-    <PackageReference Include="Npgsql" Version="9.0.3" />
-    <PackageReference Include="MySql.Data" Version="9.3.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
+    <PackageReference Include="Npgsql" Version="10.0.1" />
+    <PackageReference Include="MySql.Data" Version="9.6.0" />
   </ItemGroup>
 </Project>

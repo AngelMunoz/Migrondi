@@ -350,10 +350,7 @@ type DatabaseTests() =
           | countVal ->
             let c = Convert.ToInt64(countVal)
 
-            if c = 0L then
-              return ()
-            else
-              return! Error msg
+            if c = 0L then return () else return! Error msg
         }
 
         do! checkTableIsEmpty connection "test_1"
@@ -495,8 +492,10 @@ type DatabaseTests() =
     ]
 
     let thrown =
-      Assert.ThrowsException<MigrationApplicationFailed>(
-        Action (fun () -> databaseEnv.ApplyMigrations(runnableMigrations) |> ignore)
+      Assert.ThrowsExactly<MigrationApplicationFailed>(
+        Action(fun () ->
+          databaseEnv.ApplyMigrations(runnableMigrations) |> ignore
+        )
       )
 
     Assert.AreEqual(failingMigration, thrown.Migration)
@@ -537,10 +536,10 @@ type DatabaseTests() =
     ]
 
     let thrown =
-      Assert.ThrowsException<MigrationRollbackFailed>(
-        Action (fun () ->
-                databaseEnv.RollbackMigrations(runnableMigrations) |> ignore
-              )
+      Assert.ThrowsExactly<MigrationRollbackFailed>(
+        Action(fun () ->
+          databaseEnv.RollbackMigrations(runnableMigrations) |> ignore
+        )
       )
 
     Assert.AreEqual(failingMigration, thrown.Migration)
