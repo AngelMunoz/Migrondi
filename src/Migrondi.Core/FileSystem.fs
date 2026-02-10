@@ -222,9 +222,10 @@ module PhysicalFileSystemImpl =
     ) =
     cancellableTask {
       let path = Uri(projectRoot, UMX.untag readFrom)
+      let! token = CancellableTask.getCancellationToken()
       logger.LogDebug("Reading configuration from {Path}", path.ToString())
 
-      let! contents = source.ReadContentAsync path
+      let! contents = source.ReadContentAsync(path, token)
 
       try
         return serializer.Decode contents
@@ -263,6 +264,7 @@ module PhysicalFileSystemImpl =
     ) =
     cancellableTask {
       let path = Uri(projectRoot, UMX.untag writeTo)
+      let! token = CancellableTask.getCancellationToken()
 
       logger.LogDebug(
         "Writing configuration to {Path}, constructed from {WriteTo}",
@@ -270,7 +272,7 @@ module PhysicalFileSystemImpl =
         writeTo
       )
 
-      do! source.WriteContentAsync(path, serializer.Encode config)
+      do! source.WriteContentAsync(path, serializer.Encode config, token)
     }
 
   let readMigration
@@ -306,6 +308,7 @@ module PhysicalFileSystemImpl =
     ) =
     cancellableTask {
       let path = Uri(migrationsDir, UMX.untag migrationName)
+      let! token = CancellableTask.getCancellationToken()
 
       logger.LogDebug(
         "Reading migration from {Path} with name: {MigrationName}",
@@ -313,7 +316,7 @@ module PhysicalFileSystemImpl =
         migrationName
       )
 
-      let! contents = source.ReadContentAsync path
+      let! contents = source.ReadContentAsync(path, token)
 
       try
         return serializer.DecodeText contents
@@ -353,6 +356,7 @@ module PhysicalFileSystemImpl =
     ) =
     cancellableTask {
       let path = Uri(migrationsDir, UMX.untag migrationName)
+      let! token = CancellableTask.getCancellationToken()
 
       logger.LogDebug(
         "Writing migration to {Path} with directory: {MigrationsDirectory} and name: {MigrationName}",
@@ -361,7 +365,7 @@ module PhysicalFileSystemImpl =
         migrationName
       )
 
-      do! source.WriteContentAsync(path, serializer.EncodeText migration)
+      do! source.WriteContentAsync(path, serializer.EncodeText migration, token)
     }
 
   let listMigrations
@@ -419,21 +423,23 @@ module PhysicalFileSystemImpl =
         migrationsDir
       )
 
-      let! uris = source.ListFilesAsync path
+      let! uris = source.ListFilesAsync(path, token)
 
       let! files =
-        uris
-        |> Seq.map(fun uri -> async {
-          let! token' = Async.CancellationToken
-          let name = uri.Segments |> Array.last
+        let ops =
+          uris
+          |> Seq.map(fun uri -> async {
+            let! token' = Async.CancellationToken
+            let name = uri.Segments |> Array.last
 
-          let! content =
-            source.ReadContentAsync(uri, cancellationToken = token')
-            |> Async.AwaitTask
+            let! content =
+              source.ReadContentAsync(uri, cancellationToken = token')
+              |> Async.AwaitTask
 
-          return name, content
-        })
-        |> Async.Parallel
+            return name, content
+          })
+
+        Async.Parallel(ops)
 
       let operation =
         files
