@@ -35,14 +35,16 @@ module internal Init =
 [<RequireQualifiedAccess>]
 module internal Migrations =
 
-  let newMigration (name: string, logger: ILogger, migrondi: IMigrondi) =
+  let newMigration
+    (name: string, manualTransaction: bool option, logger: ILogger, migrondi: IMigrondi)
+    =
     logger.LogInformation(
       "Creating a new migration with name: {MigrationName}.",
       name
     )
 
     try
-      let migration = migrondi.RunNew(name)
+      let migration = migrondi.RunNew(name, ?manualTransaction = manualTransaction)
 
       logger.LogInformation(
         "Migration {MigrationName} created successfully.",

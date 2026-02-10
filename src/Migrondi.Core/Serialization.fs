@@ -1,6 +1,6 @@
 namespace Migrondi.Core.Serialization
 
-
+open System
 open System.Text
 open System.Text.RegularExpressions
 open System.Runtime.InteropServices
@@ -109,6 +109,16 @@ module private Migration =
     let timestamp =
       migrationDelimiter("TIMESTAMP", Some(migration.timestamp.ToString()))
 
+    let manualTransaction =
+      if migration.manualTransaction then
+        migrationDelimiter(
+          "ManualTransaction",
+          Some(migration.manualTransaction.ToString())
+        )
+        + "\n"
+      else
+        ""
+
     let up = migrationDelimiter(MigrationType.Up.AsString, None)
     let down = migrationDelimiter(MigrationType.Down.AsString, None)
 
@@ -123,6 +133,7 @@ module private Migration =
         .Append('\n')
         .Append(timestamp)
         .Append('\n')
+        .Append(manualTransaction)
         .Append(up)
         .Append('\n')
         .Append(migration.upContent)
@@ -234,14 +245,32 @@ module private Migration =
 
     let! name =
       metadataCollection
-      |> Seq.find(fun value -> value.Groups["Key"].Value = "NAME")
-      |> fun value -> value.Groups["Value"].Value |> Option.ofObj
+      |> Seq.tryFind(fun value ->
+        System.String.Equals(
+          value.Groups["Key"].Value,
+          "NAME",
+          StringComparison.OrdinalIgnoreCase
+        )
+      )
+      |> fun value ->
+        match value with
+        | Some value -> value.Groups["Value"].Value |> Option.ofObj
+        | None -> None
       |> Result.requireSome "Missing Migration Name In metadata"
 
     let! timestamp =
       metadataCollection
-      |> Seq.find(fun value -> value.Groups["Key"].Value = "TIMESTAMP")
-      |> fun value -> value.Groups["Value"].Value |> Option.ofObj
+      |> Seq.tryFind(fun value ->
+        System.String.Equals(
+          value.Groups["Key"].Value,
+          "TIMESTAMP",
+          StringComparison.OrdinalIgnoreCase
+        )
+      )
+      |> fun value ->
+        match value with
+        | Some value -> value.Groups["Value"].Value |> Option.ofObj
+        | None -> None
       |> Result.requireSome "Missing Migration Timestamp In metadata"
       |> Result.bind(fun value ->
         try
@@ -261,7 +290,11 @@ module private Migration =
 
       metadataCollection
       |> Seq.tryFind(fun value ->
-        value.Groups["Key"].Value = "ManualTransaction"
+        System.String.Equals(
+          value.Groups["Key"].Value,
+          "ManualTransaction",
+          StringComparison.OrdinalIgnoreCase
+        )
       )
       |> fun value ->
           match value with

@@ -33,6 +33,12 @@ module SharedArguments =
     |> Input.desc
       "Signals migrondi to not run against the database and prints the migrations that would be run into the screen"
 
+  let manualTransaction =
+    Input.optionMaybe<bool> "--manual-transaction"
+    |> Input.alias "-m"
+    |> Input.desc
+      "Signals migrondi to create a migration that will not be wrapped in a transaction when executed"
+
 [<RequireQualifiedAccess>]
 module ListArgs =
   let MigrationKind =

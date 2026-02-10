@@ -86,6 +86,12 @@ By default, Migrondi wraps each migration in a transaction. If you need to manag
 
 `-- MIGRONDI:ManualTransaction=true`
 
+Alternatively, you can create a new migration with this header already present by using the `--manual-transaction` (or `-m`) flag:
+
+```bash
+$ migrondi new create-index-concurrently --manual-transaction
+```
+
 With those elements present in the migration file in that order you can start writing some SQL code to create your table.
 
 Example:
@@ -169,6 +175,8 @@ That's the General Gist of how to use migrondi.
 
   - aliases: create
   - description: This will create a new SQL migration file in the configured directory for migrations
+  - options:
+    - --manual-transaction, -m: Signals migrondi to create a migration that will not be wrapped in a transaction when executed
   - arguments:
     - name: The name of the migration file
 
