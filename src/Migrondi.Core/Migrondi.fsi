@@ -36,11 +36,19 @@ type IMigrondi =
   /// <param name="downContent">
   /// The content of the down migration
   /// </param>
+  /// <param name="manualTransaction">
+  /// Whether to execute the migration without an enclosing transaction.
+  /// Useful for operations like CREATE INDEX CONCURRENTLY.
+  /// </param>
   /// <returns>
   /// The newly created migration as a record
   /// </returns>
   abstract member RunNew:
-    friendlyName: string * [<Optional>] ?upContent: string * [<Optional>] ?downContent: string -> Migration
+    friendlyName: string *
+    [<Optional>] ?upContent: string *
+    [<Optional>] ?downContent: string *
+    [<Optional>] ?manualTransaction: bool ->
+      Migration
 
   /// <summary>
   /// Creates a new migration file with
@@ -56,6 +64,10 @@ type IMigrondi =
   /// <param name="downContent">
   /// The content of the down migration
   /// </param>
+  /// <param name="manualTransaction">
+  /// Whether to execute the migration without an enclosing transaction.
+  /// Useful for operations like CREATE INDEX CONCURRENTLY.
+  /// </param>
   /// <param name="cancellationToken">
   /// A cancellation token to cancel the operation
   /// </param>
@@ -66,6 +78,7 @@ type IMigrondi =
     friendlyName: string *
     [<Optional>] ?upContent: string *
     [<Optional>] ?downContent: string *
+    [<Optional>] ?manualTransaction: bool *
     [<Optional>] ?cancellationToken: CancellationToken ->
       Task<Migration>
 

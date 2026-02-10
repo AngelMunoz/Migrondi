@@ -40,13 +40,28 @@ $ migrondi new create-users-table
 
 All of the migrondi migrations have the following naming convention:
 
-- `{name}_{timestamp}.sql`
+- `{timestamp}_{name}.sql`
 
 The name is the one you specify as the argument for the `new` command and should not be changed once it has been applied to the database.
 
 The timestamp is a unix miliseconds timestamp that is used to order the migrations.
 
 The latest date is always at the top while the oldest is at the bottom.
+
+### Migration Format Versions
+
+Migrondi supports two migration file formats:
+
+**V1 Format (current)**:
+- Filename: `{timestamp}_{name}.sql`
+- Required headers: `-- MIGRONDI:NAME={name}` and `-- MIGRONDI:TIMESTAMP={timestamp}`
+- Optional header: `-- MIGRONDI:ManualTransaction=true`
+
+**V0 Format (deprecated)**:
+- Filename: `{name}_{timestamp}.sql`
+- Content marker: `-- ---------- MIGRONDI:UP:{timestamp} ----------`
+
+Migrondi automatically detects and handles both formats. You don't need to manually migrate your V0 files - they will continue to work. However, new migrations created with the `new` command will use the V1 format.
 
 This should have created a new file in the `migrations` directory with the following content:
 
@@ -62,8 +77,16 @@ This should have created a new file in the `migrations` directory with the follo
 
 ```
 
-The first 2 lines are used by migrondi to keep track of the migration file, please do not delete them.
-The markers `MIGRONDI:UP` and `MIGRONDI:DOWN` are used to separate the migration code from the rollback code, and you should not delete those as well. With those elements present in the migration file in that order you can start writing some SQL code to create your table.
+The first lines are used by migrondi to keep track of the migration file, please do not delete them.
+The markers `MIGRONDI:UP` and `MIGRONDI:DOWN` are used to separate the migration code from the rollback code, and you should not delete those as well.
+
+### Manual Transactions
+
+By default, Migrondi wraps each migration in a transaction. If you need to manage your own transactions (e.g., for `CREATE INDEX CONCURRENTLY` or multi-step processes), you can add the following header:
+
+`-- MIGRONDI:ManualTransaction=true`
+
+With those elements present in the migration file in that order you can start writing some SQL code to create your table.
 
 Example:
 

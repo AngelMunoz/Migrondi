@@ -66,7 +66,9 @@ module PhysicalMigrationSourceImpl =
     with
     | :? DirectoryNotFoundException
     | :? IOException as ex ->
-      reriseCustom(SourceNotFound(uri.LocalPath |> Path.GetFileName, uri.LocalPath))
+      reriseCustom(
+        SourceNotFound(uri.LocalPath |> Path.GetFileName, uri.LocalPath)
+      )
 
   let readContentAsync (logger: ILogger, uri: Uri) = cancellableTask {
     let! token = CancellableTask.getCancellationToken()

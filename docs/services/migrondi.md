@@ -77,7 +77,7 @@ migrondi.InitializeAsync() |> Async.AwaitTask
 
 This creates the migrations tracking table if it doesn't exist. It's safe to call multiple times - it won't recreate an existing table.
 
-## Creating Migrations
+ ## Creating Migrations
 
 Create new migration files with `RunNew`:
 
@@ -102,6 +102,22 @@ If you omit `upContent` and `downContent`, default templates will be used:
 ```fsharp
 let migration = migrondi.RunNew("create-users-table")
 ```
+
+### Manual Transactions
+
+By default, Migrondi wraps each migration in a transaction. If you need to manage your own transactions (e.g., for `CREATE INDEX CONCURRENTLY` or multi-step processes), set `manualTransaction` to `true`:
+
+```fsharp
+// Create migration without automatic transaction handling
+let migration = migrondi.RunNew(
+  "create-index-concurrently",
+  upContent = "CREATE INDEX CONCURRENTLY idx_users_email ON users(email);",
+  downContent = "DROP INDEX CONCURRENTLY IF EXISTS idx_users_email;",
+  manualTransaction = true
+)
+```
+
+When `manualTransaction` is `true`, Migrondi will execute the SQL directly without an enclosing transaction. You are responsible for managing any transaction boundaries in your SQL.
 
 ## Listing Migrations
 
@@ -297,3 +313,18 @@ Migrations are ordered by timestamp, not filename. The V1 format (`{timestamp}_{
 - Timestamps are in Unix milliseconds
 
 When creating migrations with `RunNew`, the current time is used for the timestamp automatically.
+
+### Migration Format Versions
+
+Migrondi supports two migration file formats and automatically detects which format your migrations use:
+
+**V1 Format (current)**:
+- Filename: `{timestamp}_{name}.sql`
+- Required headers: `-- MIGRONDI:NAME={name}` and `-- MIGRONDI:TIMESTAMP={timestamp}`
+- Optional header: `-- MIGRONDI:ManualTransaction=true`
+
+**V0 Format (deprecated)**:
+- Filename: `{name}_{timestamp}.sql`
+- Content marker: `-- ---------- MIGRONDI:UP:{timestamp} ----------`
+
+The library handles both formats transparently - you don't need to manually migrate old files. New migrations created programmatically will use the V1 format.
