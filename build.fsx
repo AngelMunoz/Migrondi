@@ -23,7 +23,7 @@ let libraries = [ "Migrondi.Core" ]
 let NugetApiKey = EnvVar.getOrFail "NUGET_DEPLOY_KEY"
 
 [<Literal>]
-let PackageVersion = "1.0.0-beta-010"
+let PackageVersion = "1.0.0"
 
 let fsSources =
   Glob.create "*.fsx"
@@ -89,7 +89,7 @@ module Operations =
   let buildBinaries (project: string) (runtime: string) =
     let cmd =
       let outdir = $"{outDir}/{runtime}"
-      let framework = "net8.0"
+      let framework = "net10.0"
       $"publish {project} -c Release -r {runtime} -f {framework} --self-contained -p:PublishSingleFile=true -p:Version={PackageVersion} -o {outdir}"
 
     dotnet cmd
