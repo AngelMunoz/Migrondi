@@ -1,30 +1,29 @@
 (**
 ---
-title: FileSystem Service
+title: Custom Migration Source
 category: Core
 categoryindex: 3
 index: 2
 ---
 
-The `IMiFileSystem` object is one of most likely interfaces to replace if you're implementing your own storage mechanism. It is used to read and write files.
+The `IMiMigrationSource` interface is the primary extension point for implementing custom storage mechanisms. It allows you to provide raw migration and configuration content from any source (HTTP, S3, In-Memory, etc.), while the library handles all internal logic for parsing and managing migrations.
 *)
 
 #r "../../src/Migrondi.Core/bin/Debug/net8.0/Migrondi.Core.dll"
 #r "nuget: Microsoft.Extensions.Logging.Console, 9.0.0"
-#r "nuget: FsToolkit.ErrorHandling"
 
 open System
+open System.Threading
+open System.Threading.Tasks
+open Microsoft.Extensions.Logging
+open System.Runtime.InteropServices
 open Migrondi.Core
 open Migrondi.Core.FileSystem
-open Migrondi.Core.Serialization
-open Microsoft.Extensions.Logging
 
 let logger =
   // create a sample logger, you can provide your own
   LoggerFactory.Create(fun builder -> builder.AddConsole() |> ignore)
   |> fun x -> x.CreateLogger("FileSystem")
-
-let serializer = MigrondiSerializer()
 
 // Example URIs for documentation purposes
 let rootDir = Uri("https://example.com/project/", UriKind.Absolute)
@@ -38,105 +37,100 @@ let migrationsDir = Uri("migrations/", UriKind.Relative)
 (**
 ## URI-based Path Handling
 
-Migrondi uses URIs internally to represent both local and remote paths. This abstraction allows you to implement file systems that work with:
+Migrondi uses URIs internally to represent both local and remote paths. This abstraction allows you to implement sources that work with:
 - Local file system (using file:// URIs)
 - Cloud storage (using http:// or https:// URIs)
 - Virtual file systems
 - Databases as file storage
 
-The file system service is provided internally when you use `MigrondiFactory`. You can provide your own implementation via the experimental factory overload.
+The migration source is used by the internal file system service. You can provide your own implementation via the `source` parameter in `MigrondiFactory`.
 *)
 
 (**
-## Reading Migrations
+## Custom Migration Sources
 
-The file system service can list and read migration files. When you use the main Migrondi service, this happens automatically.
+To implement a custom storage backend, you implement the `IMiMigrationSource` interface. This interface deals strictly with raw strings and URIs, ensuring you don't have to worry about the internal migration format or serialization.
 
-To list migrations, the service:
-1. Builds a URI from the `rootDir` and `migrationsDir` objects
-2. Lists files in the directory
-3. Filters out ones that match the migration filename schema
-4. Reads and decodes each migration file
-
-Example of what this looks like internally:
+Using an object expression is the recommended way to implement this interface:
 *)
 
-let listMigrations (readFrom: string) =
-  let path = Uri(rootDir, readFrom)
-  let dir = IO.DirectoryInfo(path.LocalPath)
-  // list all files in the directory
-  // filter out the ones that are migrations (we have a specific schema for the file name)
-  // for each found file, decode the text and return migration object
-  []
+let createCustomSource (logger: ILogger) =
+  { new IMiMigrationSource with
+      member _.ReadContent(uri: Uri) =
+        logger.LogDebug("Reading content from {Path}", uri.ToString())
+        // Implement your sync read logic here
+        "SQL CONTENT"
+
+      member _.ReadContentAsync
+        (uri: Uri, [<Optional>] ?cancellationToken: CancellationToken)
+        =
+        task {
+          logger.LogDebug(
+            "Reading content asynchronously from {Path}",
+            uri.ToString()
+          )
+          // Implement your async read logic here
+          return "SQL CONTENT"
+        }
+
+      member _.WriteContent(uri: Uri, content: string) =
+        logger.LogDebug("Writing content to {Path}", uri.ToString())
+        // Implement your sync write logic here
+        ()
+
+      member _.WriteContentAsync
+        (
+          uri: Uri,
+          content: string,
+          [<Optional>] ?cancellationToken: CancellationToken
+        ) =
+        task {
+          logger.LogDebug(
+            "Writing content asynchronously to {Path}",
+            uri.ToString()
+          )
+          // Implement your async write logic here
+          ()
+        }
+
+      member _.ListFiles(locationUri: Uri) =
+        logger.LogDebug("Listing files in {Path}", locationUri.ToString())
+        // Return a sequence of URIs for migrations at this location
+        Seq.empty
+
+      member _.ListFilesAsync
+        (locationUri: Uri, [<Optional>] ?cancellationToken: CancellationToken)
+        =
+        task {
+          logger.LogDebug(
+            "Listing files asynchronously in {Path}",
+            locationUri.ToString()
+          )
+          // Return URIs asynchronously
+          return Seq.empty
+        }
+  }
 
 (**
-When you read a specific migration file, the path is relative to the migrations directory:
-*)
+## Usage with MigrondiFactory
 
-// Example: "1708216610033_initial-tables.sql"
-// This would be read from: rootDir + migrationsDir + "1708216610033_initial-tables.sql"
-
-let readMigration (readFrom: string) =
-  let path = Uri(rootDir, Uri(migrationsDir, readFrom))
-  let file = IO.File.ReadAllText(path.LocalPath)
-  let migration = (serializer :> IMiMigrationSerializer).DecodeText(file)
-  migration
-
-(**
-## Writing Migrations
-
-Writing a migration serializes it to either text or JSON format and saves it to the configured location.
-
-Typically, the main Migrondi service handles writing migrations when you call `RunNew()`. Here's what that looks like:
-*)
-
-let writeMigration (migration: Migration) (filename: string) =
-  let content = (serializer :> IMiMigrationSerializer).EncodeText(migration)
-  let path = Uri(rootDir, Uri(migrationsDir, filename))
-  IO.File.WriteAllText(path.LocalPath, content)
-
-(**
-## Configuration Files
-
-The file system also handles reading and writing the `migrondi.json` configuration file.
-*)
-
-// Reading configuration
-let readConfig (configPath: string) =
-  let fullPath = Uri(rootDir, configPath)
-  let content = IO.File.ReadAllText(fullPath.LocalPath)
-  let config = (serializer :> IMiConfigurationSerializer).Decode(content)
-  config
-
-// Writing configuration
-let writeConfig (config: MigrondiConfig) (configPath: string) =
-  let content = (serializer :> IMiConfigurationSerializer).Encode(config)
-  let fullPath = Uri(rootDir, configPath)
-  IO.File.WriteAllText(fullPath.LocalPath, content)
-
-(**
-## Custom File System Implementations
-
-You can implement your own `IMiFileSystem` interface to work with different storage backends:
+Once you have your custom source, you can pass it to the factory. Migrondi will wrap it in its internal file system service, providing all the listing, filtering, and parsing logic automatically.
 
 ```fsharp
-type MyCloudFileSystem(logger, serializer, rootUri, migrationsUri) =
-  interface IMiFileSystem with
-    member this.ReadMigration(name) =
-      // Read from cloud storage
-      let content = downloadFromCloud(name)
-      (serializer :> IMiMigrationSerializer).DecodeText(content)
+let config = MigrondiConfig.Default
+let mySource = createCustomSource logger
 
-    member this.WriteMigration(migration, name) =
-      // Upload to cloud storage
-      let content = (serializer :> IMiMigrationSerializer).EncodeText(migration)
-      uploadToCloud(name, content)
+let migrondi = Migrondi.MigrondiFactory(
+    config,
+    rootDirectory = ".",
+    source = mySource
+)
 ```
 
-Then use the experimental factory overload:
+## Benefits of the Source Abstraction
 
-```fsharp
-let customFS = MyCloudFileSystem(logger, serializer, rootUri, migrationsUri)
-let migrondi = Migrondi.MigrondiFactory(config, ".", miFileSystem = customFS)
-```
+By using `IMiMigrationSource` instead of implementing the full file system:
+1. **Simplified API**: You only handle raw string transfers.
+2. **Encapsulated Serialization**: You don't need to know how Migrondi encodes migrations (Regex, JSON, etc.).
+3. **Internal Consistency**: The library ensures that migrations are listed, filtered, and ordered correctly regardless of where they are stored.
 *)

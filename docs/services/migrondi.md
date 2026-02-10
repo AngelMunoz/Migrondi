@@ -5,7 +5,7 @@ categoryindex: 3
 index: 4
 ---
 
-The `IMigrondi` interface is the main entry point for the Migrondi library. It coordinates between the file system and database services to provide a simple API for managing migrations.
+The `IMigrondi` interface is the main entry point for the Migrondi library. It coordinates between your migration source and the database to provide a simple API for managing migrations.
 
 ## Creating a Migrondi Service
 
@@ -21,36 +21,43 @@ let config = {
     driver = MigrondiDriver.Sqlite
 }
 
-// Create service with default file system
+// Create service with default local file system source
 let migrondi = Migrondi.MigrondiFactory(config, ".")
 
 // Optionally, provide a custom logger
 open Microsoft.Extensions.Logging
 let logger = LoggerFactory.Create(fun builder -> builder.AddConsole() |> ignore)
                     .CreateLogger<IMigrondi>()
-let migrondi = Migrondi.MigrondiFactory(config, ".", ?logger = Some logger)
+let migrondi = Migrondi.MigrondiFactory(config, ".", logger = logger)
 ```
 
-## Custom File System (Experimental)
+## Custom Migration Sources
 
-> **Experimental:** This API may change in future versions.
-
-You can provide a custom `IMiFileSystem` implementation to use non-local storage:
+You can provide a custom `IMiMigrationSource` implementation to use non-local storage. This is done via the `source` parameter:
 
 ```fsharp
 open Migrondi.Core.FileSystem
 
-let customFileSystem = MyCustomFileSystem()
+let customSource =
+  { new IMiMigrationSource with
+      member _.ReadContent(uri) = "..."
+      member _.ReadContentAsync(uri, ct) = task { return "..." }
+      member _.WriteContent(uri, content) = ()
+      member _.WriteContentAsync(uri, content, ct) = task { () }
+      member _.ListFiles(locationUri) = Seq.empty
+      member _.ListFilesAsync(locationUri, ct) = task { return Seq.empty }
+  }
 
 let migrondi = Migrondi.MigrondiFactory(
   config,
   ".",
   ?logger = Some logger,
-  ?miFileSystem = Some customFileSystem
+  source = customSource
 )
 ```
 
 This allows you to store migrations in:
+
 - Cloud storage (S3, Azure Blob, etc.)
 - Virtual file systems
 - Version control systems
@@ -109,6 +116,7 @@ let! migrations = migrondi.MigrationsListAsync()
 ```
 
 Returns a `MigrationStatus IReadOnlyList` where each item is either:
+
 - `Applied migration` - Migration has been applied to database
 - `Pending migration` - Migration is pending application
 
@@ -261,6 +269,7 @@ printfn "Applied %d migrations" applied.Count
 ## Async API Reference
 
 All methods have async equivalents:
+
 - `InitializeAsync`
 - `RunNewAsync`
 - `RunUpAsync`

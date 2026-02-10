@@ -29,6 +29,125 @@ module Units =
 
 open Units
 
+/// <summary>
+/// Minimal abstraction for reading/writing raw migration content.
+/// Users implement this to provide custom sources (HTTP, S3, Azure Blob, etc.).
+/// The library handles all serialization/deserialization internally.
+/// </summary>
+[<Interface>]
+type IMiMigrationSource =
+  abstract member ReadContent: uri: Uri -> string
+
+  abstract member ReadContentAsync:
+    uri: Uri * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<string>
+
+  abstract member WriteContent: uri: Uri * content: string -> unit
+
+  abstract member WriteContentAsync:
+    uri: Uri *
+    content: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task
+
+  abstract member ListFiles: locationUri: Uri -> Uri seq
+
+  abstract member ListFilesAsync:
+    locationUri: Uri * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Uri seq>
+
+module PhysicalMigrationSourceImpl =
+
+  let readContent (logger: ILogger, uri: Uri) =
+    logger.LogDebug("Reading content from {Path}", uri.LocalPath)
+
+    try
+      File.ReadAllText uri.LocalPath
+    with
+    | :? DirectoryNotFoundException
+    | :? IOException as ex ->
+      reriseCustom(SourceNotFound(uri.LocalPath |> Path.GetFileName, uri.LocalPath))
+
+  let readContentAsync (logger: ILogger, uri: Uri) = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+    logger.LogDebug("Reading content from {Path}", uri.LocalPath)
+
+    try
+      return! File.ReadAllTextAsync(uri.LocalPath, cancellationToken = token)
+    with
+    | :? DirectoryNotFoundException
+    | :? IOException as ex ->
+      return
+        reriseCustom(
+          SourceNotFound(uri.LocalPath |> Path.GetFileName, uri.LocalPath)
+        )
+  }
+
+  let writeContent (logger: ILogger, uri: Uri, content: string) =
+    logger.LogDebug("Writing content to {Path}", uri.LocalPath)
+    let file = FileInfo(uri.LocalPath)
+    file.Directory.Create()
+    File.WriteAllText(uri.LocalPath, content)
+
+  let writeContentAsync (logger: ILogger, uri: Uri, content: string) = cancellableTask {
+    logger.LogDebug("Writing content to {Path}", uri.LocalPath)
+    let! token = CancellableTask.getCancellationToken()
+    let file = FileInfo(uri.LocalPath)
+    file.Directory.Create()
+
+    do!
+      File.WriteAllTextAsync(uri.LocalPath, content, cancellationToken = token)
+  }
+
+  let listFiles (logger: ILogger, locationUri: Uri) =
+    logger.LogDebug("Listing files in {Path}", locationUri.LocalPath)
+    let directory = DirectoryInfo(locationUri.LocalPath)
+
+    directory.GetFileSystemInfos()
+    |> Seq.choose(fun file ->
+      match file.Name with
+      | V0Name _
+      | V1Name _ -> Some(Uri(file.FullName))
+      | _ -> None
+    )
+
+  let listFilesAsync (logger: ILogger, locationUri: Uri) = cancellableTask {
+    logger.LogDebug("Listing files in {Path}", locationUri.LocalPath)
+    let directory = DirectoryInfo(locationUri.LocalPath)
+
+    return
+      directory.GetFileSystemInfos()
+      |> Seq.choose(fun file ->
+        match file.Name with
+        | V0Name _
+        | V1Name _ -> Some(Uri(file.FullName))
+        | _ -> None
+      )
+  }
+
+  let create (logger: ILogger) =
+    { new IMiMigrationSource with
+        member _.ReadContent(uri: Uri) = readContent(logger, uri)
+
+        member _.ReadContentAsync(uri: Uri, ?cancellationToken) =
+          let token = defaultArg cancellationToken CancellationToken.None
+          readContentAsync (logger, uri) token
+
+        member _.WriteContent(uri: Uri, content: string) =
+          writeContent(logger, uri, content)
+
+        member _.WriteContentAsync
+          (uri: Uri, content: string, ?cancellationToken)
+          =
+          let token = defaultArg cancellationToken CancellationToken.None
+          writeContentAsync (logger, uri, content) token
+
+        member _.ListFiles(locationUri: Uri) = listFiles(logger, locationUri)
+
+        member _.ListFilesAsync(locationUri: Uri, ?cancellationToken) =
+          let token = defaultArg cancellationToken CancellationToken.None
+          listFilesAsync (logger, locationUri) token
+    }
 
 [<Interface>]
 type IMiFileSystem =
@@ -74,6 +193,7 @@ module PhysicalFileSystemImpl =
 
   let readConfiguration
     (
+      source: IMiMigrationSource,
       serializer: IMiConfigurationSerializer,
       logger: ILogger,
       projectRoot: Uri,
@@ -81,25 +201,18 @@ module PhysicalFileSystemImpl =
     ) =
     let path = Uri(projectRoot, UMX.untag readFrom)
 
-    logger.LogDebug("Reading configuration from {Path}", path.LocalPath)
+    logger.LogDebug("Reading configuration from {Path}", path.ToString())
 
-    let content =
-      try
-        File.ReadAllText path.LocalPath
-      with
-      | :? DirectoryNotFoundException
-      | :? IOException as ex ->
-        reriseCustom(
-          SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
-        )
+    let content = source.ReadContent path
 
     try
       serializer.Decode content
     with :? DeserializationFailed as ex ->
-      reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
+      reriseCustom(MalformedSource(path.ToString(), ex.Content, ex.Reason))
 
   let readConfigurationAsync
     (
+      source: IMiMigrationSource,
       serializer: IMiConfigurationSerializer,
       logger: ILogger,
       projectRoot: Uri,
@@ -107,34 +220,20 @@ module PhysicalFileSystemImpl =
     ) =
     cancellableTask {
       let path = Uri(projectRoot, UMX.untag readFrom)
-      logger.LogDebug("Reading configuration from {Path}", path.LocalPath)
+      logger.LogDebug("Reading configuration from {Path}", path.ToString())
 
-      let! contents =
-        fun token -> task {
-          try
-            return!
-              File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
-          with
-          | :? DirectoryNotFoundException
-          | :? IOException ->
-            return
-              reriseCustom(
-                SourceNotFound(
-                  path.LocalPath |> Path.GetFileName,
-                  path.LocalPath
-                )
-              )
-        }
+      let! contents = source.ReadContentAsync path
 
       try
         return serializer.Decode contents
       with :? DeserializationFailed as ex ->
         return
-          reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
+          reriseCustom(MalformedSource(path.ToString(), ex.Content, ex.Reason))
     }
 
   let writeConfiguration
     (
+      source: IMiMigrationSource,
       serializer: IMiConfigurationSerializer,
       logger: ILogger,
       config: MigrondiConfig,
@@ -142,20 +241,18 @@ module PhysicalFileSystemImpl =
       writeTo: string<RelativeUserPath>
     ) =
     let path = Uri(projectRoot, UMX.untag writeTo)
-    let file = FileInfo(path.LocalPath)
 
     logger.LogDebug(
-      "Writing configuration to {Path}, constructed fom {WriteTo}",
-      path.LocalPath,
+      "Writing configuration to {Path}, constructed from {WriteTo}",
+      path.ToString(),
       writeTo
     )
 
-    file.Directory.Create()
-
-    File.WriteAllText(path.LocalPath, serializer.Encode config)
+    source.WriteContent(path, serializer.Encode config)
 
   let writeConfigurationAsync
     (
+      source: IMiMigrationSource,
       serializer: IMiConfigurationSerializer,
       logger: ILogger,
       config: MigrondiConfig,
@@ -163,28 +260,20 @@ module PhysicalFileSystemImpl =
       writeTo: string<RelativeUserPath>
     ) =
     cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
       let path = Uri(projectRoot, UMX.untag writeTo)
-      let file = FileInfo(path.LocalPath)
 
       logger.LogDebug(
-        "Writing configuration to {Path}, constructed fom {WriteTo}",
-        path.LocalPath,
+        "Writing configuration to {Path}, constructed from {WriteTo}",
+        path.ToString(),
         writeTo
       )
 
-      file.Directory.Create()
-
-      do!
-        File.WriteAllTextAsync(
-          path.LocalPath,
-          serializer.Encode config,
-          cancellationToken = token
-        )
+      do! source.WriteContentAsync(path, serializer.Encode config)
     }
 
   let readMigration
     (
+      source: IMiMigrationSource,
       serializer: IMiMigrationSerializer,
       logger: ILogger,
       migrationsDir: Uri,
@@ -194,27 +283,20 @@ module PhysicalFileSystemImpl =
 
     logger.LogDebug(
       "Reading migration from {Path} with name: {MigrationName}",
-      path.LocalPath,
+      path.ToString(),
       migrationName
     )
 
-    let content =
-      try
-        File.ReadAllText path.LocalPath
-      with
-      | :? DirectoryNotFoundException
-      | :? IOException as ex ->
-        reriseCustom(
-          SourceNotFound(path.LocalPath |> Path.GetFileName, path.LocalPath)
-        )
+    let content = source.ReadContent path
 
     try
       serializer.DecodeText content
     with :? DeserializationFailed as ex ->
-      reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
+      reriseCustom(MalformedSource(path.ToString(), ex.Content, ex.Reason))
 
   let readMigrationAsync
     (
+      source: IMiMigrationSource,
       serializer: IMiMigrationSerializer,
       logger: ILogger,
       migrationsDir: Uri,
@@ -225,36 +307,22 @@ module PhysicalFileSystemImpl =
 
       logger.LogDebug(
         "Reading migration from {Path} with name: {MigrationName}",
-        path.LocalPath,
+        path.ToString(),
         migrationName
       )
 
-      let! contents =
-        fun token -> task {
-          try
-            return!
-              File.ReadAllTextAsync(path.LocalPath, cancellationToken = token)
-          with
-          | :? DirectoryNotFoundException
-          | :? IOException ->
-            return
-              reriseCustom(
-                SourceNotFound(
-                  path.LocalPath |> Path.GetFileName,
-                  path.LocalPath
-                )
-              )
-        }
+      let! contents = source.ReadContentAsync path
 
       try
         return serializer.DecodeText contents
       with :? DeserializationFailed as ex ->
         return
-          reriseCustom(MalformedSource(path.LocalPath, ex.Content, ex.Reason))
+          reriseCustom(MalformedSource(path.ToString(), ex.Content, ex.Reason))
     }
 
   let writeMigration
     (
+      source: IMiMigrationSource,
       serializer: IMiMigrationSerializer,
       logger: ILogger,
       migration: Migration,
@@ -265,18 +333,16 @@ module PhysicalFileSystemImpl =
 
     logger.LogDebug(
       "Writing migration to {Path} with directory: {MigrationsDirectory} and name: {MigrationName}",
-      path.LocalPath,
-      migrationsDir.LocalPath,
+      path.ToString(),
+      migrationsDir.ToString(),
       migrationName
     )
 
-    let file = FileInfo(path.LocalPath)
-    file.Directory.Create()
-
-    File.WriteAllText(path.LocalPath, serializer.EncodeText migration)
+    source.WriteContent(path, serializer.EncodeText migration)
 
   let writeMigrationAsync
     (
+      source: IMiMigrationSource,
       serializer: IMiMigrationSerializer,
       logger: ILogger,
       migration: Migration,
@@ -284,29 +350,21 @@ module PhysicalFileSystemImpl =
       migrationName: string<RelativeUserPath>
     ) =
     cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
       let path = Uri(migrationsDir, UMX.untag migrationName)
 
       logger.LogDebug(
         "Writing migration to {Path} with directory: {MigrationsDirectory} and name: {MigrationName}",
-        path.LocalPath,
-        migrationsDir.LocalPath,
+        path.ToString(),
+        migrationsDir.ToString(),
         migrationName
       )
 
-      let file = FileInfo(path.LocalPath)
-      file.Directory.Create()
-
-      do!
-        File.WriteAllTextAsync(
-          path.LocalPath,
-          serializer.EncodeText migration,
-          cancellationToken = token
-        )
+      do! source.WriteContentAsync(path, serializer.EncodeText migration)
     }
 
   let listMigrations
     (
+      source: IMiMigrationSource,
       serializer: IMiMigrationSerializer,
       logger: ILogger,
       projectRoot: Uri,
@@ -317,94 +375,78 @@ module PhysicalFileSystemImpl =
 
       logger.LogDebug(
         "Listing migrations from {Path} with directory: {MigrationsDir}",
-        path.LocalPath,
+        path.ToString(),
         migrationsDir
       )
 
-      let directory = DirectoryInfo(path.LocalPath)
-
-      let files =
-        directory.GetFileSystemInfos()
-        |> Array.Parallel.choose(fun file ->
-
-          match file.Name with
-          | V0Name _
-          | V1Name _ -> Some(file.Name, file.FullName |> File.ReadAllText)
-          | _ -> None
-        )
-        |> Array.toList
+      let files = source.ListFiles path |> Seq.toList
 
       return!
         files
-        |> List.traverseResultA(fun (name, contents) ->
+        |> List.traverseResultA(fun uri ->
+          let name = uri.Segments |> Array.last
+          let content = source.ReadContent uri
+
           try
-            serializer.DecodeText(contents, name) |> Ok
+            serializer.DecodeText(content, name) |> Ok
           with :? DeserializationFailed as ex ->
             MalformedSource(name, ex.Reason, ex.Source) |> Error
         )
     }
 
     match operation with
-    | Ok value ->
-      value |> List.sortByDescending(_.timestamp)
+    | Ok value -> value |> List.sortByDescending(_.timestamp)
     | Error err ->
       raise(AggregateException("Failed to Decode Some Migrations", err))
 
   let listMigrationsAsync
     (
+      source: IMiMigrationSource,
       serializer: IMiMigrationSerializer,
       logger: ILogger,
       projectRoot: Uri,
       migrationsDir: string<RelativeUserDirectoryPath>
     ) =
     cancellableTask {
-      let! operation = taskResult {
-        let path = Uri(projectRoot, UMX.untag migrationsDir)
+      let! token = CancellableTask.getCancellationToken()
+      let path = Uri(projectRoot, UMX.untag migrationsDir)
 
-        logger.LogDebug(
-          "Listing migrations from {Path} with directory: {MigrationsDir}",
-          path.LocalPath,
-          migrationsDir
+      logger.LogDebug(
+        "Listing migrations from {Path} with directory: {MigrationsDir}",
+        path.ToString(),
+        migrationsDir
+      )
+
+      let! uris = source.ListFilesAsync path
+
+      let! files =
+        uris
+        |> Seq.map(fun uri -> async {
+          let! token' = Async.CancellationToken
+          let name = uri.Segments |> Array.last
+
+          let! content =
+            source.ReadContentAsync(uri, cancellationToken = token')
+            |> Async.AwaitTask
+
+          return name, content
+        })
+        |> Async.Parallel
+
+      let operation =
+        files
+        |> Array.toList
+        |> List.traverseResultA(fun (name, contents) ->
+          try
+            serializer.DecodeText(contents, name) |> Ok
+          with :? DeserializationFailed as ex ->
+            MalformedSource(name, ex.Reason, ex.Source) |> Error
         )
-
-        let directory = DirectoryInfo(path.LocalPath)
-
-        let! files =
-          directory.GetFileSystemInfos()
-          |> Array.Parallel.choose(fun file ->
-            match file.Name with
-            | V1Name _
-            | V0Name _ -> Some file
-            | _ -> None
-          )
-          |> Array.Parallel.map(fun file -> async {
-            let! token = Async.CancellationToken
-            let name = file.Name
-
-            let! content =
-              File.ReadAllTextAsync(file.FullName, cancellationToken = token)
-              |> Async.AwaitTask
-
-            return name, content
-          })
-          |> Async.Parallel
-
-        return!
-          files
-          |> Array.toList
-          |> List.traverseResultA(fun (name, contents) ->
-            try
-              serializer.DecodeText(contents, name) |> Ok
-            with :? DeserializationFailed as ex ->
-              MalformedSource(name, ex.Reason, ex.Source) |> Error
-          )
-      }
 
       return
         match operation with
         | Ok value ->
-          value |> List.sortByDescending(_.timestamp)
-          :> IReadOnlyList<_>
+          value |> List.sortByDescending(_.timestamp) :> IReadOnlyList<_>
         | Error err ->
           raise(AggregateException("Failed to Decode Some Migrations", err))
     }
@@ -416,14 +458,20 @@ type internal MiFileSystem
     configurationSerializer: IMiConfigurationSerializer,
     migrationSerializer: IMiMigrationSerializer,
     projectRootUri: Uri,
-    migrationsRootUri: Uri
+    migrationsRootUri: Uri,
+    [<Optional>] ?source: IMiMigrationSource
   ) =
+  let migrationSource =
+    match source with
+    | Some source -> source
+    | None -> PhysicalMigrationSourceImpl.create logger
 
   let migrationsWorkingDir = Uri(projectRootUri, migrationsRootUri)
 
   interface IMiFileSystem with
     member _.ListMigrations(readFrom) =
       PhysicalFileSystemImpl.listMigrations(
+        migrationSource,
         migrationSerializer,
         logger,
         projectRootUri,
@@ -434,11 +482,16 @@ type internal MiFileSystem
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.listMigrationsAsync
-        (migrationSerializer, logger, projectRootUri, UMX.tag arg1)
+        (migrationSource,
+         migrationSerializer,
+         logger,
+         projectRootUri,
+         UMX.tag arg1)
         token
 
     member _.ReadConfiguration(readFrom) =
       PhysicalFileSystemImpl.readConfiguration(
+        migrationSource,
         configurationSerializer,
         logger,
         projectRootUri,
@@ -449,11 +502,16 @@ type internal MiFileSystem
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.readConfigurationAsync
-        (configurationSerializer, logger, projectRootUri, UMX.tag readFrom)
+        (migrationSource,
+         configurationSerializer,
+         logger,
+         projectRootUri,
+         UMX.tag readFrom)
         token
 
     member _.ReadMigration readFrom =
       PhysicalFileSystemImpl.readMigration(
+        migrationSource,
         migrationSerializer,
         logger,
         migrationsWorkingDir,
@@ -464,11 +522,16 @@ type internal MiFileSystem
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.readMigrationAsync
-        (migrationSerializer, logger, migrationsWorkingDir, UMX.tag readFrom)
+        (migrationSource,
+         migrationSerializer,
+         logger,
+         migrationsWorkingDir,
+         UMX.tag readFrom)
         token
 
     member _.WriteConfiguration(config: MigrondiConfig, writeTo) : unit =
       PhysicalFileSystemImpl.writeConfiguration(
+        migrationSource,
         configurationSerializer,
         logger,
         config,
@@ -482,7 +545,8 @@ type internal MiFileSystem
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.writeConfigurationAsync
-        (configurationSerializer,
+        (migrationSource,
+         configurationSerializer,
          logger,
          config,
          projectRootUri,
@@ -491,6 +555,7 @@ type internal MiFileSystem
 
     member _.WriteMigration(arg1: Migration, arg2) : unit =
       PhysicalFileSystemImpl.writeMigration(
+        migrationSource,
         migrationSerializer,
         logger,
         arg1,
@@ -504,5 +569,10 @@ type internal MiFileSystem
       let token = defaultArg cancellationToken CancellationToken.None
 
       PhysicalFileSystemImpl.writeMigrationAsync
-        (migrationSerializer, logger, arg1, migrationsWorkingDir, UMX.tag arg2)
+        (migrationSource,
+         migrationSerializer,
+         logger,
+         arg1,
+         migrationsWorkingDir,
+         UMX.tag arg2)
         token

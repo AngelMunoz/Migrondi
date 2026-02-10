@@ -542,7 +542,7 @@ type Migrondi
       config: MigrondiConfig,
       rootDirectory: string,
       [<Optional>] ?logger: ILogger<IMigrondi>,
-      [<Optional>] ?miFileSystem: IMiFileSystem
+      [<Optional>] ?migrationSource: IMiMigrationSource
     ) : IMigrondi =
 
     let logger =
@@ -579,15 +579,14 @@ type Migrondi
         )
 
     let fileSystem =
-      defaultArg
-        miFileSystem
-        (MiFileSystem(
-          logger,
-          serializer,
-          serializer,
-          projectRoot,
-          migrationsDir
-        ))
+      MiFileSystem(
+        logger,
+        serializer,
+        serializer,
+        projectRoot,
+        migrationsDir,
+        ?source = migrationSource
+      )
 
     Migrondi(config, database, fileSystem, logger)
 
