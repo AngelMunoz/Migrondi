@@ -33,7 +33,10 @@ module internal ArgumentMapper =
     | Some false
     | None -> Migrations.runDown(amount, appEnv.Logger, appEnv.Migrondi)
 
-  let inline New (appEnv: AppEnv) (name: string, manualTransaction: bool option) =
+  let inline New
+    (appEnv: AppEnv)
+    (name: string, manualTransaction: bool option)
+    =
     name, manualTransaction, appEnv.Logger, appEnv.Migrondi
 
   let inline List (appEnv: AppEnv) (kind: MigrationType option) =
