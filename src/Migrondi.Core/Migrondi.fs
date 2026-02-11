@@ -564,15 +564,22 @@ type Migrondi
     let serializer = MigrondiSerializer()
 
     let projectRoot =
-      let rootDirectory = IO.Path.GetFullPath(rootDirectory)
+      match Uri.TryCreate(rootDirectory, UriKind.Absolute) with
+      | true, uri when not uri.IsFile ->
+        if rootDirectory.EndsWith("/") then
+          uri
+        else
+          Uri($"{rootDirectory}/", UriKind.Absolute)
+      | _ ->
+        let rootDirectory = IO.Path.GetFullPath(rootDirectory)
 
-      if IO.Path.EndsInDirectorySeparator rootDirectory then
-        Uri(rootDirectory, UriKind.Absolute)
-      else
-        Uri(
-          $"{rootDirectory}{IO.Path.DirectorySeparatorChar}",
-          UriKind.Absolute
-        )
+        if IO.Path.EndsInDirectorySeparator rootDirectory then
+          Uri(rootDirectory, UriKind.Absolute)
+        else
+          Uri(
+            $"{rootDirectory}{IO.Path.DirectorySeparatorChar}",
+            UriKind.Absolute
+          )
 
     let migrationsDir =
       if IO.Path.EndsInDirectorySeparator config.migrations then
