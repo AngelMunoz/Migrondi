@@ -36,15 +36,20 @@ module internal Init =
 module internal Migrations =
 
   let newMigration
-    (name: string, manualTransaction: bool option, logger: ILogger, migrondi: IMigrondi)
-    =
+    (
+      name: string,
+      manualTransaction: bool option,
+      logger: ILogger,
+      migrondi: IMigrondi
+    ) =
     logger.LogInformation(
       "Creating a new migration with name: {MigrationName}.",
       name
     )
 
     try
-      let migration = migrondi.RunNew(name, ?manualTransaction = manualTransaction)
+      let migration =
+        migrondi.RunNew(name, ?manualTransaction = manualTransaction)
 
       logger.LogInformation(
         "Migration {MigrationName} created successfully.",

@@ -253,10 +253,10 @@ module private Migration =
         )
       )
       |> fun value ->
-        match value with
-        | Some value -> value.Groups["Value"].Value |> Option.ofObj
-        | None -> None
-      |> Result.requireSome "Missing Migration Name In metadata"
+          match value with
+          | Some value -> value.Groups["Value"].Value |> Option.ofObj
+          | None -> None
+          |> Result.requireSome "Missing Migration Name In metadata"
 
     let! timestamp =
       metadataCollection
@@ -268,16 +268,16 @@ module private Migration =
         )
       )
       |> fun value ->
-        match value with
-        | Some value -> value.Groups["Value"].Value |> Option.ofObj
-        | None -> None
-      |> Result.requireSome "Missing Migration Timestamp In metadata"
-      |> Result.bind(fun value ->
-        try
-          int64 value |> Ok
-        with ex ->
-          Error $"Invalid timestamp: {ex.Message}"
-      )
+          match value with
+          | Some value -> value.Groups["Value"].Value |> Option.ofObj
+          | None -> None
+          |> Result.requireSome "Missing Migration Timestamp In metadata"
+          |> Result.bind(fun value ->
+            try
+              int64 value |> Ok
+            with ex ->
+              Error $"Invalid timestamp: {ex.Message}"
+          )
 
     let manualTransaction =
       let parseTransaction (value: string) =
@@ -453,3 +453,37 @@ type MigrondiSerializer() =
     member _.Encode(content: MigrondiConfig) : string =
       let content = MigrondiConfig.Encode content
       Encode.toString 2 content
+
+[<Class; Sealed>]
+type MiSerializer =
+
+  static member Encode(migration: Migration) : string =
+    Migration.EncodeText migration
+
+  static member Decode
+    (content: string, [<Optional>] ?migrationName: string)
+    : Migration =
+    Migration.DecodeText(content, migrationName)
+    |> function
+      | Ok value -> value
+      | Error err -> DeserializationFailed(content, err) |> raise
+
+  static member Encode(config: MigrondiConfig) : string =
+    let content = MigrondiConfig.Encode config
+    Encode.toString 2 content
+
+  static member DecodeConfig(content: string) : MigrondiConfig =
+    Decode.fromString MigrondiConfig.Decode content
+    |> function
+      | Ok value -> value
+      | Error err -> DeserializationFailed(content, err) |> raise
+
+  static member Encode(record: MigrationRecord) : string =
+    let content = MigrationRecord.Encode record
+    Encode.toString 0 content
+
+  static member DecodeRecord(content: string) : MigrationRecord =
+    Decode.fromString MigrationRecord.Decode content
+    |> function
+      | Ok value -> value
+      | Error err -> DeserializationFailed(content, err) |> raise

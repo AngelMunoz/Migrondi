@@ -213,3 +213,76 @@ type SerializationTests() =
     }
 
     Assert.AreEqual(expected, decoded)
+
+[<TestClass>]
+type MiSerializerTests() =
+
+  [<TestMethod>]
+  member _.``Can Encode Migration to Text``() =
+    let encoded = MiSerializer.Encode(MigrationData.migrationObject)
+
+    Assert.AreEqual<string>(MigrationData.textMigrationSampleV1, encoded)
+
+  [<TestMethod>]
+  member _.``Can Decode Migration from Text``() =
+    let decoded = MiSerializer.Decode(MigrationData.textMigrationSampleV1)
+
+    Assert.AreEqual(
+      MigrationData.migrationObject,
+      decoded,
+      "Migration should be decoded correctly"
+    )
+
+  [<TestMethod>]
+  member _.``Can Decode Migration v0 with Name``() =
+    let decoded =
+      MiSerializer.Decode(
+        MigrationData.textMigrationSampleV0,
+        MigrationData.migrationObject.name
+      )
+
+    Assert.AreEqual(
+      MigrationData.migrationObject,
+      decoded,
+      "Migration v0 should be decoded correctly"
+    )
+
+  [<TestMethod>]
+  member _.``Can Encode Config to JSON``() =
+    let encoded = MiSerializer.Encode(ConfigurationData.configJsonObject)
+
+    Assert.AreEqual(
+      ConfigurationData.configJsonSample,
+      encoded,
+      ignoreCase = true
+    )
+
+  [<TestMethod>]
+  member _.``Can Decode Config from JSON``() =
+    let decoded = MiSerializer.DecodeConfig(ConfigurationData.configJsonSample)
+
+    Assert.AreEqual(
+      ConfigurationData.configJsonObject,
+      decoded,
+      "Configuration should be decoded correctly"
+    )
+
+  [<TestMethod>]
+  member _.``Can Encode MigrationRecord to JSON``() =
+    let encoded = MiSerializer.Encode(MigrationRecordData.migrationRecordObject)
+
+    Assert.AreEqual<string>(
+      MigrationRecordData.migrationRecordJsonSample,
+      encoded
+    )
+
+  [<TestMethod>]
+  member _.``Can Decode MigrationRecord from JSON``() =
+    let decoded =
+      MiSerializer.DecodeRecord(MigrationRecordData.migrationRecordJsonSample)
+
+    Assert.AreEqual(
+      MigrationRecordData.migrationRecordObject,
+      decoded,
+      "MigrationRecord should be decoded correctly"
+    )

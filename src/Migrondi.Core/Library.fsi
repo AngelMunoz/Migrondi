@@ -102,7 +102,7 @@ type Migration =
   /// A Result that may contain a tuple of the migration name and timestamp
   /// or a set of strings that may represent all of the found errors while validating the filename
   /// </returns>
-  static member internal ExtractFromFilename: filename: string -> Validation<string * int64, string>
+  static member ExtractFromFilename: filename: string -> Validation<string * int64, string>
 
   /// <summary>
   /// Takes a path and tries to extract the migration information from it
@@ -115,7 +115,7 @@ type Migration =
   /// A Result that may contain a tuple of the migration name and timestamp
   /// or a set of strings that may represent all of the found errors while validating the path
   /// </returns>
-  static member internal ExtractFromPath: path: string -> Validation<string * int64, string>
+  static member ExtractFromPath: path: string -> Validation<string * int64, string>
 
 /// Migration information can be obtained from a file or the database
 /// this DU allows to identify where the information is coming from

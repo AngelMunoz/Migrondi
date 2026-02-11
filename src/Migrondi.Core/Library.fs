@@ -1,4 +1,4 @@
-﻿namespace Migrondi.Core
+namespace Migrondi.Core
 
 open System
 open FsToolkit.ErrorHandling
@@ -100,7 +100,7 @@ type Migration = {
   manualTransaction: bool
 } with
 
-  static member internal ExtractFromFilename
+  static member ExtractFromFilename
     (filename: string)
     : Validation<string * int64, string> =
     match filename with
@@ -109,7 +109,7 @@ type Migration = {
     | null
     | NotMatched -> Error [ "Invalid migration name" ]
 
-  static member internal ExtractFromPath
+  static member ExtractFromPath
     (path: string)
     : Validation<string * int64, string> =
     Migration.ExtractFromFilename(path |> System.IO.Path.GetFileName)
