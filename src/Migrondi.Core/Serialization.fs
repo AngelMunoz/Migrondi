@@ -461,7 +461,7 @@ type MiSerializer =
     Migration.EncodeText migration
 
   static member Decode
-    (content: string, migrationName: string option)
+    (content: string, [<Optional>] ?migrationName: string)
     : Migration =
     Migration.DecodeText(content, migrationName)
     |> function
