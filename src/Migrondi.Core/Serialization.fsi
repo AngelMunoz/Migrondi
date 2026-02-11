@@ -123,3 +123,61 @@ type internal MigrondiSerializer =
   new: unit -> MigrondiSerializer
   interface IMiMigrationSerializer
   interface IMiConfigurationSerializer
+
+/// <summary>
+/// Provides static methods for encoding and decoding Migrondi types.
+/// </summary>
+[<Class; Sealed>]
+type MiSerializer =
+
+  /// <summary>
+  /// Encodes a <see cref="Migrondi.Core.Migration">Migration</see> to the Migrondi text format.
+  /// </summary>
+  /// <param name="migration">The migration to encode.</param>
+  /// <returns>A string containing the encoded migration.</returns>
+  static member Encode: migration: Migration -> string
+
+  /// <summary>
+  /// Decodes Migrondi text format to a <see cref="Migrondi.Core.Migration">Migration</see>.
+  /// </summary>
+  /// <param name="content">The content to decode.</param>
+  /// <param name="migrationName">Optional migration name, required for v0 format migrations.</param>
+  /// <returns>A <see cref="Migrondi.Core.Migration">Migration</see> object.</returns>
+  /// <exception cref="Migrondi.Core.DeserializationFailed">
+  /// Thrown when the content cannot be decoded.
+  /// </exception>
+  static member Decode: content: string * [<Optional>] ?migrationName: string -> Migration
+
+  /// <summary>
+  /// Encodes a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> to JSON.
+  /// </summary>
+  /// <param name="config">The configuration to encode.</param>
+  /// <returns>A JSON string containing the encoded configuration.</returns>
+  static member Encode: config: MigrondiConfig -> string
+
+  /// <summary>
+  /// Decodes JSON to a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see>.
+  /// </summary>
+  /// <param name="content">The JSON content to decode.</param>
+  /// <returns>A <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> object.</returns>
+  /// <exception cref="Migrondi.Core.DeserializationFailed">
+  /// Thrown when the content cannot be decoded.
+  /// </exception>
+  static member DecodeConfig: content: string -> MigrondiConfig
+
+  /// <summary>
+  /// Encodes a <see cref="Migrondi.Core.MigrationRecord">MigrationRecord</see> to JSON.
+  /// </summary>
+  /// <param name="record">The migration record to encode.</param>
+  /// <returns>A JSON string containing the encoded migration record.</returns>
+  static member Encode: record: MigrationRecord -> string
+
+  /// <summary>
+  /// Decodes JSON to a <see cref="Migrondi.Core.MigrationRecord">MigrationRecord</see>.
+  /// </summary>
+  /// <param name="content">The JSON content to decode.</param>
+  /// <returns>A <see cref="Migrondi.Core.MigrationRecord">MigrationRecord</see> object.</returns>
+  /// <exception cref="Migrondi.Core.DeserializationFailed">
+  /// Thrown when the content cannot be decoded.
+  /// </exception>
+  static member DecodeRecord: content: string -> MigrationRecord

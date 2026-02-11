@@ -16,14 +16,14 @@ let runtimes = [|
   "win-arm64"
 |]
 
-let projects = [ "Migrondi" ]
+let projects = List.empty // [ "Migrondi" ]
 
 let libraries = [ "Migrondi.Core" ]
 
 let NugetApiKey = EnvVar.getOrFail "NUGET_DEPLOY_KEY"
 
 [<Literal>]
-let PackageVersion = "1.0.1"
+let PackageVersion = "1.1.0"
 
 let fsSources =
   Glob.create "*.fsx"
