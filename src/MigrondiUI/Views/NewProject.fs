@@ -2,7 +2,6 @@ module MigrondiUI.Views.NewProject
 
 open System
 open System.IO
-open System.Text.Json
 
 open Microsoft.Extensions.Logging
 
@@ -19,6 +18,7 @@ open FsToolkit.ErrorHandling
 open Navs
 open Navs.Avalonia
 open Migrondi.Core
+open Migrondi.Core.Serialization
 open MigrondiUI
 open MigrondiUI.Projects
 open MigrondiUI.Components.NewVirtualProjectForm
@@ -111,11 +111,7 @@ type NewProjectVM
 
     File.WriteAllText(
       configPath,
-      Json
-        .migrondiConfigEncoder(config)
-        .ToJsonString(
-          JsonSerializerOptions(WriteIndented = true, IndentSize = 2)
-        )
+      MiSerializer.Encode config
     )
 
     let! dirName = Path.GetFileNameWithoutExtension directory

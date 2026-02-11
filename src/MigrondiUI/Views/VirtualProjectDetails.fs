@@ -50,6 +50,8 @@ type VirtualProjectDetailsVM
 
   do
     logger.LogDebug "VirtualProjectDetailsVM created"
+    logger.LogDebug "Initializing migrondi"
+    logger.LogDebug("Project connection: {project}", project.connection)
     migrondi.Initialize()
 
   member _.Project: VirtualProject aval = _project
@@ -366,18 +368,7 @@ let buildDetailsView
     logger.LogDebug("Project from repository: {project}", project)
 
     let migrondi =
-      let projectRoot =
-        let rootPath = Path.Combine(Path.GetTempPath(), project.id.ToString())
-
-        try
-          Directory.CreateDirectory(rootPath).FullName
-        with ex ->
-          logger.LogWarning(
-            "Exception thrown while creating project root directory: {error}",
-            ex
-          )
-
-          Path.GetFullPath rootPath
+      let projectRoot = $"migrondi-ui://projects/virtual/"
 
       logger.LogDebug(
         "Using project root directory: {projectRoot}",

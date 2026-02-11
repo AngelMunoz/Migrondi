@@ -1,7 +1,7 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
@@ -56,10 +56,10 @@
     <PackageReference Include="Donald" Version="10.1.0" />
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
 
-    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.0.0" />
+    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.1.0" />
 
-    <PackageReference Include="JDeck" Version="1.0.0-beta-006" />
-    <PackageReference Include="Migrondi.Core" Version="1.0.0-rc-002" />
+    <PackageReference Include="JDeck" Version="1.1.0" />
+    <PackageReference Include="Migrondi.Core" Version="1.2.0" />
     <PackageReference Include="Navs.Avalonia" Version="1.0.0-rc-008" />
 
   </ItemGroup>

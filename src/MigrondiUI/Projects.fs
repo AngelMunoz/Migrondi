@@ -5,6 +5,7 @@ open System.IO
 
 open FsToolkit.ErrorHandling
 open Migrondi.Core
+open Migrondi.Core.Serialization
 
 open IcedTasks
 open MigrondiUI.Database
@@ -61,7 +62,8 @@ let GetLocalProjectRepository createDbConnection =
       let json = File.ReadAllText path
 
       return!
-        JDeck.Decoding.fromString(json, Json.migrondiConfigDecoder)
+        MiSerializer.DecodeConfig json
+        |> Ok
         |> Result.toOption
     with :? FileNotFoundException ->
       return! None
