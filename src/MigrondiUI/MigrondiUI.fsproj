@@ -59,7 +59,7 @@
     <PackageReference Include="FsToolkit.ErrorHandling" Version="5.1.0" />
 
     <PackageReference Include="JDeck" Version="1.1.0" />
-    <PackageReference Include="Migrondi.Core" Version="1.2.0" />
+    <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
     <PackageReference Include="Navs.Avalonia" Version="1.0.0-rc-008" />
 
   </ItemGroup>
