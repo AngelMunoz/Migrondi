@@ -1,0 +1,114 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract Release Data
+        id: extract
+        run: |
+          VERSION_LINE=$(grep -n "^## \[[0-9]" CHANGELOG.md | head -n 1)
+          
+          if [ -z "$VERSION_LINE" ]; then
+            echo "No version found in CHANGELOG.md"
+            exit 1
+          fi
+          
+          LINE_NUM=$(echo "$VERSION_LINE" | cut -d: -f1)
+          VERSION=$(echo "$VERSION_LINE" | sed -E 's/.*## \[([^]]+)\].*/\1/')
+          
+          echo "Found version: $VERSION at line $LINE_NUM"
+          
+          NEXT_HEADER_LINE=$(tail -n +$((LINE_NUM + 1)) CHANGELOG.md | grep -n "^## \[" | head -n 1 | cut -d: -f1)
+          
+          if [ -z "$NEXT_HEADER_LINE" ]; then
+            BODY=$(tail -n +$((LINE_NUM + 1)) CHANGELOG.md)
+          else
+            BODY=$(tail -n +$((LINE_NUM + 1)) CHANGELOG.md | head -n $((NEXT_HEADER_LINE - 1)))
+          fi
+          
+          echo "$BODY" > RELEASE_NOTES.md
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if Tag Exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${{ steps.extract.outputs.version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ steps.extract.outputs.version }} already exists."
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup .NET
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore dependencies
+        if: steps.check_tag.outputs.exists == 'false'
+        run: dotnet restore
+
+      - name: Build
+        if: steps.check_tag.outputs.exists == 'false'
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          dotnet test src/Migrondi.Tests --no-build --configuration Release
+          dotnet test src/MigrondiUI.Tests --no-build --configuration Release
+
+      - name: Pack NuGet packages
+        if: steps.check_tag.outputs.exists == 'false'
+        run: dotnet pack --configuration Release --no-build --output nupkgs
+
+      - name: Publish to NuGet
+        if: steps.check_tag.outputs.exists == 'false'
+        run: dotnet nuget push "nupkgs/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: Publish CLI Binaries
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          VERSION=${{ steps.extract.outputs.version }}
+          for RUNTIME in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64; do
+            dotnet publish src/Migrondi/Migrondi.fsproj -c Release -r $RUNTIME -f net10.0 --self-contained -p:PublishSingleFile=true -p:Version=$VERSION -o dist/cli/$RUNTIME
+          done
+
+      - name: Publish UI Binaries
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          VERSION=${{ steps.extract.outputs.version }}
+          for RUNTIME in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64; do
+            dotnet publish src/MigrondiUI/MigrondiUI.fsproj -c Release -r $RUNTIME -f net10.0 --self-contained -p:PublishSingleFile=true -p:Version=$VERSION -o dist/ui/$RUNTIME
+          done
+
+      - name: Zip Binaries
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          cd dist/cli && for d in */; do zip -r "${d%/}.zip" "$d"; done
+          cd ../ui && for d in */; do zip -r "${d%/}.zip" "$d"; done
+
+      - name: Create Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.extract.outputs.version }}
+          name: v${{ steps.extract.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
+          files: |
+            nupkgs/*.nupkg
+            dist/cli/*.zip
+            dist/ui/*.zip

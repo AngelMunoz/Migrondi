@@ -19,6 +19,7 @@
           This is a simple SQL migrations tool
           Write your Migration SQL apply them or revert them from your database.
         </Summary>
+        <ChangelogFile>$(MSBuildThisFileDirectory)CHANGELOG.md</ChangelogFile>
 
         <!-- FsDocs Properties -->
         <FsDocsLicenseLink>https://github.com/AngelMunoz/Migrondi/blob/main/LICENSE</FsDocsLicenseLink>
@@ -32,5 +33,6 @@
     </ItemGroup>
     <ItemGroup>
         <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
+        <PackageReference Include="Ionide.KeepAChangelog.Tasks" Version="0.3.1" PrivateAssets="all" />
     </ItemGroup>
 </Project>
