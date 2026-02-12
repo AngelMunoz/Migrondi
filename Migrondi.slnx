@@ -3,5 +3,7 @@
     <Project Path="src/Migrondi.Core/Migrondi.Core.fsproj" />
     <Project Path="src/Migrondi.Tests/Migrondi.Tests.fsproj" />
     <Project Path="src/Migrondi/Migrondi.fsproj" />
+    <Project Path="src/MigrondiUI/MigrondiUI.fsproj" />
+    <Project Path="src/MigrondiUI.Tests/MigrondiUI.Tests.fsproj" />
   </Folder>
 </Solution>
