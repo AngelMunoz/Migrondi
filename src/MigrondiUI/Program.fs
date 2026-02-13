@@ -96,8 +96,12 @@ type App() as this =
 
 [<EntryPoint; STAThread>]
 let main argv =
-
-  AppBuilder
-    .Configure<App>()
-    .UsePlatformDetect()
-    .StartWithClassicDesktopLifetime(Orchestrate, argv)
+  match McpServer.parseArgs argv with
+  | Some mcpOptions ->
+    McpServer.runMcpServer mcpOptions loggerFactory |> Async.AwaitTask |> Async.RunSynchronously
+    0
+  | None ->
+    AppBuilder
+      .Configure<App>()
+      .UsePlatformDetect()
+      .StartWithClassicDesktopLifetime(Orchestrate, argv)
