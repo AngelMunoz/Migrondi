@@ -37,7 +37,6 @@ let private parseVirtualProjectUri(uri: Uri) : VirtualProjectResource option =
     None
   else
     let segments = uri.Segments |> Array.map(fun s -> s.TrimEnd('/'))
-    printfn "Parsing URI segments: %A" segments
 
     match segments with
     | [| ""; "virtual"; projectId; "config" |] ->
@@ -50,12 +49,7 @@ let private parseVirtualProjectUri(uri: Uri) : VirtualProjectResource option =
       | true, id -> Some(MigrationList id)
       | _ -> None
 
-    | [| ""; "virtual"; projectId; "migrations" |] ->
-      match Guid.TryParse projectId with
-      | true, id -> Some(MigrationList id)
-      | _ -> None
-
-    | [| ""; "virtual"; projectId; "migrations"; migrationName |] ->
+    | [| ""; "virtual"; projectId; migrationName |] ->
       match Guid.TryParse projectId with
       | true, id -> Some(Migration(id, migrationName))
       | _ -> None
@@ -166,7 +160,14 @@ let getVirtualFs
             let config = p.ToMigrondiConfig()
             return MiSerializer.Encode config
 
-        | Some(Migration(_, migrationName)) ->
+        | Some(Migration(_, migrationFileName)) ->
+          let migrationName =
+            let idx = migrationFileName.IndexOf('_')
+            if idx >= 0 then
+              migrationFileName.Substring(idx + 1).Replace(".sql", "")
+            else
+              migrationFileName.Replace(".sql", "")
+
           let! migration = vpr.GetMigrationByName migrationName ct
 
           match migration with
@@ -249,10 +250,12 @@ let getVirtualFs
         | Some(MigrationList projectId) ->
           let! migrations = vpr.GetMigrations projectId ct
 
+          let basePath = locationUri.ToString().TrimEnd('/') + "/"
+
           return
             migrations
             |> List.map(fun m ->
-              Uri(locationUri, $"{m.timestamp}_{m.name}.sql"))
+              Uri($"{basePath}{m.timestamp}_{m.name}.sql"))
             :> Uri seq
 
         | Some(ProjectConfig _) ->

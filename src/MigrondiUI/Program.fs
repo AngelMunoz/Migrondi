@@ -98,7 +98,7 @@ type App() as this =
 let main argv =
   match McpServer.parseArgs argv with
   | Some mcpOptions ->
-    McpServer.runMcpServer mcpOptions loggerFactory |> Async.AwaitTask |> Async.RunSynchronously
+    McpServer.runMcpServer Database.ConnectionFactory mcpOptions loggerFactory |> Async.AwaitTask |> Async.RunSynchronously
     0
   | None ->
     AppBuilder

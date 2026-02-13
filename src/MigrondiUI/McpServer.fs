@@ -1722,6 +1722,7 @@ let private runHttpServer
   }
 
 let runMcpServer
+  (connectionFactory: unit -> System.Data.IDbConnection)
   (options: McpOptions)
   (loggerFactory: ILoggerFactory)
   : Task<unit> =
@@ -1730,7 +1731,7 @@ let runMcpServer
     |> ValueOption.defaultWith(fun () -> failwith "No migrondi found")
     |> Migrations.Migrate
 
-    let lpr, vpr = Projects.GetRepositories Database.ConnectionFactory
+    let lpr, vpr = Projects.GetRepositories connectionFactory
 
     let baseVirtualFactory = MigrondiExt.getMigrondiUI(loggerFactory, vpr)
     let virtualMigrondiFactory (config: MigrondiConfig, projectId: Guid) =

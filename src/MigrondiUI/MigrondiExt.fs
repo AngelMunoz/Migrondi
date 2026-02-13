@@ -30,6 +30,7 @@ let private normalizeSqliteConnection (vProjectId: Guid) (connection: string) =
     let dataSource = m.Groups.[1].Value.Trim()
     
     if Path.IsPathRooted dataSource then connection
+    elif dataSource.StartsWith(":") then connection  // Special SQLite keywords like :memory:
     else
       let appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
       let baseDir = Path.Combine(appData, "MigrondiUI", vProjectId.ToString())
