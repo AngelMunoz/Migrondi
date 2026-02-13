@@ -32,7 +32,7 @@ Log.Logger <-
 
 let loggerFactory = (new LoggerFactory()).AddSerilog Log.Logger
 
-let BuildMainWindow(dialogManager, toastManager) =
+let BuildMainWindow (dialogManager, toastManager) =
   let win =
     (new SukiWindow())
       .BackgroundStyle(SukiBackgroundStyle.Bubble)
@@ -44,12 +44,10 @@ let BuildMainWindow(dialogManager, toastManager) =
       .MinHeight(640)
       .Title
       "MigrondiUI"
-#if DEBUG
-  win.AttachDevTools()
-#endif
+
   win
 
-let Orchestrate() =
+let Orchestrate () =
   // This is for the current application's database
   // each project is dealt with accordingly
   Migrations.GetMigrondi loggerFactory
@@ -98,7 +96,10 @@ type App() as this =
 let main argv =
   match McpServer.parseArgs argv with
   | Some mcpOptions ->
-    McpServer.runMcpServer Database.ConnectionFactory mcpOptions loggerFactory |> Async.AwaitTask |> Async.RunSynchronously
+    McpServer.runMcpServer Database.ConnectionFactory mcpOptions loggerFactory
+    |> Async.AwaitTask
+    |> Async.RunSynchronously
+
     0
   | None ->
     AppBuilder

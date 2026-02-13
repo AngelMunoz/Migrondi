@@ -29,6 +29,81 @@ type McpMode =
 
 type McpOptions = { mode: McpMode; readOnly: bool }
 
+// Strongly-typed delegates for MCP tools
+type ListProjectsDelegate =
+  delegate of ct: CancellationToken -> Task<CallToolResult>
+
+type GetProjectDelegate =
+  delegate of projectId: string * ct: CancellationToken -> Task<CallToolResult>
+
+type ListMigrationsDelegate =
+  delegate of projectId: string * ct: CancellationToken -> Task<CallToolResult>
+
+type GetMigrationDelegate =
+  delegate of
+    migrationName: string * ct: CancellationToken -> Task<CallToolResult>
+
+type DryRunMigrationsDelegate =
+  delegate of
+    projectId: string * amount: int option * ct: CancellationToken ->
+      Task<CallToolResult>
+
+type RunMigrationsDelegate =
+  delegate of
+    projectId: string * amount: int option * ct: CancellationToken ->
+      Task<CallToolResult>
+
+type CreateMigrationDelegate =
+  delegate of
+    projectId: string *
+    name: string *
+    upContent: string option *
+    downContent: string option *
+    ct: CancellationToken ->
+      Task<CallToolResult>
+
+type UpdateMigrationDelegate =
+  delegate of
+    name: string *
+    upContent: string *
+    downContent: string *
+    ct: CancellationToken ->
+      Task<CallToolResult>
+
+type DeleteMigrationDelegate =
+  delegate of name: string * ct: CancellationToken -> Task<CallToolResult>
+
+type CreateVirtualProjectDelegate =
+  delegate of
+    name: string *
+    connection: string *
+    driver: string *
+    description: string option *
+    tableName: string option *
+    ct: CancellationToken ->
+      Task<CallToolResult>
+
+type UpdateVirtualProjectDelegate =
+  delegate of
+    projectId: string *
+    name: string option *
+    connection: string option *
+    tableName: string option *
+    driver: string option *
+    ct: CancellationToken ->
+      Task<CallToolResult>
+
+type DeleteProjectDelegate =
+  delegate of projectId: string * ct: CancellationToken -> Task<CallToolResult>
+
+type ExportVirtualProjectDelegate =
+  delegate of
+    projectId: string * exportPath: string * ct: CancellationToken ->
+      Task<CallToolResult>
+
+type ImportFromLocalDelegate =
+  delegate of configPath: string * ct: CancellationToken -> Task<CallToolResult>
+
 [<NoComparison; NoEquality>]
 type McpEnvironment = {
   lf: ILoggerFactory
@@ -57,7 +132,7 @@ module MigrondiCache =
   let clear (cache: ConcurrentDictionary<Guid, MigrondiExt.IMigrondiUI>) =
     cache.Clear()
 
-let getProject
+let findProject
   (lProjects: ILocalProjectRepository)
   (vProjects: IVirtualProjectRepository)
   (projectId: Guid)
@@ -606,13 +681,9 @@ module private McpResultMapper =
 
     CallToolResult(StructuredContent = node, IsError = isError)
 
-[<McpServerToolType>]
-type McpTools(env: McpEnvironment) =
+module McpTools =
 
-  [<McpServerTool(ReadOnly = true,
-                  Name = "list_projects",
-                  Title = "List Projects")>]
-  member _.ListProjects(ct: CancellationToken) = task {
+  let listProjects (env: McpEnvironment) (ct: CancellationToken) = task {
     let! localProjects = env.lProjects.GetProjects () ct
     let! vProjects = env.vProjects.GetProjects () ct
 
@@ -629,59 +700,60 @@ type McpTools(env: McpEnvironment) =
       McpResultMapper.fromEncoder McpResults.ListProjectsResult.Encoder result
   }
 
-  [<McpServerTool(ReadOnly = true, Name = "get_project", Title = "Get Project")>]
-  member _.GetProject(projectId: string, ct: CancellationToken) = task {
-    match Guid.TryParse projectId with
-    | false, _ ->
-      return
-        McpResultMapper.fromEncoder
-          McpResults.GetProjectResult.Encoder
-          (McpResults.GetProjectResult.ProjectNotFound
-            "projectId must be a valid GUID")
-    | true, id ->
-      let! localProject = env.lProjects.GetProjectById id ct
-
-      match localProject with
-      | Some p ->
+  let getProject
+    (env: McpEnvironment)
+    (projectId: string)
+    (ct: CancellationToken)
+    =
+    task {
+      match Guid.TryParse projectId with
+      | false, _ ->
         return
           McpResultMapper.fromEncoder
             McpResults.GetProjectResult.Encoder
-            (McpResults.GetProjectResult.LocalProject(
-              McpResults.LocalProjectDetail.FromLocalProject p
-            ))
-      | None ->
-        let! vProject = env.vProjects.GetProjectById id ct
+            (McpResults.GetProjectResult.ProjectNotFound
+              "projectId must be a valid GUID")
+      | true, id ->
+        let! localProject = env.lProjects.GetProjectById id ct
 
-        match vProject with
+        match localProject with
         | Some p ->
           return
             McpResultMapper.fromEncoder
               McpResults.GetProjectResult.Encoder
-              (McpResults.GetProjectResult.VirtualProject(
-                McpResults.VirtualProjectDetail.FromVirtualProject p
+              (McpResults.GetProjectResult.LocalProject(
+                McpResults.LocalProjectDetail.FromLocalProject p
               ))
         | None ->
-          return
-            McpResultMapper.fromEncoder
-              McpResults.GetProjectResult.Encoder
-              (McpResults.GetProjectResult.ProjectNotFound
-                $"Project {projectId} not found")
-  }
+          let! vProject = env.vProjects.GetProjectById id ct
 
-  [<McpServerTool(ReadOnly = true,
-                  Name = "list_migrations",
-                  Title = "List Migrations")>]
-  member _.ListMigrations
-    (projectId: string, ?cancellationToken: CancellationToken)
+          match vProject with
+          | Some p ->
+            return
+              McpResultMapper.fromEncoder
+                McpResults.GetProjectResult.Encoder
+                (McpResults.GetProjectResult.VirtualProject(
+                  McpResults.VirtualProjectDetail.FromVirtualProject p
+                ))
+          | None ->
+            return
+              McpResultMapper.fromEncoder
+                McpResults.GetProjectResult.Encoder
+                (McpResults.GetProjectResult.ProjectNotFound
+                  $"Project {projectId} not found")
+    }
+
+  let listMigrations
+    (env: McpEnvironment)
+    (projectId: string)
+    (ct: CancellationToken)
     =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match Guid.TryParse projectId with
         | false, _ -> return McpResults.ListMigrationsResult.Empty
         | true, id ->
-          match! getProject env.lProjects env.vProjects id ct with
+          match! findProject env.lProjects env.vProjects id ct with
           | None -> return McpResults.ListMigrationsResult.Empty
           | Some project ->
             match getMigrondi env project with
@@ -697,40 +769,40 @@ type McpTools(env: McpEnvironment) =
           result
     }
 
-  [<McpServerTool(ReadOnly = true,
-                  Name = "get_migration",
-                  Title = "Get Migration")>]
-  member _.GetMigration(migrationName: string, ct: CancellationToken) = task {
-    match! env.vProjects.GetMigrationByName migrationName ct with
-    | None ->
-      return
-        McpResultMapper.fromEncoder
-          McpResults.GetMigrationResult.Encoder
-          (McpResults.GetMigrationResult.MigrationNotFound
-            $"Migration '{migrationName}' not found")
-    | Some m ->
-      return
-        McpResultMapper.fromEncoder
-          McpResults.GetMigrationResult.Encoder
-          (McpResults.GetMigrationResult.MigrationFound(
-            McpResults.MigrationDetail.FromVirtualMigration m
-          ))
-  }
-
-  [<McpServerTool(ReadOnly = true,
-                  Name = "dry_run_migrations",
-                  Title = "Preview Migrations")>]
-  member _.DryRunMigrations
-    (projectId: string, ?amount: int, ?cancellationToken: CancellationToken)
+  let getMigration
+    (env: McpEnvironment)
+    (migrationName: string)
+    (ct: CancellationToken)
     =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
+      match! env.vProjects.GetMigrationByName migrationName ct with
+      | None ->
+        return
+          McpResultMapper.fromEncoder
+            McpResults.GetMigrationResult.Encoder
+            (McpResults.GetMigrationResult.MigrationNotFound
+              $"Migration '{migrationName}' not found")
+      | Some m ->
+        return
+          McpResultMapper.fromEncoder
+            McpResults.GetMigrationResult.Encoder
+            (McpResults.GetMigrationResult.MigrationFound(
+              McpResults.MigrationDetail.FromVirtualMigration m
+            ))
+    }
 
+  let dryRunMigrations
+    (env: McpEnvironment)
+    (projectId: string)
+    (amount: int option)
+    (ct: CancellationToken)
+    =
+    task {
       let! result = task {
         match Guid.TryParse projectId with
         | false, _ -> return McpResults.DryRunResult.Empty
         | true, id ->
-          match! getProject env.lProjects env.vProjects id ct with
+          match! findProject env.lProjects env.vProjects id ct with
           | None -> return McpResults.DryRunResult.Empty
           | Some project ->
             match getMigrondi env project with
@@ -748,20 +820,18 @@ type McpTools(env: McpEnvironment) =
       return McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder result
     }
 
-  [<McpServerTool(ReadOnly = true,
-                  Name = "dry_run_rollback",
-                  Title = "Preview Rollback")>]
-  member _.DryRunRollback
-    (projectId: string, ?amount: int, ?cancellationToken: CancellationToken)
+  let dryRunRollback
+    (env: McpEnvironment)
+    (projectId: string)
+    (amount: int option)
+    (ct: CancellationToken)
     =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match Guid.TryParse projectId with
         | false, _ -> return McpResults.DryRunResult.Empty
         | true, id ->
-          match! getProject env.lProjects env.vProjects id ct with
+          match! findProject env.lProjects env.vProjects id ct with
           | None -> return McpResults.DryRunResult.Empty
           | Some project ->
             match getMigrondi env project with
@@ -779,26 +849,22 @@ type McpTools(env: McpEnvironment) =
       return McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder result
     }
 
-[<McpServerToolType>]
-type McpWriteTools(env: McpEnvironment) =
+module McpWriteTools =
 
-  [<McpServerTool(ReadOnly = false,
-                  Destructive = true,
-                  Name = "run_migrations",
-                  Title = "Apply Migrations")>]
-  member _.RunMigrations
-    (projectId: string, ?amount: int, ?cancellationToken: CancellationToken)
+  let runMigrations
+    (env: McpEnvironment)
+    (projectId: string)
+    (amount: int option)
+    (ct: CancellationToken)
     =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match Guid.TryParse projectId with
         | false, _ ->
           return
             McpResults.MigrationsResult.Error "projectId must be a valid GUID"
         | true, id ->
-          match! getProject env.lProjects env.vProjects id ct with
+          match! findProject env.lProjects env.vProjects id ct with
           | None ->
             return
               McpResults.MigrationsResult.Error $"Project {projectId} not found"
@@ -828,23 +894,20 @@ type McpWriteTools(env: McpEnvironment) =
         McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder result
     }
 
-  [<McpServerTool(ReadOnly = false,
-                  Destructive = true,
-                  Name = "run_rollback",
-                  Title = "Rollback Migrations")>]
-  member _.RunRollback
-    (projectId: string, ?amount: int, ?cancellationToken: CancellationToken)
+  let runRollback
+    (env: McpEnvironment)
+    (projectId: string)
+    (amount: int option)
+    (ct: CancellationToken)
     =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match Guid.TryParse projectId with
         | false, _ ->
           return
             McpResults.MigrationsResult.Error "projectId must be a valid GUID"
         | true, id ->
-          match! getProject env.lProjects env.vProjects id ct with
+          match! findProject env.lProjects env.vProjects id ct with
           | None ->
             return
               McpResults.MigrationsResult.Error $"Project {projectId} not found"
@@ -874,20 +937,15 @@ type McpWriteTools(env: McpEnvironment) =
         McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder result
     }
 
-  [<McpServerTool(ReadOnly = false,
-                  Name = "create_migration",
-                  Title = "Create Migration")>]
-  member _.CreateMigration
-    (
-      projectId: string,
-      name: string,
-      ?upContent: string,
-      ?downContent: string,
-      ?cancellationToken: CancellationToken
-    ) =
+  let createMigration
+    (env: McpEnvironment)
+    (projectId: string)
+    (name: string)
+    (upContent: string option)
+    (downContent: string option)
+    (ct: CancellationToken)
+    =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match Guid.TryParse projectId with
         | false, _ ->
@@ -935,19 +993,14 @@ type McpWriteTools(env: McpEnvironment) =
           result
     }
 
-  [<McpServerTool(ReadOnly = false,
-                  Name = "update_migration",
-                  Title = "Update Migration")>]
-  member _.UpdateMigration
-    (
-      name: string,
-      upContent: string,
-      downContent: string,
-      ?cancellationToken: CancellationToken
-    ) =
+  let updateMigration
+    (env: McpEnvironment)
+    (name: string)
+    (upContent: string)
+    (downContent: string)
+    (ct: CancellationToken)
+    =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match! env.vProjects.GetMigrationByName name ct with
         | None ->
@@ -974,16 +1027,12 @@ type McpWriteTools(env: McpEnvironment) =
       return McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder result
     }
 
-  [<McpServerTool(ReadOnly = false,
-                  Destructive = true,
-                  Name = "delete_migration",
-                  Title = "Delete Migration")>]
-  member _.DeleteMigration
-    (name: string, ?cancellationToken: CancellationToken)
+  let deleteMigration
+    (env: McpEnvironment)
+    (name: string)
+    (ct: CancellationToken)
     =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match! env.vProjects.GetMigrationByName name ct with
         | None ->
@@ -1004,21 +1053,16 @@ type McpWriteTools(env: McpEnvironment) =
       return McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder result
     }
 
-  [<McpServerTool(ReadOnly = false,
-                  Name = "create_virtual_project",
-                  Title = "Create Virtual Project")>]
-  member _.CreateVirtualProject
-    (
-      name: string,
-      connection: string,
-      driver: string,
-      ?description: string,
-      ?tableName: string,
-      ?cancellationToken: CancellationToken
-    ) =
+  let createVirtualProject
+    (env: McpEnvironment)
+    (name: string)
+    (connection: string)
+    (driver: string)
+    (description: string option)
+    (tableName: string option)
+    (ct: CancellationToken)
+    =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         let driverValue =
           try
@@ -1062,21 +1106,16 @@ type McpWriteTools(env: McpEnvironment) =
           result
     }
 
-  [<McpServerTool(ReadOnly = false,
-                  Name = "update_virtual_project",
-                  Title = "Update Virtual Project")>]
-  member _.UpdateVirtualProject
-    (
-      projectId: string,
-      ?name: string,
-      ?connection: string,
-      ?tableName: string,
-      ?driver: string,
-      ?cancellationToken: CancellationToken
-    ) =
+  let updateVirtualProject
+    (env: McpEnvironment)
+    (projectId: string)
+    (name: string option)
+    (connection: string option)
+    (tableName: string option)
+    (driver: string option)
+    (ct: CancellationToken)
+    =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match Guid.TryParse projectId with
         | false, _ ->
@@ -1122,16 +1161,12 @@ type McpWriteTools(env: McpEnvironment) =
       return McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder result
     }
 
-  [<McpServerTool(ReadOnly = false,
-                  Destructive = true,
-                  Name = "delete_project",
-                  Title = "Delete Project")>]
-  member _.DeleteProject
-    (projectId: string, ?cancellationToken: CancellationToken)
+  let deleteProject
+    (env: McpEnvironment)
+    (projectId: string)
+    (ct: CancellationToken)
     =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match Guid.TryParse projectId with
         | false, _ ->
@@ -1156,18 +1191,13 @@ type McpWriteTools(env: McpEnvironment) =
       return McpResultMapper.fromEncoder McpResults.ErrorResult.Encoder result
     }
 
-  [<McpServerTool(ReadOnly = false,
-                  Name = "export_virtual_project",
-                  Title = "Export Virtual Project")>]
-  member _.ExportVirtualProject
-    (
-      projectId: string,
-      exportPath: string,
-      ?cancellationToken: CancellationToken
-    ) =
+  let exportVirtualProject
+    (env: McpEnvironment)
+    (projectId: string)
+    (exportPath: string)
+    (ct: CancellationToken)
+    =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         match Guid.TryParse projectId with
         | false, _ ->
@@ -1194,15 +1224,12 @@ type McpWriteTools(env: McpEnvironment) =
       return McpResultMapper.fromEncoder McpResults.ExportResult.Encoder result
     }
 
-  [<McpServerTool(ReadOnly = false,
-                  Name = "import_from_local",
-                  Title = "Import from Local")>]
-  member _.ImportFromLocal
-    (configPath: string, ?cancellationToken: CancellationToken)
+  let importFromLocal
+    (env: McpEnvironment)
+    (configPath: string)
+    (ct: CancellationToken)
     =
     task {
-      let ct = defaultArg cancellationToken CancellationToken.None
-
       let! result = task {
         try
           let! projectId = env.vfs.ImportFromLocal configPath ct
@@ -1462,68 +1489,192 @@ let runMcpServer
     let services = ServiceCollection()
     services.AddSingleton<ILoggerFactory>(loggerFactory) |> ignore
     services.AddSingleton<McpEnvironment>(env) |> ignore
-    services.AddSingleton<McpTools>() |> ignore
-
-    if not options.readOnly then
-      services.AddSingleton<McpWriteTools>() |> ignore
 
     let serviceProvider = services.BuildServiceProvider()
 
-    let mcpTools = serviceProvider.GetRequiredService<McpTools>()
+    let createTool
+      name
+      title
+      (readOnly: bool)
+      (destructive: bool)
+      (del: Delegate)
+      =
+      let options =
+        McpServerToolCreateOptions(
+          Services = serviceProvider,
+          Name = name,
+          Title = title,
+          ReadOnly = readOnly,
+          Destructive = destructive
+        )
 
-    let writeTools =
-      if options.readOnly then
-        None
-      else
-        Some(serviceProvider.GetRequiredService<McpWriteTools>())
-
-    let readToolCollection = McpServerPrimitiveCollection<McpServerTool>()
-    let createOptions = McpServerToolCreateOptions(Services = serviceProvider)
-
-    for method in
-      typeof<McpTools>
-        .GetMethods(
-          System.Reflection.BindingFlags.Instance
-          ||| System.Reflection.BindingFlags.Public
-        ) do
-      if
-        method.GetCustomAttributes(typeof<McpServerToolAttribute>, true).Length > 0
-      then
-        let tool = McpServerTool.Create(method, mcpTools, createOptions)
-        readToolCollection.Add(tool) |> ignore
+      McpServerTool.Create(del, options)
 
     let allToolCollection = McpServerPrimitiveCollection<McpServerTool>()
 
-    for tool in readToolCollection do
+    // Helper wrappers that capture env
+    let listProjectsFn ct = McpTools.listProjects env ct
+    let getProjectFn pid ct = McpTools.getProject env pid ct
+    let listMigrationsFn pid ct = McpTools.listMigrations env pid ct
+    let getMigrationFn name ct = McpTools.getMigration env name ct
+
+    let dryRunMigrationsFn pid amount ct =
+      McpTools.dryRunMigrations env pid amount ct
+
+    let dryRunRollbackFn pid amount ct =
+      McpTools.dryRunRollback env pid amount ct
+
+    // Read-only tools
+    let readTools: McpServerTool list = [
+      createTool
+        "list_projects"
+        "List Projects"
+        true
+        false
+        (ListProjectsDelegate listProjectsFn)
+      createTool
+        "get_project"
+        "Get Project"
+        true
+        false
+        (GetProjectDelegate getProjectFn)
+      createTool
+        "list_migrations"
+        "List Migrations"
+        true
+        false
+        (ListMigrationsDelegate listMigrationsFn)
+      createTool
+        "get_migration"
+        "Get Migration"
+        true
+        false
+        (GetMigrationDelegate getMigrationFn)
+      createTool
+        "dry_run_migrations"
+        "Preview Migrations"
+        true
+        false
+        (DryRunMigrationsDelegate dryRunMigrationsFn)
+      createTool
+        "dry_run_rollback"
+        "Preview Rollback"
+        true
+        false
+        (DryRunMigrationsDelegate dryRunRollbackFn)
+    ]
+
+    for tool in readTools do
       allToolCollection.Add(tool) |> ignore
 
-    match writeTools with
-    | Some wt ->
-      for method in
-        typeof<McpWriteTools>
-          .GetMethods(
-            System.Reflection.BindingFlags.Instance
-            ||| System.Reflection.BindingFlags.Public
-          ) do
-        if
-          method
-            .GetCustomAttributes(typeof<McpServerToolAttribute>, true)
-            .Length > 0
-        then
-          let tool = McpServerTool.Create(method, wt, createOptions)
-          allToolCollection.Add(tool) |> ignore
-    | None -> ()
+    // Write tools (only if not read-only mode)
+    if not options.readOnly then
+
+      let runMigrationsFn pid amount ct =
+        McpWriteTools.runMigrations env pid amount ct
+
+      let runRollbackFn pid amount ct =
+        McpWriteTools.runRollback env pid amount ct
+
+      let createMigrationFn pid name up down ct =
+        McpWriteTools.createMigration env pid name up down ct
+
+      let updateMigrationFn name up down ct =
+        McpWriteTools.updateMigration env name up down ct
+
+      let deleteMigrationFn name ct =
+        McpWriteTools.deleteMigration env name ct
+
+      let createVirtualProjectFn name conn driver desc tbl ct =
+        McpWriteTools.createVirtualProject env name conn driver desc tbl ct
+
+      let updateVirtualProjectFn pid name conn tbl driver ct =
+        McpWriteTools.updateVirtualProject env pid name conn tbl driver ct
+
+      let deleteProjectFn pid ct = McpWriteTools.deleteProject env pid ct
+
+      let exportVirtualProjectFn pid path ct =
+        McpWriteTools.exportVirtualProject env pid path ct
+
+      let importFromLocalFn path ct =
+        McpWriteTools.importFromLocal env path ct
+
+      let writeTools: McpServerTool list = [
+        createTool
+          "run_migrations"
+          "Apply Migrations"
+          false
+          true
+          (RunMigrationsDelegate runMigrationsFn)
+        createTool
+          "run_rollback"
+          "Rollback Migrations"
+          false
+          true
+          (RunMigrationsDelegate runRollbackFn)
+        createTool
+          "create_migration"
+          "Create Migration"
+          false
+          false
+          (CreateMigrationDelegate createMigrationFn)
+        createTool
+          "update_migration"
+          "Update Migration"
+          false
+          false
+          (UpdateMigrationDelegate updateMigrationFn)
+        createTool
+          "delete_migration"
+          "Delete Migration"
+          false
+          true
+          (DeleteMigrationDelegate deleteMigrationFn)
+        createTool
+          "create_virtual_project"
+          "Create Virtual Project"
+          false
+          false
+          (CreateVirtualProjectDelegate createVirtualProjectFn)
+        createTool
+          "update_virtual_project"
+          "Update Virtual Project"
+          false
+          false
+          (UpdateVirtualProjectDelegate updateVirtualProjectFn)
+        createTool
+          "delete_project"
+          "Delete Project"
+          false
+          true
+          (DeleteProjectDelegate deleteProjectFn)
+        createTool
+          "export_virtual_project"
+          "Export Virtual Project"
+          false
+          false
+          (ExportVirtualProjectDelegate exportVirtualProjectFn)
+        createTool
+          "import_from_local"
+          "Import from Local"
+          false
+          false
+          (ImportFromLocalDelegate importFromLocalFn)
+      ]
+
+      for tool in writeTools do
+        allToolCollection.Add(tool) |> ignore
 
     let serverOptions = McpServerOptions()
 
     serverOptions.ServerInfo <-
-      Implementation(Name = "MigrondiUI", Version = "1.0.0")
+      Implementation(Name = "migrondi-mcp", Version = "1.2.0")
 
     serverOptions.ToolCollection <- allToolCollection
 
     match options.mode with
     | Stdio ->
-      let transport = StdioServerTransport("MigrondiUI", loggerFactory)
+      let transport = StdioServerTransport("migrondi-mcp", loggerFactory)
 
       use server =
         McpServer.Create(

@@ -383,7 +383,7 @@ type McpServerTests() =
   [<Fact>]
   member _.``get_project for non-existent ID returns not found``() = task {
     let ct = CancellationToken.None
-    let! result = getProject env.lProjects env.vProjects (Guid.NewGuid()) ct
+    let! result = findProject env.lProjects env.vProjects (Guid.NewGuid()) ct
 
     match result with
     | None -> ()
@@ -395,7 +395,7 @@ type McpServerTests() =
     let ct = CancellationToken.None
     let projectId = Guid.NewGuid()
 
-    match! getProject env.lProjects env.vProjects projectId ct with
+    match! findProject env.lProjects env.vProjects projectId ct with
     | None ->
       let result = MigrationsResult.Error $"Project {projectId} not found"
       Assert.False result.success
@@ -408,7 +408,7 @@ type McpServerTests() =
     let ct = CancellationToken.None
     let projectId = Guid.NewGuid()
 
-    match! getProject env.lProjects env.vProjects projectId ct with
+    match! findProject env.lProjects env.vProjects projectId ct with
     | None ->
       let result = DryRunResult.Empty
       Assert.Equal(0, result.count)
@@ -471,7 +471,7 @@ type McpLocalProjectTests() =
         configPath
         (Some "Test description")
 
-    let! result = getProject env.lProjects env.vProjects projectId ct
+    let! result = findProject env.lProjects env.vProjects projectId ct
 
     match result with
     | Some(Project.Local p) ->
@@ -513,7 +513,7 @@ type McpLocalProjectTests() =
     let projectId =
       TestHelpers.insertLocalProject conn "LocalProject2" configPath None
 
-    let! project = getProject env.lProjects env.vProjects projectId ct
+    let! project = findProject env.lProjects env.vProjects projectId ct
 
     match project with
     | Some(Project.Local p) ->
@@ -562,7 +562,7 @@ type McpLocalProjectTests() =
     let projectId =
       TestHelpers.insertLocalProject conn "LocalProject3" configPath None
 
-    let! project = getProject env.lProjects env.vProjects projectId ct
+    let! project = findProject env.lProjects env.vProjects projectId ct
 
     match project with
     | Some(Project.Local p) ->
@@ -609,7 +609,7 @@ type McpLocalProjectTests() =
       let projectId =
         TestHelpers.insertLocalProject conn "LocalProject4" configPath None
 
-      let! project = getProject env.lProjects env.vProjects projectId ct
+      let! project = findProject env.lProjects env.vProjects projectId ct
 
       match project with
       | Some(Project.Local p) ->
