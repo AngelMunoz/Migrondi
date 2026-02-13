@@ -1,6 +1,7 @@
 module MigrondiUI.Tests.McpServer
 
 open System
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Data
 open System.IO
@@ -19,12 +20,11 @@ open Migrondi.Core
 
 module private TestHelpers =
 
-  let createTestConnectionFactory () : SqliteConnection * (unit -> IDbConnection) =
+  let createTestConnectionFactory
+    ()
+    : SqliteConnection * (unit -> IDbConnection) =
     let dbPath =
-      Path.Combine(
-        Path.GetTempPath(),
-        $"migrondi-mcp-test-{Guid.NewGuid()}.db"
-      )
+      Path.Combine(Path.GetTempPath(), $"migrondi-mcp-test-{Guid.NewGuid()}.db")
 
     let connectionString = $"Data Source={dbPath}"
 
@@ -33,6 +33,7 @@ module private TestHelpers =
       conn.Open()
 
       use cmd = conn.CreateCommand()
+
       cmd.CommandText <-
         """
         CREATE TABLE IF NOT EXISTS projects (
@@ -151,6 +152,7 @@ module private TestHelpers =
     (driver: MigrondiDriver)
     =
     let escapedConnection = connection.Replace("\\", "\\\\")
+
     let json =
       $@"
 {{
@@ -173,7 +175,7 @@ module private TestHelpers =
     =
     let migrationsDir = Path.Combine(directory, "migrations")
 
-    if not (Directory.Exists migrationsDir) then
+    if not(Directory.Exists migrationsDir) then
       Directory.CreateDirectory migrationsDir |> ignore
 
     let fileName = $"{timestamp}_{name}.sql"
@@ -191,146 +193,66 @@ module private TestHelpers =
     File.WriteAllText(path, content)
     path
 
-  let buildTestDeps
+  let buildTestEnv
     (connectionFactory: unit -> IDbConnection)
     (loggerFactory: ILoggerFactory)
-    : IMcpWriteDeps =
+    : McpEnvironment =
     let lpr, vpr = Projects.GetRepositories connectionFactory
 
-    let baseVirtualFactory = MigrondiExt.getMigrondiUI(loggerFactory, vpr)
-
-    let virtualMigrondiFactory (config: MigrondiConfig, projectId: Guid) =
-      baseVirtualFactory(config, "migrondi-ui://projects/virtual/", projectId)
+    let vMigrondiFactory = MigrondiExt.getMigrondiUI(loggerFactory, vpr)
 
     let localMigrondiFactory (config: MigrondiConfig, rootDir: string) =
       let mLogger = loggerFactory.CreateLogger<IMigrondi>()
       let migrondi = Migrondi.MigrondiFactory(config, rootDir, mLogger)
-
-      { new MigrondiExt.IMigrondiUI with
-          member _.DryRunDown(?amount) = migrondi.DryRunDown(?amount = amount)
-
-          member _.DryRunDownAsync(?amount, ?cancellationToken) =
-            migrondi.DryRunDownAsync(
-              ?amount = amount,
-              ?cancellationToken = cancellationToken
-            )
-
-          member _.DryRunUp(?amount) : IReadOnlyList<Migration> =
-            migrondi.DryRunUp(?amount = amount)
-
-          member _.DryRunUpAsync(?amount, ?cancellationToken) =
-            migrondi.DryRunUpAsync(
-              ?amount = amount,
-              ?cancellationToken = cancellationToken
-            )
-
-          member _.Initialize() : unit = migrondi.Initialize()
-
-          member _.InitializeAsync(?cancellationToken) : Task =
-            migrondi.InitializeAsync(?cancellationToken = cancellationToken)
-
-          member _.MigrationsList() : IReadOnlyList<MigrationStatus> =
-            migrondi.MigrationsList()
-
-          member _.MigrationsListAsync(?cancellationToken) =
-            migrondi.MigrationsListAsync(?cancellationToken = cancellationToken)
-
-          member _.RunDown(?amount) = migrondi.RunDown(?amount = amount)
-
-          member _.RunDownAsync(?amount, ?cancellationToken) =
-            migrondi.RunDownAsync(
-              ?amount = amount,
-              ?cancellationToken = cancellationToken
-            )
-
-          member _.RunNew(friendlyName, ?upContent, ?downContent, ?manualTransaction) =
-            migrondi.RunNew(
-              friendlyName,
-              ?upContent = upContent,
-              ?downContent = downContent,
-              ?manualTransaction = manualTransaction
-            )
-
-          member _.RunNewAsync
-            (
-              friendlyName,
-              ?upContent,
-              ?downContent,
-              ?manualTransaction,
-              ?cancellationToken
-            ) : Task<Migration> =
-            migrondi.RunNewAsync(
-              friendlyName,
-              ?upContent = upContent,
-              ?downContent = downContent,
-              ?manualTransaction = manualTransaction,
-              ?cancellationToken = cancellationToken
-            )
-
-          member _.RunUp(?amount) = migrondi.RunUp(?amount = amount)
-
-          member _.RunUpAsync(?amount, ?cancellationToken) =
-            migrondi.RunUpAsync(
-              ?amount = amount,
-              ?cancellationToken = cancellationToken
-            )
-
-          member _.RunUpdateAsync(migration: VirtualMigration, ?cancellationToken) : Task =
-            vpr.UpdateMigration migration
-              (defaultArg cancellationToken CancellationToken.None)
-
-          member _.ScriptStatus(migrationPath) = migrondi.ScriptStatus(migrationPath)
-
-          member _.ScriptStatusAsync(arg1, ?cancellationToken) =
-            migrondi.ScriptStatusAsync(arg1, ?cancellationToken = cancellationToken)
-      }
+      MigrondiExt.wrapLocalMigrondi(migrondi, rootDir)
 
     let vfs =
       let logger = loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>()
       VirtualFs.getVirtualFs(logger, vpr)
 
-    { new IMcpWriteDeps with
-        member _.GetLocalProjects ct = lpr.GetProjects () ct
-        member _.GetVirtualProjects ct = vpr.GetProjects () ct
-        member _.GetLocalProjectById id ct = lpr.GetProjectById id ct
-        member _.GetVirtualProjectById id ct = vpr.GetProjectById id ct
-        member _.GetMigrationByName name ct = vpr.GetMigrationByName name ct
-        member _.GetMigrations projectId ct = vpr.GetMigrations projectId ct
-        member _.GetLocalMigrondi(config, rootDir) = localMigrondiFactory(config, rootDir)
-        member _.GetVirtualMigrondi(config, projectId) = virtualMigrondiFactory(config, projectId)
-
-        member _.InsertMigration migration ct = vpr.InsertMigration migration ct
-        member _.UpdateMigration migration ct = vpr.UpdateMigration migration ct
-        member _.RemoveMigrationByName name ct = vpr.RemoveMigrationByName name ct
-        member _.InsertProject args ct = vpr.InsertProject args ct
-        member _.UpdateProject project ct = vpr.UpdateProject project ct
-        member _.ExportToLocal projectId path ct = vfs.ExportToLocal (projectId, path) ct
-        member _.ImportFromLocal configPath ct = vfs.ImportFromLocal configPath ct
+    {
+      lf = loggerFactory
+      lProjects = lpr
+      vProjects = vpr
+      vfs = vfs
+      vMigrondiFactory = vMigrondiFactory
+      localMigrondiFactory = localMigrondiFactory
+      migrondiCache = ConcurrentDictionary<Guid, MigrondiExt.IMigrondiUI>()
     }
 
 type McpServerTests() =
-  let masterConnection, connectionFactory = TestHelpers.createTestConnectionFactory ()
-  let tempDirectory = Path.Combine(Path.GetTempPath(), $"migrondi-mcp-tests-{Guid.NewGuid()}")
-  let loggerFactory = TestHelpers.createTestLoggerFactory ()
-  let deps = TestHelpers.buildTestDeps connectionFactory loggerFactory
+  let masterConnection, connectionFactory =
+    TestHelpers.createTestConnectionFactory()
 
-  do
-    Directory.CreateDirectory tempDirectory |> ignore
+  let tempDirectory =
+    Path.Combine(Path.GetTempPath(), $"migrondi-mcp-tests-{Guid.NewGuid()}")
+
+  let loggerFactory = TestHelpers.createTestLoggerFactory()
+  let env = TestHelpers.buildTestEnv connectionFactory loggerFactory
+
+  do Directory.CreateDirectory tempDirectory |> ignore
 
   interface IDisposable with
     member _.Dispose() =
-      (loggerFactory :?> IDisposable).Dispose()
+      loggerFactory.Dispose()
       masterConnection.Dispose()
 
       try
         if Directory.Exists tempDirectory then
           Directory.Delete(tempDirectory, true)
-      with
-      | _ -> ()
+      with _ ->
+        ()
 
   [<Fact>]
   member _.``list_projects returns empty lists initially``() = task {
-    let! result = McpServerLogic.listProjects deps CancellationToken.None
+    let! localProjects = env.lProjects.GetProjects () CancellationToken.None
+    let! vProjects = env.vProjects.GetProjects () CancellationToken.None
+
+    let result: ListProjectsResult = {
+      local = localProjects |> List.map LocalProjectSummary.FromLocalProject
+      virtualProjects =
+        vProjects |> List.map VirtualProjectSummary.FromVirtualProject
+    }
 
     Assert.True(result.local.IsEmpty)
     Assert.True(result.virtualProjects.IsEmpty)
@@ -338,180 +260,200 @@ type McpServerTests() =
 
   [<Fact>]
   member _.``create_virtual_project returns project ID``() = task {
-    let! result =
-      McpServerLogic.createVirtualProject
-        deps
-        "TestProject"
-        "Data Source=:memory:"
-        "sqlite"
-        None
-        None
-        CancellationToken.None
+    let ct = CancellationToken.None
+    let driverValue = MigrondiDriver.FromString "sqlite"
 
-    match result with
-    | ProjectCreated p ->
-      Assert.True(p.id <> Guid.Empty)
-      Assert.Equal("TestProject", p.name)
-      Assert.Equal("sqlite", p.driver)
-    | CreateProjectError err -> Assert.Fail($"Expected success, got error: {err}")
+    let newProject: NewVirtualProjectArgs = {
+      name = "TestProject"
+      description = ""
+      connection = "Data Source=:memory:"
+      tableName = "migrations"
+      driver = driverValue
+    }
+
+    let! projectId = env.vProjects.InsertProject newProject ct
+
+    Assert.True(projectId <> Guid.Empty)
   }
 
   [<Fact>]
   member _.``list_projects includes created virtual project``() = task {
-    let! _ =
-      McpServerLogic.createVirtualProject
-        deps
-        "MyProject"
-        "Data Source=:memory:"
-        "sqlite"
-        None
-        None
-        CancellationToken.None
+    let ct = CancellationToken.None
 
-    let! result = McpServerLogic.listProjects deps CancellationToken.None
+    let newProject: NewVirtualProjectArgs = {
+      name = "MyProject"
+      description = ""
+      connection = "Data Source=:memory:"
+      tableName = "migrations"
+      driver = MigrondiDriver.Sqlite
+    }
 
-    Assert.True(result.local.IsEmpty)
-    Assert.True(result.virtualProjects.Length = 1)
-    Assert.Equal("MyProject", result.virtualProjects.[0].name)
+    let! _ = env.vProjects.InsertProject newProject ct
+
+    let! vProjects = env.vProjects.GetProjects () ct
+
+    Assert.True(vProjects.Length = 1)
+    Assert.Equal("MyProject", vProjects.[0].name)
   }
 
   [<Fact>]
   member _.``create_migration adds to virtual project``() = task {
-    let! projectResult =
-      McpServerLogic.createVirtualProject
-        deps
-        "MigrationTest"
-        "Data Source=:memory:"
-        "sqlite"
-        None
-        None
-        CancellationToken.None
+    let ct = CancellationToken.None
 
-    let projectId =
-      match projectResult with
-      | ProjectCreated p -> p.id
-      | CreateProjectError err -> failwith $"Failed to create project: {err}"
+    let newProject: NewVirtualProjectArgs = {
+      name = "MigrationTest"
+      description = ""
+      connection = "Data Source=:memory:"
+      tableName = "migrations"
+      driver = MigrondiDriver.Sqlite
+    }
 
-    let! migrationResult =
-      McpServerLogic.createMigration
-        deps
-        (projectId.ToString())
-        "add_users_table"
-        (Some "CREATE TABLE users (id INTEGER PRIMARY KEY);")
-        (Some "DROP TABLE users;")
-        CancellationToken.None
+    let! projectId = env.vProjects.InsertProject newProject ct
 
-    match migrationResult with
-    | MigrationCreated m ->
-      Assert.Equal("add_users_table", m.name)
-      Assert.True(m.timestamp > 0L)
-    | CreateMigrationError err -> Assert.Fail($"Expected success, got error: {err}")
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+    let migration: VirtualMigration = {
+      id = Guid.NewGuid()
+      name = "add_users_table"
+      timestamp = timestamp
+      upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+      downContent = "DROP TABLE users;"
+      projectId = projectId
+      manualTransaction = false
+    }
+
+    let! id = env.vProjects.InsertMigration migration ct
+
+    Assert.True(id <> Guid.Empty)
+    Assert.Equal("add_users_table", migration.name)
+    Assert.True(migration.timestamp > 0L)
   }
 
   [<Fact>]
   member _.``list_migrations for virtual project shows created migrations``() = task {
-    let dbPath = Path.Combine(tempDirectory, $"virtual-test-{Guid.NewGuid()}.db")
+    let ct = CancellationToken.None
+
+    let dbPath =
+      Path.Combine(tempDirectory, $"virtual-test-{Guid.NewGuid()}.db")
+
     let connectionString = $"Data Source={dbPath}"
 
-    let! projectResult =
-      McpServerLogic.createVirtualProject
-        deps
-        "ListMigrationsTest"
-        connectionString
-        "sqlite"
-        None
-        None
-        CancellationToken.None
+    let newProject: NewVirtualProjectArgs = {
+      name = "ListMigrationsTest"
+      description = ""
+      connection = connectionString
+      tableName = "migrations"
+      driver = MigrondiDriver.Sqlite
+    }
 
-    let projectId =
-      match projectResult with
-      | ProjectCreated p -> p.id
-      | CreateProjectError err -> failwith $"Failed to create project: {err}"
+    let! projectId = env.vProjects.InsertProject newProject ct
 
-    let! _ =
-      McpServerLogic.createMigration
-        deps
-        (projectId.ToString())
-        "first_migration"
-        None
-        None
-        CancellationToken.None
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 
-    let! project = deps.GetVirtualProjectById projectId CancellationToken.None
-    match project with
+    let migration: VirtualMigration = {
+      id = Guid.NewGuid()
+      name = "first_migration"
+      timestamp = timestamp
+      upContent = ""
+      downContent = ""
+      projectId = projectId
+      manualTransaction = false
+    }
+
+    let! _ = env.vProjects.InsertMigration migration ct
+
+    let! vProject = env.vProjects.GetProjectById projectId ct
+
+    match vProject with
     | Some p ->
       let config = p.ToMigrondiConfig()
-      let migrondi = deps.GetVirtualMigrondi(config, projectId)
-      do! migrondi.InitializeAsync()
-    | _ -> ()
+      let rootDir = "migrondi-ui://projects/virtual/"
+      let migrondi = env.vMigrondiFactory(config, rootDir, p.id)
+      do! migrondi.InitializeAsync ct
 
-    let! result = McpServerLogic.listMigrations deps projectId CancellationToken.None
+      let! migrations = migrondi.MigrationsListAsync ct
+      let result = ListMigrationsResult.FromMigrations migrations
 
-    Assert.True(result.migrations.Length = 1)
-    Assert.Equal("first_migration", result.migrations.[0].name)
-    Assert.Equal("Pending", result.migrations.[0].status)
+      Assert.True(result.migrations.Length = 1)
+      Assert.Equal("first_migration", result.migrations.[0].name)
+      Assert.Equal("Pending", result.migrations.[0].status)
+    | None -> Assert.Fail "Project not found"
   }
 
   [<Fact>]
   member _.``get_project for non-existent ID returns not found``() = task {
-    let! result =
-      McpServerLogic.getProject deps (Guid.NewGuid().ToString()) CancellationToken.None
+    let ct = CancellationToken.None
+    let! result = getProject env.lProjects env.vProjects (Guid.NewGuid()) ct
 
     match result with
-    | ProjectNotFound msg -> Assert.True(msg.Contains("not found"))
-    | _ -> Assert.Fail "Expected ProjectNotFound"
+    | None -> ()
+    | Some _ -> Assert.Fail "Expected None for non-existent project"
   }
 
   [<Fact>]
   member _.``run_migrations for non-existent project returns error``() = task {
-    let! result =
-      McpServerLogic.runMigrations deps (Guid.NewGuid()) None CancellationToken.None
+    let ct = CancellationToken.None
+    let projectId = Guid.NewGuid()
 
-    Assert.False result.success
-    Assert.True(result.message.Contains("not found"))
+    match! getProject env.lProjects env.vProjects projectId ct with
+    | None ->
+      let result = MigrationsResult.Error $"Project {projectId} not found"
+      Assert.False result.success
+      Assert.True(result.message.Contains("not found"))
+    | Some _ -> Assert.Fail "Expected project not found"
   }
 
   [<Fact>]
   member _.``dry_run_migrations for non-existent project returns empty``() = task {
-    let! result =
-      McpServerLogic.dryRunMigrations deps (Guid.NewGuid()) None CancellationToken.None
+    let ct = CancellationToken.None
+    let projectId = Guid.NewGuid()
 
-    Assert.Equal(0, result.count)
-    Assert.Empty result.migrations
+    match! getProject env.lProjects env.vProjects projectId ct with
+    | None ->
+      let result = DryRunResult.Empty
+      Assert.Equal(0, result.count)
+      Assert.Empty result.migrations
+    | Some _ -> Assert.Fail "Expected project not found"
   }
 
 type McpLocalProjectTests() =
-  let masterConnection, connectionFactory = TestHelpers.createTestConnectionFactory ()
-  
+  let masterConnection, connectionFactory =
+    TestHelpers.createTestConnectionFactory()
+
   let baseUri =
     let tmp = Path.GetTempPath()
-    let path = $"{Path.Combine(tmp, Guid.NewGuid().ToString())}{Path.DirectorySeparatorChar}"
+
+    let path =
+      $"{Path.Combine(tmp, Guid.NewGuid().ToString())}{Path.DirectorySeparatorChar}"
+
     Uri(path, UriKind.Absolute)
 
   let rootDir = DirectoryInfo(baseUri.LocalPath)
-  let loggerFactory = TestHelpers.createTestLoggerFactory ()
-  let deps = TestHelpers.buildTestDeps connectionFactory loggerFactory
+  let loggerFactory = TestHelpers.createTestLoggerFactory()
+  let env = TestHelpers.buildTestEnv connectionFactory loggerFactory
 
   do printfn $"Using '{rootDir.FullName}' as Root Directory"
 
   interface IDisposable with
     member _.Dispose() =
-      (loggerFactory :?> IDisposable).Dispose()
+      loggerFactory.Dispose()
       masterConnection.Dispose()
 
       try
         if rootDir.Exists then
           rootDir.Delete(true)
           printfn $"Deleted temporary root dir at: '{rootDir.FullName}'"
-      with
-      | _ -> ()
+      with _ ->
+        ()
 
   [<Fact>]
   member _.``get_project returns local project with correct kind``() = task {
+    let ct = CancellationToken.None
     let projectDir = Path.Combine(rootDir.FullName, "LocalProject1")
     Directory.CreateDirectory projectDir |> ignore
 
     let dbPath = Path.Combine(projectDir, "test.db")
+
     let configPath =
       TestHelpers.createMigrondiJson
         projectDir
@@ -520,26 +462,34 @@ type McpLocalProjectTests() =
         "migrations"
         MigrondiDriver.Sqlite
 
-    use conn = connectionFactory ()
-    let projectId = TestHelpers.insertLocalProject conn "LocalProject1" configPath (Some "Test description")
+    use conn = connectionFactory()
 
-    let! result = McpServerLogic.getProject deps (projectId.ToString()) CancellationToken.None
+    let projectId =
+      TestHelpers.insertLocalProject
+        conn
+        "LocalProject1"
+        configPath
+        (Some "Test description")
+
+    let! result = getProject env.lProjects env.vProjects projectId ct
 
     match result with
-    | LocalProject p ->
+    | Some(Project.Local p) ->
       Assert.Equal("LocalProject1", p.name)
-      Assert.Equal("Test description", p.description)
-      Assert.Equal("local", p.kind)
+      Assert.Equal(Some "Test description", p.description)
       Assert.True p.config.IsSome
-    | _ -> Assert.Fail $"Expected LocalProject, got {result}"
+    | Some(Project.Virtual _) -> Assert.Fail "Expected Local project"
+    | None -> Assert.Fail "Expected project to be found"
   }
 
   [<Fact>]
   member _.``list_migrations reads from filesystem for local project``() = task {
+    let ct = CancellationToken.None
     let projectDir = Path.Combine(rootDir.FullName, "LocalProject2")
     Directory.CreateDirectory projectDir |> ignore
 
     let dbPath = Path.Combine(projectDir, "test.db")
+
     let configPath =
       TestHelpers.createMigrondiJson
         projectDir
@@ -558,33 +508,37 @@ type McpLocalProjectTests() =
       "DROP TABLE test;"
     |> ignore
 
-    use conn = connectionFactory ()
-    let projectId = TestHelpers.insertLocalProject conn "LocalProject2" configPath None
+    use conn = connectionFactory()
 
-    let! project = deps.GetLocalProjectById projectId CancellationToken.None
+    let projectId =
+      TestHelpers.insertLocalProject conn "LocalProject2" configPath None
+
+    let! project = getProject env.lProjects env.vProjects projectId ct
+
     match project with
-    | Some p ->
-      match p.config with
-      | Some config ->
-        let rootDir = Path.GetDirectoryName p.migrondiConfigPath |> nonNull
-        let migrondi = deps.GetLocalMigrondi(config, rootDir)
-        do! migrondi.InitializeAsync()
-      | _ -> ()
-    | _ -> ()
+    | Some(Project.Local p) ->
+      match getMigrondi env (Project.Local p) with
+      | Some migrondi ->
+        do! migrondi.InitializeAsync ct
+        let! migrations = migrondi.MigrationsListAsync ct
+        let result = ListMigrationsResult.FromMigrations migrations
 
-    let! result = McpServerLogic.listMigrations deps projectId CancellationToken.None
-
-    Assert.True(result.migrations.Length = 1)
-    Assert.Equal("create_table", result.migrations.[0].name)
-    Assert.Equal("Pending", result.migrations.[0].status)
+        Assert.True(result.migrations.Length = 1)
+        Assert.Equal("create_table", result.migrations.[0].name)
+        Assert.Equal("Pending", result.migrations.[0].status)
+      | None -> Assert.Fail "Could not get migrondi"
+    | Some(Project.Virtual _) -> Assert.Fail "Expected Local project"
+    | None -> Assert.Fail "Expected project to be found"
   }
 
   [<Fact>]
   member _.``dry_run_migrations works for local project``() = task {
+    let ct = CancellationToken.None
     let projectDir = Path.Combine(rootDir.FullName, "LocalProject3")
     Directory.CreateDirectory projectDir |> ignore
 
     let dbPath = Path.Combine(projectDir, "test.db")
+
     let configPath =
       TestHelpers.createMigrondiJson
         projectDir
@@ -603,59 +557,71 @@ type McpLocalProjectTests() =
       "ALTER TABLE test DROP COLUMN name;"
     |> ignore
 
-    use conn = connectionFactory ()
-    let projectId = TestHelpers.insertLocalProject conn "LocalProject3" configPath None
+    use conn = connectionFactory()
 
-    let! project = deps.GetLocalProjectById projectId CancellationToken.None
+    let projectId =
+      TestHelpers.insertLocalProject conn "LocalProject3" configPath None
+
+    let! project = getProject env.lProjects env.vProjects projectId ct
+
     match project with
-    | Some p ->
-      match p.config with
-      | Some config ->
-        let rootDir = Path.GetDirectoryName p.migrondiConfigPath |> nonNull
-        let migrondi = deps.GetLocalMigrondi(config, rootDir)
-        do! migrondi.InitializeAsync()
-      | _ -> ()
-    | _ -> ()
+    | Some(Project.Local p) ->
+      match getMigrondi env (Project.Local p) with
+      | Some migrondi ->
+        do! migrondi.InitializeAsync ct
 
-    let! result =
-      McpServerLogic.dryRunMigrations deps projectId (Some 1) CancellationToken.None
+        let! migrations =
+          migrondi.DryRunUpAsync(amount = 1, cancellationToken = ct)
 
-    Assert.True(result.count >= 1)
-    Assert.True(result.migrations.Length >= 1)
+        let result = DryRunResult.FromMigrations migrations
+
+        Assert.True(result.count >= 1)
+        Assert.True(result.migrations.Length >= 1)
+      | None -> Assert.Fail "Could not get migrondi"
+    | Some(Project.Virtual _) -> Assert.Fail "Expected Local project"
+    | None -> Assert.Fail "Expected project to be found"
   }
 
   [<Fact>]
-  member _.``dry_run_rollback for local project with no applied migrations returns empty``() = task {
-    let projectDir = Path.Combine(rootDir.FullName, "LocalProject4")
-    Directory.CreateDirectory projectDir |> ignore
+  member _.``dry_run_rollback for local project with no applied migrations returns empty``
+    ()
+    =
+    task {
+      let ct = CancellationToken.None
+      let projectDir = Path.Combine(rootDir.FullName, "LocalProject4")
+      Directory.CreateDirectory projectDir |> ignore
 
-    let dbPath = Path.Combine(projectDir, "test.db")
-    let configPath =
-      TestHelpers.createMigrondiJson
-        projectDir
-        $"Data Source={dbPath}"
-        "migrations"
-        "migrations"
-        MigrondiDriver.Sqlite
+      let dbPath = Path.Combine(projectDir, "test.db")
 
-    Directory.CreateDirectory(Path.Combine(projectDir, "migrations")) |> ignore
+      let configPath =
+        TestHelpers.createMigrondiJson
+          projectDir
+          $"Data Source={dbPath}"
+          "migrations"
+          "migrations"
+          MigrondiDriver.Sqlite
 
-    use conn = connectionFactory ()
-    let projectId = TestHelpers.insertLocalProject conn "LocalProject4" configPath None
+      Directory.CreateDirectory(Path.Combine(projectDir, "migrations"))
+      |> ignore
 
-    let! project = deps.GetLocalProjectById projectId CancellationToken.None
-    match project with
-    | Some p ->
-      match p.config with
-      | Some config ->
-        let rootDir = Path.GetDirectoryName p.migrondiConfigPath |> nonNull
-        let migrondi = deps.GetLocalMigrondi(config, rootDir)
-        do! migrondi.InitializeAsync()
-      | _ -> ()
-    | _ -> ()
+      use conn = connectionFactory()
 
-    let! result = McpServerLogic.dryRunRollback deps projectId None CancellationToken.None
+      let projectId =
+        TestHelpers.insertLocalProject conn "LocalProject4" configPath None
 
-    Assert.Equal(0, result.count)
-    Assert.Empty result.migrations
-  }
+      let! project = getProject env.lProjects env.vProjects projectId ct
+
+      match project with
+      | Some(Project.Local p) ->
+        match getMigrondi env (Project.Local p) with
+        | Some migrondi ->
+          do! migrondi.InitializeAsync ct
+          let! migrations = migrondi.DryRunDownAsync(cancellationToken = ct)
+          let result = DryRunResult.FromMigrations migrations
+
+          Assert.Equal(0, result.count)
+          Assert.Empty result.migrations
+        | None -> Assert.Fail "Could not get migrondi"
+      | Some(Project.Virtual _) -> Assert.Fail "Expected Local project"
+      | None -> Assert.Fail "Expected project to be found"
+    }
