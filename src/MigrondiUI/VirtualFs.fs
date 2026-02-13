@@ -32,7 +32,7 @@ type VirtualProjectResource =
   | Migration of projectId: Guid * migrationName: string
   | MigrationList of projectId: Guid
 
-let private parseVirtualProjectUri(uri: Uri) : VirtualProjectResource option =
+let private parseVirtualProjectUri (uri: Uri) : VirtualProjectResource option =
   if uri.Scheme <> "migrondi-ui" then
     None
   else
@@ -162,11 +162,9 @@ let getVirtualFs
 
         | Some(Migration(_, migrationFileName)) ->
           let migrationName =
-            let idx = migrationFileName.IndexOf('_')
-            if idx >= 0 then
-              migrationFileName.Substring(idx + 1).Replace(".sql", "")
-            else
-              migrationFileName.Replace(".sql", "")
+            match Migration.ExtractFromFilename migrationFileName with
+            | Ok(name, _) -> name
+            | Error _ -> migrationFileName.Replace(".sql", "")
 
           let! migration = vpr.GetMigrationByName migrationName ct
 
@@ -254,8 +252,7 @@ let getVirtualFs
 
           return
             migrations
-            |> List.map(fun m ->
-              Uri($"{basePath}{m.timestamp}_{m.name}.sql"))
+            |> List.map(fun m -> Uri($"{basePath}{m.timestamp}_{m.name}.sql"))
             :> Uri seq
 
         | Some(ProjectConfig _) ->

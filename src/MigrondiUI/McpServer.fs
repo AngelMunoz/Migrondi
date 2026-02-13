@@ -2,6 +2,7 @@ module MigrondiUI.McpServer
 
 open System
 open System.Collections.Concurrent
+open System.Collections.Generic
 open System.Text.Json.Nodes
 open System.Threading
 open System.Threading.Tasks
@@ -343,11 +344,19 @@ module McpResults =
           "migrations", Json.sequence(r.migrations, AppliedMigration.Encoder)
         ]
 
-    static member Ok(count, migrations) =
-      { success = true; message = ""; count = count; migrations = migrations }
+    static member Ok(count, migrations) = {
+      success = true
+      message = ""
+      count = count
+      migrations = migrations
+    }
 
-    static member Error(message) =
-      { success = false; message = message; count = 0; migrations = [||] }
+    static member Error(message) = {
+      success = false
+      message = message
+      count = 0
+      migrations = [||]
+    }
 
   type ErrorResult = {
     error: string
@@ -520,69 +529,65 @@ module McpServerLogic =
           | None -> return ProjectNotFound $"Project {projectId} not found"
     }
 
-  let listMigrations
-    (deps: IMcpReadDeps)
-    (projectId: Guid)
-    =
-    cancellableTask {
-      let! localProject = deps.GetLocalProjectById projectId
+  let listMigrations (deps: IMcpReadDeps) (projectId: Guid) = cancellableTask {
+    let! localProject = deps.GetLocalProjectById projectId
 
-      match localProject with
+    match localProject with
+    | Some p ->
+      match p.config with
+      | None -> return { migrations = Array.empty }
+      | Some config ->
+        let rootDir = IO.Path.GetDirectoryName p.migrondiConfigPath |> nonNull
+        let migrondi = deps.GetLocalMigrondi(config, rootDir)
+
+        let! token = CancellableTask.getCancellationToken()
+        let! migrations = migrondi.MigrationsListAsync token
+
+        let result = [|
+          for m in migrations do
+            let statusStr, migration =
+              match m with
+              | Applied mig -> "Applied", mig
+              | Pending mig -> "Pending", mig
+
+            {
+              name = migration.name
+              timestamp = migration.timestamp
+              status = statusStr
+              fullName = $"{migration.timestamp}_{migration.name}"
+            }
+        |]
+
+        return { migrations = result }
+    | None ->
+      let! virtualProject = deps.GetVirtualProjectById projectId
+
+      match virtualProject with
+      | None -> return { migrations = Array.empty }
       | Some p ->
-        match p.config with
-        | None -> return { migrations = [||] }
-        | Some config ->
-          let rootDir = IO.Path.GetDirectoryName p.migrondiConfigPath |> nonNull
-          let migrondi = deps.GetLocalMigrondi(config, rootDir)
+        let config = p.ToMigrondiConfig()
+        let migrondi = deps.GetVirtualMigrondi(config, p.id)
 
-          let! token = CancellableTask.getCancellationToken()
-          let! migrations = migrondi.MigrationsListAsync token
+        let! token = CancellableTask.getCancellationToken()
+        let! migrations = migrondi.MigrationsListAsync token
 
-          let result = [|
-            for m in migrations do
-              let statusStr, migration =
-                match m with
-                | Applied mig -> "Applied", mig
-                | Pending mig -> "Pending", mig
+        let result = [|
+          for m in migrations do
+            let statusStr, migration =
+              match m with
+              | Applied mig -> "Applied", mig
+              | Pending mig -> "Pending", mig
 
-              yield {
-                name = migration.name
-                timestamp = migration.timestamp
-                status = statusStr
-                fullName = $"{migration.timestamp}_{migration.name}"
-              }
-          |]
+            {
+              name = migration.name
+              timestamp = migration.timestamp
+              status = statusStr
+              fullName = $"{migration.timestamp}_{migration.name}"
+            }
+        |]
 
-          return { migrations = result }
-      | None ->
-        let! virtualProject = deps.GetVirtualProjectById projectId
-
-        match virtualProject with
-        | None -> return { migrations = [||] }
-        | Some p ->
-          let config = p.ToMigrondiConfig()
-          let migrondi = deps.GetVirtualMigrondi(config, p.id)
-
-          let! token = CancellableTask.getCancellationToken()
-          let! migrations = migrondi.MigrationsListAsync token
-
-          let result = [|
-            for m in migrations do
-              let statusStr, migration =
-                match m with
-                | Applied mig -> "Applied", mig
-                | Pending mig -> "Pending", mig
-
-              yield {
-                name = migration.name
-                timestamp = migration.timestamp
-                status = statusStr
-                fullName = $"{migration.timestamp}_{migration.name}"
-              }
-          |]
-
-          return { migrations = result }
-    }
+        return { migrations = result }
+  }
 
   let getMigration
     (deps: IMcpReadDeps)
@@ -620,15 +625,17 @@ module McpServerLogic =
       match localProject with
       | Some p ->
         match p.config with
-        | None -> return { count = 0; migrations = [||] }
+        | None -> return { count = 0; migrations = Array.empty }
         | Some config ->
           let rootDir = IO.Path.GetDirectoryName p.migrondiConfigPath |> nonNull
           let migrondi = deps.GetLocalMigrondi(config, rootDir)
 
           let! token = CancellableTask.getCancellationToken()
+
           let! migrations =
             match amount with
-            | Some a -> migrondi.DryRunUpAsync(amount = a, cancellationToken = token)
+            | Some a ->
+              migrondi.DryRunUpAsync(amount = a, cancellationToken = token)
             | None -> migrondi.DryRunUpAsync(cancellationToken = token)
 
           let result = [|
@@ -642,20 +649,25 @@ module McpServerLogic =
               }
           |]
 
-          return { count = migrations.Count; migrations = result }
+          return {
+            count = migrations.Count
+            migrations = result
+          }
       | None ->
         let! virtualProject = deps.GetVirtualProjectById projectId
 
         match virtualProject with
-        | None -> return { count = 0; migrations = [||] }
+        | None -> return { count = 0; migrations = Array.empty }
         | Some p ->
           let config = p.ToMigrondiConfig()
           let migrondi = deps.GetVirtualMigrondi(config, p.id)
 
           let! token = CancellableTask.getCancellationToken()
+
           let! migrations =
             match amount with
-            | Some a -> migrondi.DryRunUpAsync(amount = a, cancellationToken = token)
+            | Some a ->
+              migrondi.DryRunUpAsync(amount = a, cancellationToken = token)
             | None -> migrondi.DryRunUpAsync(cancellationToken = token)
 
           let result = [|
@@ -669,7 +681,10 @@ module McpServerLogic =
               }
           |]
 
-          return { count = migrations.Count; migrations = result }
+          return {
+            count = migrations.Count
+            migrations = result
+          }
     }
 
   let dryRunRollback
@@ -689,9 +704,11 @@ module McpServerLogic =
           let migrondi = deps.GetLocalMigrondi(config, rootDir)
 
           let! token = CancellableTask.getCancellationToken()
+
           let! migrations =
             match amount with
-            | Some a -> migrondi.DryRunDownAsync(amount = a, cancellationToken = token)
+            | Some a ->
+              migrondi.DryRunDownAsync(amount = a, cancellationToken = token)
             | None -> migrondi.DryRunDownAsync(cancellationToken = token)
 
           let result = [|
@@ -705,7 +722,10 @@ module McpServerLogic =
               }
           |]
 
-          return { count = migrations.Count; migrations = result }
+          return {
+            count = migrations.Count
+            migrations = result
+          }
       | None ->
         let! virtualProject = deps.GetVirtualProjectById projectId
 
@@ -716,9 +736,11 @@ module McpServerLogic =
           let migrondi = deps.GetVirtualMigrondi(config, p.id)
 
           let! token = CancellableTask.getCancellationToken()
+
           let! migrations =
             match amount with
-            | Some a -> migrondi.DryRunDownAsync(amount = a, cancellationToken = token)
+            | Some a ->
+              migrondi.DryRunDownAsync(amount = a, cancellationToken = token)
             | None -> migrondi.DryRunDownAsync(cancellationToken = token)
 
           let result = [|
@@ -732,7 +754,10 @@ module McpServerLogic =
               }
           |]
 
-          return { count = migrations.Count; migrations = result }
+          return {
+            count = migrations.Count
+            migrations = result
+          }
     }
 
   let runMigrations
@@ -747,7 +772,10 @@ module McpServerLogic =
       | Some p ->
         match p.config with
         | None ->
-          return MigrationsResult.Error($"Local project {projectId} has no valid config")
+          return
+            MigrationsResult.Error(
+              $"Local project {projectId} has no valid config"
+            )
         | Some config ->
           let rootDir = IO.Path.GetDirectoryName p.migrondiConfigPath |> nonNull
           let migrondi = deps.GetLocalMigrondi(config, rootDir)
@@ -772,7 +800,10 @@ module McpServerLogic =
 
             return MigrationsResult.Ok(result.Count, migrations)
           with ex ->
-            return MigrationsResult.Error($"Failed to apply migrations: {ex.Message}")
+            return
+              MigrationsResult.Error(
+                $"Failed to apply migrations: {ex.Message}"
+              )
       | None ->
         let! virtualProject = deps.GetVirtualProjectById projectId
 
@@ -803,79 +834,85 @@ module McpServerLogic =
 
             return MigrationsResult.Ok(result.Count, migrations)
           with ex ->
-            return MigrationsResult.Error($"Failed to apply migrations: {ex.Message}")
+            return
+              MigrationsResult.Error(
+                $"Failed to apply migrations: {ex.Message}"
+              )
     }
 
-  let runRollback
-    (deps: IMcpWriteDeps)
-    (projectId: Guid)
-    (amount: int option)
-    =
-    cancellableTask {
-      let! localProject = deps.GetLocalProjectById projectId
+  let runRollback (deps: IMcpWriteDeps) (projectId: Guid) (amount: int option) = cancellableTask {
+    let! localProject = deps.GetLocalProjectById projectId
 
-      match localProject with
+    match localProject with
+    | Some p ->
+      match p.config with
+      | None ->
+        return
+          MigrationsResult.Error(
+            $"Local project {projectId} has no valid config"
+          )
+      | Some config ->
+        let rootDir = IO.Path.GetDirectoryName p.migrondiConfigPath |> nonNull
+        let migrondi = deps.GetLocalMigrondi(config, rootDir)
+
+        try
+          let! token = CancellableTask.getCancellationToken()
+
+          let! result =
+            match amount with
+            | Some a ->
+              migrondi.RunDownAsync(amount = a, cancellationToken = token)
+            | None -> migrondi.RunDownAsync(cancellationToken = token)
+
+          let migrations = [|
+            for m in result do
+              yield {
+                name = m.name
+                timestamp = m.timestamp
+                fullName = $"{m.timestamp}_{m.name}"
+              }
+          |]
+
+          return MigrationsResult.Ok(result.Count, migrations)
+        with ex ->
+          return
+            MigrationsResult.Error(
+              $"Failed to rollback migrations: {ex.Message}"
+            )
+    | None ->
+      let! virtualProject = deps.GetVirtualProjectById projectId
+
+      match virtualProject with
+      | None -> return MigrationsResult.Error($"Project {projectId} not found")
       | Some p ->
-        match p.config with
-        | None ->
-          return MigrationsResult.Error($"Local project {projectId} has no valid config")
-        | Some config ->
-          let rootDir = IO.Path.GetDirectoryName p.migrondiConfigPath |> nonNull
-          let migrondi = deps.GetLocalMigrondi(config, rootDir)
+        let config = p.ToMigrondiConfig()
+        let migrondi = deps.GetVirtualMigrondi(config, p.id)
 
-          try
-            let! token = CancellableTask.getCancellationToken()
+        try
+          let! token = CancellableTask.getCancellationToken()
 
-            let! result =
-              match amount with
-              | Some a ->
-                migrondi.RunDownAsync(amount = a, cancellationToken = token)
-              | None -> migrondi.RunDownAsync(cancellationToken = token)
+          let! result =
+            match amount with
+            | Some a ->
+              migrondi.RunDownAsync(amount = a, cancellationToken = token)
+            | None -> migrondi.RunDownAsync(cancellationToken = token)
 
-            let migrations = [|
-              for m in result do
-                yield {
-                  name = m.name
-                  timestamp = m.timestamp
-                  fullName = $"{m.timestamp}_{m.name}"
-                }
-            |]
+          let migrations = [|
+            for m in result do
+              yield {
+                name = m.name
+                timestamp = m.timestamp
+                fullName = $"{m.timestamp}_{m.name}"
+              }
+          |]
 
-            return MigrationsResult.Ok(result.Count, migrations)
-          with ex ->
-            return MigrationsResult.Error($"Failed to rollback migrations: {ex.Message}")
-      | None ->
-        let! virtualProject = deps.GetVirtualProjectById projectId
-
-        match virtualProject with
-        | None ->
-          return MigrationsResult.Error($"Project {projectId} not found")
-        | Some p ->
-          let config = p.ToMigrondiConfig()
-          let migrondi = deps.GetVirtualMigrondi(config, p.id)
-
-          try
-            let! token = CancellableTask.getCancellationToken()
-
-            let! result =
-              match amount with
-              | Some a ->
-                migrondi.RunDownAsync(amount = a, cancellationToken = token)
-              | None -> migrondi.RunDownAsync(cancellationToken = token)
-
-            let migrations = [|
-              for m in result do
-                yield {
-                  name = m.name
-                  timestamp = m.timestamp
-                  fullName = $"{m.timestamp}_{m.name}"
-                }
-            |]
-
-            return MigrationsResult.Ok(result.Count, migrations)
-          with ex ->
-            return MigrationsResult.Error($"Failed to rollback migrations: {ex.Message}")
-    }
+          return MigrationsResult.Ok(result.Count, migrations)
+        with ex ->
+          return
+            MigrationsResult.Error(
+              $"Failed to rollback migrations: {ex.Message}"
+            )
+  }
 
   let createMigration
     (deps: IMcpWriteDeps)
@@ -1259,18 +1296,26 @@ type McpTools(deps: IMcpReadDeps) =
   [<McpServerTool(ReadOnly = true,
                   Name = "list_migrations",
                   Title = "List Migrations")>]
-  member _.ListMigrations(projectId: string, ?cancellationToken: CancellationToken) = task {
-    let ct = defaultArg cancellationToken CancellationToken.None
+  member _.ListMigrations
+    (projectId: string, ?cancellationToken: CancellationToken)
+    =
+    task {
+      let ct = defaultArg cancellationToken CancellationToken.None
 
-    match Guid.TryParse projectId with
-    | false, _ ->
-      return
-        McpResultMapper.fromEncoder McpResults.ListMigrationsResult.Encoder
-          { migrations = [||] }
-    | true, id ->
-      let! result = McpServerLogic.listMigrations deps id ct
-      return McpResultMapper.fromEncoder McpResults.ListMigrationsResult.Encoder result
-  }
+      match Guid.TryParse projectId with
+      | false, _ ->
+        return
+          McpResultMapper.fromEncoder McpResults.ListMigrationsResult.Encoder {
+            migrations = [||]
+          }
+      | true, id ->
+        let! result = McpServerLogic.listMigrations deps id ct
+
+        return
+          McpResultMapper.fromEncoder
+            McpResults.ListMigrationsResult.Encoder
+            result
+    }
 
   [<McpServerTool(ReadOnly = true,
                   Name = "get_migration",
@@ -1294,11 +1339,15 @@ type McpTools(deps: IMcpReadDeps) =
       match Guid.TryParse projectId with
       | false, _ ->
         return
-          McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder
-            { count = 0; migrations = [||] }
+          McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder {
+            count = 0
+            migrations = [||]
+          }
       | true, id ->
         let! result = McpServerLogic.dryRunMigrations deps id amount ct
-        return McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder result
+
+        return
+          McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder result
     }
 
   [<McpServerTool(ReadOnly = true,
@@ -1313,11 +1362,15 @@ type McpTools(deps: IMcpReadDeps) =
       match Guid.TryParse projectId with
       | false, _ ->
         return
-          McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder
-            { count = 0; migrations = [||] }
+          McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder {
+            count = 0
+            migrations = [||]
+          }
       | true, id ->
         let! result = McpServerLogic.dryRunRollback deps id amount ct
-        return McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder result
+
+        return
+          McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder result
     }
 
 [<McpServerToolType>]
@@ -1336,11 +1389,14 @@ type McpWriteTools(deps: IMcpWriteDeps) =
       match Guid.TryParse projectId with
       | false, _ ->
         return
-          McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder
+          McpResultMapper.fromEncoder
+            McpResults.MigrationsResult.Encoder
             (McpResults.MigrationsResult.Error "projectId must be a valid GUID")
       | true, id ->
         let! result = McpServerLogic.runMigrations deps id amount ct
-        return McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder result
+
+        return
+          McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder result
     }
 
   [<McpServerTool(ReadOnly = false,
@@ -1356,11 +1412,14 @@ type McpWriteTools(deps: IMcpWriteDeps) =
       match Guid.TryParse projectId with
       | false, _ ->
         return
-          McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder
+          McpResultMapper.fromEncoder
+            McpResults.MigrationsResult.Encoder
             (McpResults.MigrationsResult.Error "projectId must be a valid GUID")
       | true, id ->
         let! result = McpServerLogic.runRollback deps id amount ct
-        return McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder result
+
+        return
+          McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder result
     }
 
   [<McpServerTool(ReadOnly = false,
@@ -1583,6 +1642,7 @@ let private runHttpServer
     listener.Start()
 
     use linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct)
+    let runningTasks = ConcurrentBag<Task>()
 
     let createSession () : McpHttpSession =
       let sessionId = Guid.NewGuid().ToString("N")
@@ -1631,51 +1691,62 @@ let private runHttpServer
         | null -> None
         | id -> Some(string id)
 
+      let sendError (statusCode: int) (message: string) =
+        try
+          context.Response.StatusCode <- statusCode
+          use writer = new IO.StreamWriter(context.Response.OutputStream)
+          writer.Write(message)
+          writer.Flush()
+        with _ ->
+          ()
+
+        context.Response.Close()
+
       match context.Request.HttpMethod with
       | "POST" ->
-        let session =
-          match sessionId with
-          | Some id ->
-            match getSession id with
-            | Some s -> s
+        try
+          let session =
+            match sessionId with
+            | Some id ->
+              match getSession id with
+              | Some s -> s
+              | None -> createSession()
             | None -> createSession()
-          | None -> createSession()
 
-        sessions.[session.id] <- session
+          sessions.[session.id] <- session
 
-        use stream = context.Request.InputStream
-        use reader = new IO.StreamReader(stream)
-        let! body = reader.ReadToEndAsync(linkedCts.Token)
+          use stream = context.Request.InputStream
+          use reader = new IO.StreamReader(stream)
+          let! body = reader.ReadToEndAsync(linkedCts.Token)
 
-        let message =
-          System.Text.Json.JsonSerializer.Deserialize<JsonRpcMessage>(
-            body,
-            McpJsonUtilities.DefaultOptions
-          )
-          |> nonNull
+          let message =
+            System.Text.Json.JsonSerializer.Deserialize<JsonRpcMessage>(
+              body,
+              McpJsonUtilities.DefaultOptions
+            )
 
-        context.Response.Headers.Add("Mcp-Session-Id", session.id)
-        use responseStream = context.Response.OutputStream
+          match message with
+          | null -> sendError 400 "Invalid JSON-RPC message"
+          | msg ->
+            context.Response.Headers.Add("Mcp-Session-Id", session.id)
+            use responseStream = context.Response.OutputStream
 
-        let! wroteResponse =
-          session.transport.HandlePostRequestAsync(
-            message,
-            responseStream,
-            linkedCts.Token
-          )
+            let! wroteResponse =
+              session.transport.HandlePostRequestAsync(
+                msg,
+                responseStream,
+                linkedCts.Token
+              )
 
-        if not wroteResponse then
-          context.Response.StatusCode <- 202
-          context.Response.Close()
+            if not wroteResponse then
+              context.Response.StatusCode <- 202
+              context.Response.Close()
+        with ex ->
+          sendError 500 $"Internal server error: {ex.Message}"
 
       | "GET" ->
         match sessionId with
-        | None ->
-          context.Response.StatusCode <- 400
-          use writer = new IO.StreamWriter(context.Response.OutputStream)
-          writer.Write("Mcp-Session-Id header is required")
-          writer.Flush()
-          context.Response.Close()
+        | None -> sendError 400 "Mcp-Session-Id header is required"
         | Some id ->
           match getSession id with
           | None ->
@@ -1692,14 +1763,13 @@ let private runHttpServer
                   context.Response.OutputStream,
                   linkedCts.Token
                 )
-            with :? OperationCanceledException ->
-              ()
+            with
+            | :? OperationCanceledException -> ()
+            | ex -> ()
 
       | "DELETE" ->
         match sessionId with
-        | None ->
-          context.Response.StatusCode <- 400
-          context.Response.Close()
+        | None -> sendError 400 "Mcp-Session-Id header is required"
         | Some id ->
           removeSession id
           context.Response.StatusCode <- 200
@@ -1713,10 +1783,13 @@ let private runHttpServer
     try
       while not linkedCts.Token.IsCancellationRequested do
         let! context = listener.GetContextAsync().WaitAsync(linkedCts.Token)
-        handleRequest context |> ignore
+        let t = handleRequest context
+        runningTasks.Add(t)
     with :? OperationCanceledException ->
       ()
 
+    // Wait for all pending requests to complete before cleanup
+    do! Task.WhenAll(runningTasks.ToArray())
     listener.Stop()
     cleanup()
   }
@@ -1734,51 +1807,36 @@ let runMcpServer
     let lpr, vpr = Projects.GetRepositories connectionFactory
 
     let baseVirtualFactory = MigrondiExt.getMigrondiUI(loggerFactory, vpr)
+
     let virtualMigrondiFactory (config: MigrondiConfig, projectId: Guid) =
       baseVirtualFactory(config, "migrondi-ui://projects/virtual/", projectId)
 
     let localMigrondiFactory (config: MigrondiConfig, rootDir: string) =
       let mLogger = loggerFactory.CreateLogger<Migrondi.Core.IMigrondi>()
-      let migrondi = Migrondi.Core.Migrondi.MigrondiFactory(config, rootDir, mLogger)
-      { new MigrondiExt.IMigrondiUI with
-          member _.DryRunDown(?amount) = migrondi.DryRunDown(?amount = amount)
-          member _.DryRunDownAsync(?amount, ?cancellationToken) =
-            migrondi.DryRunDownAsync(?amount = amount, ?cancellationToken = cancellationToken)
-          member _.DryRunUp(?amount) = migrondi.DryRunUp(?amount = amount)
-          member _.DryRunUpAsync(?amount, ?cancellationToken) =
-            migrondi.DryRunUpAsync(?amount = amount, ?cancellationToken = cancellationToken)
-          member _.Initialize() = migrondi.Initialize()
-          member _.InitializeAsync(?cancellationToken) =
-            migrondi.InitializeAsync(?cancellationToken = cancellationToken)
-          member _.MigrationsList() = migrondi.MigrationsList()
-          member _.MigrationsListAsync(?cancellationToken) =
-            migrondi.MigrationsListAsync(?cancellationToken = cancellationToken)
-          member _.RunDown(?amount) = migrondi.RunDown(?amount = amount)
-          member _.RunDownAsync(?amount, ?cancellationToken) =
-            migrondi.RunDownAsync(?amount = amount, ?cancellationToken = cancellationToken)
-          member _.RunNew(friendlyName, ?upContent, ?downContent, ?manualTransaction) =
-            migrondi.RunNew(friendlyName, ?upContent = upContent, ?downContent = downContent, ?manualTransaction = manualTransaction)
-          member _.RunNewAsync(friendlyName, ?upContent, ?downContent, ?manualTransaction, ?cancellationToken) =
-            migrondi.RunNewAsync(friendlyName, ?upContent = upContent, ?downContent = downContent, ?manualTransaction = manualTransaction, ?cancellationToken = cancellationToken)
-          member _.RunUp(?amount) = migrondi.RunUp(?amount = amount)
-          member _.RunUpAsync(?amount, ?cancellationToken) =
-            migrondi.RunUpAsync(?amount = amount, ?cancellationToken = cancellationToken)
-          member _.RunUpdateAsync(migration, ?cancellationToken) =
-            task { () }
-          member _.ScriptStatus(migrationPath) = migrondi.ScriptStatus(migrationPath)
-          member _.ScriptStatusAsync(migrationPath, ?cancellationToken) =
-            migrondi.ScriptStatusAsync(migrationPath, ?cancellationToken = cancellationToken)
-      }
+
+      let migrondi =
+        Migrondi.Core.Migrondi.MigrondiFactory(config, rootDir, mLogger)
+
+      MigrondiExt.wrapLocalMigrondi(migrondi, rootDir)
 
     let vfs =
       let logger = loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>()
       VirtualFs.getVirtualFs(logger, vpr)
 
     let readDeps =
-      McpDepsFactory.createReadDeps lpr vpr localMigrondiFactory virtualMigrondiFactory
+      McpDepsFactory.createReadDeps
+        lpr
+        vpr
+        localMigrondiFactory
+        virtualMigrondiFactory
 
     let writeDeps =
-      McpDepsFactory.createWriteDeps lpr vpr vfs localMigrondiFactory virtualMigrondiFactory
+      McpDepsFactory.createWriteDeps
+        lpr
+        vpr
+        vfs
+        localMigrondiFactory
+        virtualMigrondiFactory
 
     let services = ServiceCollection()
     services.AddSingleton<ILoggerFactory>(loggerFactory) |> ignore
