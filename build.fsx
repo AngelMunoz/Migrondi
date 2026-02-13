@@ -16,7 +16,7 @@ let runtimes = [|
   "win-arm64"
 |]
 
-let projects = [ "Migrondi" ]
+let projects = [ "Migrondi"; "MigrondiUI" ]
 
 let libraries = [ "Migrondi.Core" ]
 
