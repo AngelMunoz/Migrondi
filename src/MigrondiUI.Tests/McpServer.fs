@@ -14,8 +14,9 @@ open ModelContextProtocol.Protocol
 open Xunit
 
 open MigrondiUI
-open MigrondiUI.McpServer
-open MigrondiUI.McpServer.McpResults
+open MigrondiUI.Mcp
+open MigrondiUI.Mcp.McpResults
+open MigrondiUI.Mcp.McpRuntime
 open MigrondiUI.Projects
 open Migrondi.Core
 open Migrondi.Core.Serialization
@@ -903,7 +904,7 @@ type McpMigrationProjectScopingTests() =
 
     let success = result.StructuredContent.["success"].GetValue<bool>()
     Assert.True(success, "Migration update should succeed")
-    
+
     let message = result.StructuredContent.["message"].GetValue<string>()
     Assert.Contains("success", message.ToLower())
 
@@ -957,7 +958,7 @@ type McpMigrationProjectScopingTests() =
 
     let success = result.StructuredContent.["success"].GetValue<bool>()
     Assert.True(success, "Migration deletion should succeed")
-    
+
     let message = result.StructuredContent.["message"].GetValue<string>()
     Assert.Contains("success", message.ToLower())
 

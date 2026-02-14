@@ -12,6 +12,7 @@ open Navs.Avalonia
 
 open MigrondiUI
 open Microsoft.Extensions.Logging
+open MigrondiUI.Mcp
 
 open SukiUI
 open SukiUI.Controls
@@ -94,10 +95,9 @@ type App() as this =
 
 [<EntryPoint; STAThread>]
 let main argv =
-  match McpServer.parseArgs argv with
+  match Server.tryParseArgs argv with
   | Some mcpOptions ->
-    McpServer.runMcpServer Database.ConnectionFactory mcpOptions loggerFactory
-    |> Async.AwaitTask
+    Server.runMcpServer Database.ConnectionFactory mcpOptions loggerFactory
     |> Async.RunSynchronously
 
     0

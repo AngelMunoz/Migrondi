@@ -30,7 +30,11 @@
     <Compile Include="Views/VirtualProjectDetails.fs" />
     <Compile Include="Views/Routes.fs" />
     <Compile Include="Migrations.fs" />
-    <Compile Include="McpServer.fs" />
+    <Compile Include="Mcp/Types.fs" />
+    <Compile Include="Mcp/Results.fs" />
+    <Compile Include="Mcp/Tools.fs" />
+    <Compile Include="Mcp/HttpServer.fs" />
+    <Compile Include="Mcp/Server.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
