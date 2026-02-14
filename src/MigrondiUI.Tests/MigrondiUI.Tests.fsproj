@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -13,6 +13,9 @@
     <Compile Include="EditableMigrationTests.fs" />
     <Compile Include="VirtualProjectFormTests.fs" />
     <Compile Include="NewVirtualProjectFormTests.fs" />
+    <Compile Include="VirtualProjectRepositoryTests.fs" />
+    <Compile Include="VirtualFsTests.fs" />
+    <Compile Include="McpServer.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -23,6 +26,9 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
   </ItemGroup>
 
   <ItemGroup>

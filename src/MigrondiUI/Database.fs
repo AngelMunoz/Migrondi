@@ -118,7 +118,8 @@ module Queries =
       vm.virtual_project_id as virtual_project_id,
       vm.manual_transaction as manual_transaction
     from virtual_migrations as vm
-    where vm.name = @name;
+    where vm.name = @name
+      and vm.virtual_project_id = @project_id;
     """
 
   [<Literal>]
@@ -145,7 +146,8 @@ module Queries =
       up_content = coalesce(@up_content, up_content),
       down_content = coalesce(@down_content, down_content),
       manual_transaction = coalesce(@manual_transaction, manual_transaction)
-    where name = @name;
+    where name = @name
+      and virtual_project_id = @project_id;
     """
 
   [<Literal>]
@@ -159,7 +161,8 @@ module Queries =
   let RemoveVirtualMigrationByName =
     """
     delete from virtual_migrations
-    where name = @name;
+    where name = @name
+      and virtual_project_id = @project_id;
     """
 
 module Mappers =
@@ -254,6 +257,7 @@ module Database =
 
   [<Struct>]
   type UpdateVirtualMigrationArgs = {
+    virtualProjectId: Guid
     name: string
     upContent: string
     downContent: string
@@ -476,7 +480,7 @@ module Database =
 
   // Virtual migration database functions
   let FindVirtualMigrationByName(createDbConnection: unit -> IDbConnection) =
-    fun (name: string) -> cancellableTask {
+    fun (projectId: Guid) (name: string) -> cancellableTask {
       let! ct = CancellableTask.getCancellationToken()
       use connection = createDbConnection()
 
@@ -486,7 +490,10 @@ module Database =
         connection
         |> Db.newCommand Queries.FindByVirtualMigrationName
         |> Db.setCancellationToken ct
-        |> Db.setParams [ "name", sqlString name ]
+        |> Db.setParams [
+          "project_id", sqlString projectId
+          "name", sqlString name
+        ]
         |> Db.Async.querySingle(Mappers.mapVirtualMigration)
     }
 
@@ -519,6 +526,7 @@ module Database =
         |> Db.newCommand Queries.UpdateVirtualMigrationByName
         |> Db.setCancellationToken ct
         |> Db.setParams [
+          "project_id", sqlString args.virtualProjectId
           "name", sqlString args.name
           "up_content", sqlString args.upContent
           "down_content", sqlString args.downContent
@@ -555,7 +563,7 @@ module Database =
     }
 
   let RemoveVirtualMigrationByName(createDbConnection: unit -> IDbConnection) =
-    fun (name: string) -> cancellableTask {
+    fun (projectId: Guid) (name: string) -> cancellableTask {
       let! ct = CancellableTask.getCancellationToken()
       use connection = createDbConnection()
 
@@ -565,6 +573,9 @@ module Database =
         connection
         |> Db.newCommand Queries.RemoveVirtualMigrationByName
         |> Db.setCancellationToken ct
-        |> Db.setParams [ "name", sqlString name ]
+        |> Db.setParams [
+          "project_id", sqlString projectId
+          "name", sqlString name
+        ]
         |> Db.Async.exec
     }

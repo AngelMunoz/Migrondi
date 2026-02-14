@@ -194,6 +194,46 @@ exception DeserializationFailed of Content: string * Reason: string
 /// </summary>
 exception MalformedSource of SourceName: string * Content: string * Reason: string
 
+/// <summary>
+/// Provides functions for validating migration names.
+/// </summary>
+[<RequireQualifiedAccess>]
+module MigrationName =
+
+  /// <summary>
+  /// The regex pattern for valid metadata values in migration files.
+  /// This pattern is used to validate migration names and other metadata values.
+  /// Valid characters are: a-z, A-Z, 0-9, underscore (_), and hyphen (-)
+  /// </summary>
+  [<Literal>]
+  val MetadataValuePattern: string = "[a-zA-Z0-9_-]+"
+
+  /// <summary>
+  /// Validates a migration name against the allowed character set.
+  /// Migration names must match the pattern [a-zA-Z0-9_-]+ to be
+  /// compatible with the Migrondi metadata format.
+  /// </summary>
+  /// <param name="name">The migration name to validate</param>
+  /// <returns>
+  /// Ok with the name if valid, Error with error message if invalid
+  /// </returns>
+  val Validate: name: string -> Result<string, string>
+
+
+/// <summary>
+/// Extension methods for F# Result type to enable C# interop.
+/// </summary>
+[<Extension; Class>]
+type ResultExtensions =
+
+  /// <summary>Returns the value if Ok, otherwise throws InvalidOperationException</summary>
+  [<Extension>]
+  static member inline Value: Result<'T, 'TError> -> 'T
+
+  /// <summary>Returns the error if Error, otherwise throws InvalidOperationException</summary>
+  [<Extension>]
+  static member inline ErrorValue: Result<'T, 'TError> -> 'TError
+
 
 [<Extension; Class>]
 type ExceptionExtensions =

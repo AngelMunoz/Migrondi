@@ -163,6 +163,55 @@ exception MalformedSource of
   Reason: string
 
 
+[<RequireQualifiedAccess>]
+module MigrationName =
+  open System.Text.RegularExpressions
+
+  /// <summary>
+  /// The regex pattern for valid metadata values in migration files.
+  /// This pattern is used to validate migration names and other metadata values.
+  /// Valid characters are: a-z, A-Z, 0-9, underscore (_), and hyphen (-)
+  /// </summary>
+  [<Literal>]
+  let MetadataValuePattern = "[a-zA-Z0-9_-]+"
+
+  let private nameRegex = lazy Regex($"^{MetadataValuePattern}$")
+
+  /// <summary>
+  /// Validates a migration name against the allowed character set.
+  /// Migration names must match the pattern [a-zA-Z0-9_-]+ to be
+  /// compatible with the Migrondi metadata format.
+  /// </summary>
+  /// <param name="name">The migration name to validate</param>
+  /// <returns>
+  /// Ok with the name if valid, Error with error message if invalid
+  /// </returns>
+  let Validate(name: string) : Result<string, string> =
+    if String.IsNullOrWhiteSpace(name) then
+      Error "Migration name cannot be empty or whitespace"
+    elif nameRegex.Value.IsMatch(name) then
+      Ok name
+    else
+      Error
+        $"Migration name '{name}' contains invalid characters. Names must match the pattern [a-zA-Z0-9_-]+"
+
+
+[<Extension; Class>]
+type ResultExtensions =
+
+  [<Extension>]
+  static member inline Value(this: Result<'T, 'TError>) : 'T =
+    match this with
+    | Ok v -> v
+    | Error _ -> invalidOp "Cannot access Value on Error result"
+
+  [<Extension>]
+  static member inline ErrorValue(this: Result<'T, 'TError>) : 'TError =
+    match this with
+    | Ok _ -> invalidOp "Cannot access ErrorValue on Ok result"
+    | Error e -> e
+
+
 [<Extension; Class>]
 type ExceptionExtensions =
 

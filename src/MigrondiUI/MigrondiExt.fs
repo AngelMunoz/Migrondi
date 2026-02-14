@@ -9,6 +9,7 @@ open System.Runtime.InteropServices
 open System.Text.RegularExpressions
 
 open Migrondi.Core
+open Migrondi.Core.Serialization
 open Microsoft.Extensions.Logging
 
 open MigrondiUI
@@ -21,29 +22,135 @@ type IMigrondiUI =
     migration: VirtualMigration * ?cancellationToken: CancellationToken -> Task
 
 
+/// Wraps an IMigrondi instance into an IMigrondiUI for local projects.
+/// RunUpdateAsync writes migration content directly to the file system.
+let wrapLocalMigrondi
+  (migrondi: IMigrondi, config: MigrondiConfig, rootDir: string)
+  : IMigrondiUI =
+  { new IMigrondiUI with
+      member _.DryRunDown(?amount) = migrondi.DryRunDown(?amount = amount)
+
+      member _.DryRunDownAsync(?amount, ?cancellationToken) =
+        migrondi.DryRunDownAsync(
+          ?amount = amount,
+          ?cancellationToken = cancellationToken
+        )
+
+      member _.DryRunUp(?amount) : IReadOnlyList<Migration> =
+        migrondi.DryRunUp(?amount = amount)
+
+      member _.DryRunUpAsync(?amount, ?cancellationToken) =
+        migrondi.DryRunUpAsync(
+          ?amount = amount,
+          ?cancellationToken = cancellationToken
+        )
+
+      member _.Initialize() : unit = migrondi.Initialize()
+
+      member _.InitializeAsync(?cancellationToken) : Task =
+        migrondi.InitializeAsync(?cancellationToken = cancellationToken)
+
+      member _.MigrationsList() : IReadOnlyList<MigrationStatus> =
+        migrondi.MigrationsList()
+
+      member _.MigrationsListAsync(?cancellationToken) =
+        migrondi.MigrationsListAsync(?cancellationToken = cancellationToken)
+
+      member _.RunDown(?amount) = migrondi.RunDown(?amount = amount)
+
+      member _.RunDownAsync(?amount, ?cancellationToken) =
+        migrondi.RunDownAsync(
+          ?amount = amount,
+          ?cancellationToken = cancellationToken
+        )
+
+      member _.RunNew
+        (friendlyName: string, ?upContent, ?downContent, ?manualTransaction)
+        : Migration =
+        migrondi.RunNew(
+          friendlyName,
+          ?upContent = upContent,
+          ?downContent = downContent,
+          ?manualTransaction = manualTransaction
+        )
+
+      member _.RunNewAsync
+        (
+          friendlyName: string,
+          ?upContent,
+          ?downContent,
+          ?manualTransaction,
+          ?cancellationToken
+        ) : Task<Migration> =
+        migrondi.RunNewAsync(
+          friendlyName,
+          ?upContent = upContent,
+          ?downContent = downContent,
+          ?manualTransaction = manualTransaction,
+          ?cancellationToken = cancellationToken
+        )
+
+      member _.RunUp(?amount) = migrondi.RunUp(?amount = amount)
+
+      member _.RunUpAsync(?amount, ?cancellationToken) =
+        migrondi.RunUpAsync(
+          ?amount = amount,
+          ?cancellationToken = cancellationToken
+        )
+
+      member _.RunUpdateAsync(migration, ?cancellationToken) =
+        task {
+          let ct = defaultArg cancellationToken CancellationToken.None
+          let fileName = $"{migration.timestamp}_{migration.name}.sql"
+          let migrationsPath = Path.Combine(rootDir, config.migrations)
+          let migrationPath = Path.Combine(migrationsPath, fileName)
+          let migrationRecord = migration.ToMigration()
+          let content: string = MiSerializer.Encode migrationRecord
+          do! File.WriteAllTextAsync(migrationPath, content, ct)
+        }
+        :> Task
+
+      member _.ScriptStatus(migrationPath: string) : MigrationStatus =
+        migrondi.ScriptStatus(migrationPath)
+
+      member _.ScriptStatusAsync(arg1: string, ?cancellationToken) =
+        migrondi.ScriptStatusAsync(arg1, ?cancellationToken = cancellationToken)
+  }
+
+
 let private normalizeSqliteConnection (vProjectId: Guid) (connection: string) =
-  let pattern = Regex(@"Data Source\s*=\s*(.+?)(?:;|$)", RegexOptions.IgnoreCase)
+  let pattern =
+    Regex(@"Data Source\s*=\s*(.+?)(?:;|$)", RegexOptions.IgnoreCase)
+
   let m = pattern.Match(connection)
-  
-  if not m.Success then connection
+
+  if not m.Success then
+    connection
   else
     let dataSource = m.Groups.[1].Value.Trim()
-    
-    if Path.IsPathRooted dataSource then connection
+
+    if Path.IsPathRooted dataSource then
+      connection
+    elif dataSource.StartsWith(":") then
+      connection // Special SQLite keywords like :memory:
     else
-      let appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+      let appData =
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
+
       let baseDir = Path.Combine(appData, "MigrondiUI", vProjectId.ToString())
       let fileName = dataSource.Replace("./", "").Replace(".\\", "")
       let absolutePath = Path.Combine(baseDir, fileName)
-      
-      if not (Directory.Exists baseDir) then
+
+      if not(Directory.Exists baseDir) then
         Directory.CreateDirectory baseDir |> ignore
-      
+
       let restOfConnection = connection.Substring(m.Index + m.Length)
       $"Data Source={absolutePath}{restOfConnection}"
 
 
-let getMigrondiUI(lf: ILoggerFactory, vpr: Projects.IVirtualProjectRepository) =
+let getMigrondiUI
+  (lf: ILoggerFactory, vpr: Projects.IVirtualProjectRepository)
+  =
   let mufs = lf.CreateLogger<VirtualFs.MigrondiUIFs>()
   let ml = lf.CreateLogger<IMigrondi>()
   let vfs = VirtualFs.getVirtualFs(mufs, vpr)
@@ -52,17 +159,14 @@ let getMigrondiUI(lf: ILoggerFactory, vpr: Projects.IVirtualProjectRepository) =
 
     let normalizedConfig =
       match config.driver with
-      | MigrondiDriver.Sqlite ->
-        { config with connection = normalizeSqliteConnection projectId config.connection }
+      | MigrondiDriver.Sqlite -> {
+          config with
+              connection = normalizeSqliteConnection projectId config.connection
+        }
       | _ -> config
 
     let migrondi =
-      Migrondi.Core.Migrondi.MigrondiFactory(
-        normalizedConfig,
-        rootDir,
-        ml,
-        vfs
-      )
+      Migrondi.Core.Migrondi.MigrondiFactory(normalizedConfig, rootDir, ml, vfs)
 
 
     { new IMigrondiUI with
@@ -118,12 +222,13 @@ let getMigrondiUI(lf: ILoggerFactory, vpr: Projects.IVirtualProjectRepository) =
           )
 
         member _.RunNewAsync
-          (friendlyName: string,
-           ?upContent,
-           ?downContent,
-           ?manualTransaction,
-           ?cancellationToken)
-          : Task<Migration> =
+          (
+            friendlyName: string,
+            ?upContent,
+            ?downContent,
+            ?manualTransaction,
+            ?cancellationToken
+          ) : Task<Migration> =
 
           migrondi.RunNewAsync(
             friendlyName,

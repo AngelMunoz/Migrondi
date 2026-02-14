@@ -32,12 +32,11 @@ type VirtualProjectResource =
   | Migration of projectId: Guid * migrationName: string
   | MigrationList of projectId: Guid
 
-let private parseVirtualProjectUri(uri: Uri) : VirtualProjectResource option =
+let private parseVirtualProjectUri (uri: Uri) : VirtualProjectResource option =
   if uri.Scheme <> "migrondi-ui" then
     None
   else
     let segments = uri.Segments |> Array.map(fun s -> s.TrimEnd('/'))
-    printfn "Parsing URI segments: %A" segments
 
     match segments with
     | [| ""; "virtual"; projectId; "config" |] ->
@@ -50,12 +49,7 @@ let private parseVirtualProjectUri(uri: Uri) : VirtualProjectResource option =
       | true, id -> Some(MigrationList id)
       | _ -> None
 
-    | [| ""; "virtual"; projectId; "migrations" |] ->
-      match Guid.TryParse projectId with
-      | true, id -> Some(MigrationList id)
-      | _ -> None
-
-    | [| ""; "virtual"; projectId; "migrations"; migrationName |] ->
+    | [| ""; "virtual"; projectId; migrationName |] ->
       match Guid.TryParse projectId with
       | true, id -> Some(Migration(id, migrationName))
       | _ -> None
@@ -166,8 +160,13 @@ let getVirtualFs
             let config = p.ToMigrondiConfig()
             return MiSerializer.Encode config
 
-        | Some(Migration(_, migrationName)) ->
-          let! migration = vpr.GetMigrationByName migrationName ct
+        | Some(Migration(projectId, migrationFileName)) ->
+          let migrationName =
+            match Migration.ExtractFromFilename migrationFileName with
+            | Ok(name, _) -> name
+            | Error _ -> migrationFileName.Replace(".sql", "")
+
+          let! migration = vpr.GetMigrationByName projectId migrationName ct
 
           match migration with
           | None -> return failwith $"Migration {migrationName} not found"
@@ -209,7 +208,12 @@ let getVirtualFs
 
               return! vpr.UpdateProject updatedProject ct
 
-          | Some(Migration(projectId, migrationName)) ->
+          | Some(Migration(projectId, migrationFileName)) ->
+            let migrationName =
+              match Migration.ExtractFromFilename migrationFileName with
+              | Ok(name, _) -> name
+              | Error _ -> migrationFileName.Replace(".sql", "")
+
             let migration = MiSerializer.Decode(content, migrationName)
 
             let virtualMigration: VirtualMigration = {
@@ -222,7 +226,7 @@ let getVirtualFs
               manualTransaction = migration.manualTransaction
             }
 
-            let! existing = vpr.GetMigrationByName migrationName ct
+            let! existing = vpr.GetMigrationByName projectId migrationName ct
 
             match existing with
             | Some _ -> return! vpr.UpdateMigration virtualMigration ct
@@ -249,10 +253,11 @@ let getVirtualFs
         | Some(MigrationList projectId) ->
           let! migrations = vpr.GetMigrations projectId ct
 
+          let basePath = locationUri.ToString().TrimEnd('/') + "/"
+
           return
             migrations
-            |> List.map(fun m ->
-              Uri(locationUri, $"{m.timestamp}_{m.name}.sql"))
+            |> List.map(fun m -> Uri($"{basePath}{m.timestamp}_{m.name}.sql"))
             :> Uri seq
 
         | Some(ProjectConfig _) ->

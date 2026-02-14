@@ -236,7 +236,7 @@ module private Migration =
 
     let metadataMatcher =
       Regex(
-        "-- MIGRONDI:(?<Key>[a-zA-Z0-9_-]+)=(?<Value>[a-zA-Z0-9_-]+)",
+        $"-- MIGRONDI:(?<Key>{MigrationName.MetadataValuePattern})=(?<Value>{MigrationName.MetadataValuePattern})",
         RegexOptions.Multiline
       )
 

@@ -12,6 +12,7 @@ open Navs.Avalonia
 
 open MigrondiUI
 open Microsoft.Extensions.Logging
+open MigrondiUI.Mcp
 
 open SukiUI
 open SukiUI.Controls
@@ -32,7 +33,7 @@ Log.Logger <-
 
 let loggerFactory = (new LoggerFactory()).AddSerilog Log.Logger
 
-let BuildMainWindow(dialogManager, toastManager) =
+let BuildMainWindow (dialogManager, toastManager) =
   let win =
     (new SukiWindow())
       .BackgroundStyle(SukiBackgroundStyle.Bubble)
@@ -44,12 +45,10 @@ let BuildMainWindow(dialogManager, toastManager) =
       .MinHeight(640)
       .Title
       "MigrondiUI"
-#if DEBUG
-  win.AttachDevTools()
-#endif
+
   win
 
-let Orchestrate() =
+let Orchestrate () =
   // This is for the current application's database
   // each project is dealt with accordingly
   Migrations.GetMigrondi loggerFactory
@@ -96,8 +95,14 @@ type App() as this =
 
 [<EntryPoint; STAThread>]
 let main argv =
+  match Server.tryParseArgs argv with
+  | Some mcpOptions ->
+    Server.runMcpServer Database.ConnectionFactory mcpOptions loggerFactory
+    |> Async.RunSynchronously
 
-  AppBuilder
-    .Configure<App>()
-    .UsePlatformDetect()
-    .StartWithClassicDesktopLifetime(Orchestrate, argv)
+    0
+  | None ->
+    AppBuilder
+      .Configure<App>()
+      .UsePlatformDetect()
+      .StartWithClassicDesktopLifetime(Orchestrate, argv)

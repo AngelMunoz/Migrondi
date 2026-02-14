@@ -27,13 +27,13 @@ type IVirtualProjectRepository =
 
   abstract member InsertMigration: VirtualMigration -> CancellableTask<Guid>
   abstract member UpdateMigration: VirtualMigration -> CancellableTask<unit>
-  abstract member RemoveMigrationByName: string -> CancellableTask<unit>
 
   abstract member GetMigrations: Guid -> CancellableTask<VirtualMigration list>
 
-
   abstract member GetMigrationByName:
-    string -> CancellableTask<VirtualMigration option>
+    Guid -> string -> CancellableTask<VirtualMigration option>
+
+  abstract member RemoveMigrationByName: Guid -> string -> CancellableTask<unit>
 
 type ILocalProjectRepository =
   abstract member GetProjects: unit -> CancellableTask<LocalProject list>
@@ -169,19 +169,21 @@ let GetVirtualProjectRepository createDbConnection =
 
       member _.UpdateMigration migration =
         updateVirtualMigration {
+          virtualProjectId = migration.projectId
           name = migration.name
           upContent = migration.upContent
           downContent = migration.downContent
           manualTransaction = migration.manualTransaction
         }
 
-      member _.RemoveMigrationByName migrationName =
-        removeVirtualMigrationByName migrationName
-
       member _.GetMigrations projectId =
         findVirtualMigrationsByProjectId projectId
 
-      member _.GetMigrationByName name = findVirtualMigrationByName name
+      member _.GetMigrationByName projectId name =
+        findVirtualMigrationByName projectId name
+
+      member _.RemoveMigrationByName projectId migrationName =
+        removeVirtualMigrationByName projectId migrationName
   }
 
 let inline GetRepositories createDbConnection =

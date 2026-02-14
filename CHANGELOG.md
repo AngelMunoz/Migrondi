@@ -8,10 +8,14 @@
 - MigrondiUI: Virtual project support - create projects without physical files
 - MigrondiUI: Local project import and visualization
 - MigrondiUI: Migration execution from GUI
+- MigrondiUI: MCP (Model Context Protocol) server mode for AI assistant integration
+- MigrationName module with validation for migration names
+- ResultExtensions for C# interop with F# Result type
 
 ### Changed
 
 - MigrondiUI references Migrondi.Core by project reference rather than NuGet
+- Updated Microsoft.Extensions.Logging.Console from 9.0.6 to 10.0.3
 
 ## [1.2.0] - 2026-02-11
 
