@@ -951,32 +951,37 @@ module McpWriteTools =
               McpResults.CreateMigrationResult.CreateMigrationError
                 $"Virtual project {projectId} not found"
           | Some _ ->
-            let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-
-            let migration: VirtualMigration = {
-              id = Guid.NewGuid()
-              name = name
-              timestamp = timestamp
-              upContent = defaultArg upContent ""
-              downContent = defaultArg downContent ""
-              projectId = projectId
-              manualTransaction = false
-            }
-
-            try
-              let! id = env.vProjects.InsertMigration migration
-
+            match MigrationName.Validate name with
+            | Error errorMsg ->
               return
-                McpResults.CreateMigrationResult.MigrationCreated {|
-                  id = id
-                  name = migration.name
-                  timestamp = migration.timestamp
-                  fullName = $"{migration.timestamp}_{migration.name}"
-                |}
-            with ex ->
-              return
-                McpResults.CreateMigrationResult.CreateMigrationError
-                  $"Failed to create migration: {ex.Message}"
+                McpResults.CreateMigrationResult.CreateMigrationError errorMsg
+            | Ok _ ->
+              let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+              let migration: VirtualMigration = {
+                id = Guid.NewGuid()
+                name = name
+                timestamp = timestamp
+                upContent = defaultArg upContent ""
+                downContent = defaultArg downContent ""
+                projectId = projectId
+                manualTransaction = false
+              }
+
+              try
+                let! id = env.vProjects.InsertMigration migration
+
+                return
+                  McpResults.CreateMigrationResult.MigrationCreated {|
+                    id = id
+                    name = migration.name
+                    timestamp = migration.timestamp
+                    fullName = $"{migration.timestamp}_{migration.name}"
+                  |}
+              with ex ->
+                return
+                  McpResults.CreateMigrationResult.CreateMigrationError
+                    $"Failed to create migration: {ex.Message}"
       }
 
       return
