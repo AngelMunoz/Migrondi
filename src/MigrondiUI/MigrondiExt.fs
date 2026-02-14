@@ -24,7 +24,9 @@ type IMigrondiUI =
 
 /// Wraps an IMigrondi instance into an IMigrondiUI for local projects.
 /// RunUpdateAsync writes migration content directly to the file system.
-let wrapLocalMigrondi (migrondi: IMigrondi, rootDir: string) : IMigrondiUI =
+let wrapLocalMigrondi
+  (migrondi: IMigrondi, config: MigrondiConfig, rootDir: string)
+  : IMigrondiUI =
   { new IMigrondiUI with
       member _.DryRunDown(?amount) = migrondi.DryRunDown(?amount = amount)
 
@@ -100,7 +102,8 @@ let wrapLocalMigrondi (migrondi: IMigrondi, rootDir: string) : IMigrondiUI =
         task {
           let ct = defaultArg cancellationToken CancellationToken.None
           let fileName = $"{migration.timestamp}_{migration.name}.sql"
-          let migrationPath = Path.Combine(rootDir, "migrations", fileName)
+          let migrationsPath = Path.Combine(rootDir, config.migrations)
+          let migrationPath = Path.Combine(migrationsPath, fileName)
           let migrationRecord = migration.ToMigration()
           let content: string = MiSerializer.Encode migrationRecord
           do! File.WriteAllTextAsync(migrationPath, content, ct)

@@ -160,13 +160,13 @@ let getVirtualFs
             let config = p.ToMigrondiConfig()
             return MiSerializer.Encode config
 
-        | Some(Migration(_, migrationFileName)) ->
+        | Some(Migration(projectId, migrationFileName)) ->
           let migrationName =
             match Migration.ExtractFromFilename migrationFileName with
             | Ok(name, _) -> name
             | Error _ -> migrationFileName.Replace(".sql", "")
 
-          let! migration = vpr.GetMigrationByName migrationName ct
+          let! migration = vpr.GetMigrationByName projectId migrationName ct
 
           match migration with
           | None -> return failwith $"Migration {migrationName} not found"
@@ -208,7 +208,12 @@ let getVirtualFs
 
               return! vpr.UpdateProject updatedProject ct
 
-          | Some(Migration(projectId, migrationName)) ->
+          | Some(Migration(projectId, migrationFileName)) ->
+            let migrationName =
+              match Migration.ExtractFromFilename migrationFileName with
+              | Ok(name, _) -> name
+              | Error _ -> migrationFileName.Replace(".sql", "")
+
             let migration = MiSerializer.Decode(content, migrationName)
 
             let virtualMigration: VirtualMigration = {
@@ -221,7 +226,7 @@ let getVirtualFs
               manualTransaction = migration.manualTransaction
             }
 
-            let! existing = vpr.GetMigrationByName migrationName ct
+            let! existing = vpr.GetMigrationByName projectId migrationName ct
 
             match existing with
             | Some _ -> return! vpr.UpdateMigration virtualMigration ct

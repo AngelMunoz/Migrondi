@@ -10,6 +10,7 @@ open System.Threading.Tasks
 
 open Microsoft.Data.Sqlite
 open Microsoft.Extensions.Logging
+open ModelContextProtocol.Protocol
 open Xunit
 
 open MigrondiUI
@@ -17,6 +18,12 @@ open MigrondiUI.McpServer
 open MigrondiUI.McpServer.McpResults
 open MigrondiUI.Projects
 open Migrondi.Core
+open Migrondi.Core.Serialization
+
+open JDeck
+
+open JDeck
+open System.Text.Json
 
 module private TestHelpers =
 
@@ -204,7 +211,7 @@ module private TestHelpers =
     let localMigrondiFactory (config: MigrondiConfig, rootDir: string) =
       let mLogger = loggerFactory.CreateLogger<IMigrondi>()
       let migrondi = Migrondi.MigrondiFactory(config, rootDir, mLogger)
-      MigrondiExt.wrapLocalMigrondi(migrondi, rootDir)
+      MigrondiExt.wrapLocalMigrondi(migrondi, config, rootDir)
 
     let vfs =
       let logger = loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>()
@@ -379,6 +386,78 @@ type McpServerTests() =
       Assert.Equal("Pending", result.migrations.[0].status)
     | None -> Assert.Fail "Project not found"
   }
+
+  [<Fact>]
+  member _.``WriteContentAsync updates existing migration instead of inserting duplicate``
+    ()
+    =
+    task {
+      let ct = CancellationToken.None
+
+      let dbPath =
+        Path.Combine(tempDirectory, $"virtual-write-test-{Guid.NewGuid()}.db")
+
+      let connectionString = $"Data Source={dbPath}"
+
+      let newProject: NewVirtualProjectArgs = {
+        name = "WriteContentTest"
+        description = ""
+        connection = connectionString
+        tableName = "migrations"
+        driver = MigrondiDriver.Sqlite
+      }
+
+      let! projectId = env.vProjects.InsertProject newProject ct
+
+      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+      let migrationName = "update_test_migration"
+
+      let initialMigration: VirtualMigration = {
+        id = Guid.NewGuid()
+        name = migrationName
+        timestamp = timestamp
+        upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+        downContent = "DROP TABLE users;"
+        projectId = projectId
+        manualTransaction = false
+      }
+
+      let! _ = env.vProjects.InsertMigration initialMigration ct
+
+      let migrationUri =
+        Uri(
+          $"migrondi-ui://projects/virtual/{projectId}/{timestamp}_{migrationName}.sql"
+        )
+
+      let updatedContent =
+        MiSerializer.Encode {
+          name = migrationName
+          timestamp = timestamp
+          upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);"
+          downContent = "DROP TABLE users;"
+          manualTransaction = false
+        }
+
+      do! env.vfs.WriteContentAsync(migrationUri, updatedContent, ct)
+
+      let! migrations = env.vProjects.GetMigrations projectId ct
+
+      Assert.True(
+        migrations.Length = 1,
+        $"Expected 1 migration after update, but found {migrations.Length}. This indicates WriteContentAsync inserted a duplicate instead of updating."
+      )
+
+      let! updatedMigration =
+        env.vProjects.GetMigrationByName projectId migrationName ct
+
+      match updatedMigration with
+      | Some m ->
+        Assert.Equal(
+          "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+          m.upContent
+        )
+      | None -> Assert.Fail "Migration should exist after update"
+    }
 
   [<Fact>]
   member _.``get_project for non-existent ID returns not found``() = task {
@@ -625,3 +704,273 @@ type McpLocalProjectTests() =
       | Some(Project.Virtual _) -> Assert.Fail "Expected Local project"
       | None -> Assert.Fail "Expected project to be found"
     }
+
+type McpMigrationProjectScopingTests() =
+  let masterConnection, connectionFactory =
+    TestHelpers.createTestConnectionFactory()
+
+  let tempDirectory =
+    Path.Combine(Path.GetTempPath(), $"migrondi-scoping-tests-{Guid.NewGuid()}")
+
+  let loggerFactory = TestHelpers.createTestLoggerFactory()
+  let env = TestHelpers.buildTestEnv connectionFactory loggerFactory
+
+  do Directory.CreateDirectory tempDirectory |> ignore
+
+  let insertVirtualProject
+    (connection: IDbConnection)
+    (name: string)
+    (connectionStr: string)
+    : Guid =
+    let baseProjectId = Guid.NewGuid()
+    let virtualProjectId = Guid.NewGuid()
+
+    use cmd = connection.CreateCommand()
+
+    cmd.CommandText <-
+      "INSERT INTO projects (id, name, description) VALUES (@id, @name, @description)"
+
+    let p1 = cmd.CreateParameter()
+    p1.ParameterName <- "@id"
+    p1.Value <- baseProjectId.ToString()
+    cmd.Parameters.Add(p1) |> ignore
+    let p2 = cmd.CreateParameter()
+    p2.ParameterName <- "@name"
+    p2.Value <- name
+    cmd.Parameters.Add(p2) |> ignore
+    let p3 = cmd.CreateParameter()
+    p3.ParameterName <- "@description"
+    p3.Value <- DBNull.Value
+    cmd.Parameters.Add(p3) |> ignore
+    cmd.ExecuteNonQuery() |> ignore
+
+    use cmd2 = connection.CreateCommand()
+
+    cmd2.CommandText <-
+      "INSERT INTO virtual_projects (id, connection, table_name, driver, project_id) VALUES (@id, @connection, @table_name, @driver, @project_id)"
+
+    let p4 = cmd2.CreateParameter()
+    p4.ParameterName <- "@id"
+    p4.Value <- virtualProjectId.ToString()
+    cmd2.Parameters.Add(p4) |> ignore
+    let p5 = cmd2.CreateParameter()
+    p5.ParameterName <- "@connection"
+    p5.Value <- connectionStr
+    cmd2.Parameters.Add(p5) |> ignore
+    let p6 = cmd2.CreateParameter()
+    p6.ParameterName <- "@table_name"
+    p6.Value <- "migrations"
+    cmd2.Parameters.Add(p6) |> ignore
+    let p7 = cmd2.CreateParameter()
+    p7.ParameterName <- "@driver"
+    p7.Value <- "sqlite"
+    cmd2.Parameters.Add(p7) |> ignore
+    let p8 = cmd2.CreateParameter()
+    p8.ParameterName <- "@project_id"
+    p8.Value <- baseProjectId.ToString()
+    cmd2.Parameters.Add(p8) |> ignore
+    cmd2.ExecuteNonQuery() |> ignore
+
+    virtualProjectId
+
+  interface IDisposable with
+    member _.Dispose() =
+      loggerFactory.Dispose()
+      masterConnection.Dispose()
+
+      try
+        if Directory.Exists tempDirectory then
+          Directory.Delete(tempDirectory, true)
+      with _ ->
+        ()
+
+  [<Fact>]
+  member _.``get_migration returns migration from specified project only``() = task {
+    let ct = CancellationToken.None
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+    use conn = connectionFactory()
+    let projectId1 = insertVirtualProject conn "Project1" "Data Source=:memory:"
+    let projectId2 = insertVirtualProject conn "Project2" "Data Source=:memory:"
+
+    let migration1: VirtualMigration = {
+      id = Guid.NewGuid()
+      name = "create_users"
+      timestamp = timestamp
+      upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+      downContent = "DROP TABLE users;"
+      projectId = projectId1
+      manualTransaction = false
+    }
+
+    let migration2: VirtualMigration = {
+      id = Guid.NewGuid()
+      name = "create_users"
+      timestamp = timestamp
+      upContent = "CREATE TABLE users (id INTEGER, name TEXT);"
+      downContent = "DROP TABLE users;"
+      projectId = projectId2
+      manualTransaction = false
+    }
+
+    let! _ = env.vProjects.InsertMigration migration1 ct
+    let! _ = env.vProjects.InsertMigration migration2 ct
+
+    let! result1 = McpTools.getMigration env projectId1 "create_users" ct
+    let! result2 = McpTools.getMigration env projectId2 "create_users" ct
+
+    let content1 = result1.StructuredContent.["upContent"].GetValue<string>()
+    let content2 = result2.StructuredContent.["upContent"].GetValue<string>()
+
+    Assert.Contains("CREATE TABLE users (id INTEGER PRIMARY KEY);", content1)
+    Assert.Contains("CREATE TABLE users (id INTEGER, name TEXT);", content2)
+  }
+
+  [<Fact>]
+  member _.``get_migration returns not found when migration exists in different project``
+    ()
+    =
+    task {
+      let ct = CancellationToken.None
+      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+      use conn = connectionFactory()
+
+      let projectId1 =
+        insertVirtualProject conn "Project1" "Data Source=:memory:"
+
+      let projectId2 =
+        insertVirtualProject conn "Project2" "Data Source=:memory:"
+
+      let migration1: VirtualMigration = {
+        id = Guid.NewGuid()
+        name = "create_users"
+        timestamp = timestamp
+        upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+        downContent = "DROP TABLE users;"
+        projectId = projectId1
+        manualTransaction = false
+      }
+
+      let! _ = env.vProjects.InsertMigration migration1 ct
+
+      let! result = McpTools.getMigration env projectId2 "create_users" ct
+
+      let errorMsg = result.StructuredContent.["error"].GetValue<string>()
+      Assert.Contains("not found", errorMsg.ToLower())
+    }
+
+  [<Fact>]
+  member _.``update_migration updates migration in correct project only``() = task {
+    let ct = CancellationToken.None
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+    use conn = connectionFactory()
+    let projectId1 = insertVirtualProject conn "Project1" "Data Source=:memory:"
+    let projectId2 = insertVirtualProject conn "Project2" "Data Source=:memory:"
+
+    let migration1: VirtualMigration = {
+      id = Guid.NewGuid()
+      name = "create_users"
+      timestamp = timestamp
+      upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+      downContent = "DROP TABLE users;"
+      projectId = projectId1
+      manualTransaction = false
+    }
+
+    let migration2: VirtualMigration = {
+      id = Guid.NewGuid()
+      name = "create_users"
+      timestamp = timestamp
+      upContent = "CREATE TABLE users (id INTEGER);"
+      downContent = "DROP TABLE users;"
+      projectId = projectId2
+      manualTransaction = false
+    }
+
+    let! _ = env.vProjects.InsertMigration migration1 ct
+    let! _ = env.vProjects.InsertMigration migration2 ct
+
+    let! result =
+      McpWriteTools.updateMigration
+        env
+        projectId1
+        "create_users"
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);"
+        "DROP TABLE users;"
+        ct
+
+    let success = result.StructuredContent.["success"].GetValue<bool>()
+    Assert.True(success, "Migration update should succeed")
+    
+    let message = result.StructuredContent.["message"].GetValue<string>()
+    Assert.Contains("success", message.ToLower())
+
+    let! updated1 =
+      env.vProjects.GetMigrationByName projectId1 "create_users" ct
+
+    let! updated2 =
+      env.vProjects.GetMigrationByName projectId2 "create_users" ct
+
+    Assert.Equal(
+      "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);",
+      updated1.Value.upContent
+    )
+
+    Assert.Equal("CREATE TABLE users (id INTEGER);", updated2.Value.upContent)
+  }
+
+  [<Fact>]
+  member _.``delete_migration deletes migration in correct project only``() = task {
+    let ct = CancellationToken.None
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+    use conn = connectionFactory()
+    let projectId1 = insertVirtualProject conn "Project1" "Data Source=:memory:"
+    let projectId2 = insertVirtualProject conn "Project2" "Data Source=:memory:"
+
+    let migration1: VirtualMigration = {
+      id = Guid.NewGuid()
+      name = "create_users"
+      timestamp = timestamp
+      upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+      downContent = "DROP TABLE users;"
+      projectId = projectId1
+      manualTransaction = false
+    }
+
+    let migration2: VirtualMigration = {
+      id = Guid.NewGuid()
+      name = "create_users"
+      timestamp = timestamp
+      upContent = "CREATE TABLE users (id INTEGER);"
+      downContent = "DROP TABLE users;"
+      projectId = projectId2
+      manualTransaction = false
+    }
+
+    let! _ = env.vProjects.InsertMigration migration1 ct
+    let! _ = env.vProjects.InsertMigration migration2 ct
+
+    let! result = McpWriteTools.deleteMigration env projectId1 "create_users" ct
+
+    let success = result.StructuredContent.["success"].GetValue<bool>()
+    Assert.True(success, "Migration deletion should succeed")
+    
+    let message = result.StructuredContent.["message"].GetValue<string>()
+    Assert.Contains("success", message.ToLower())
+
+    let! deleted1 =
+      env.vProjects.GetMigrationByName projectId1 "create_users" ct
+
+    let! stillExists2 =
+      env.vProjects.GetMigrationByName projectId2 "create_users" ct
+
+    Assert.True(deleted1.IsNone, "Migration should be deleted from project 1")
+
+    Assert.True(
+      stillExists2.IsSome,
+      "Migration should still exist in project 2"
+    )
+  }

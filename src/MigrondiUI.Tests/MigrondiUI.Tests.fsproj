@@ -13,6 +13,8 @@
     <Compile Include="EditableMigrationTests.fs" />
     <Compile Include="VirtualProjectFormTests.fs" />
     <Compile Include="NewVirtualProjectFormTests.fs" />
+    <Compile Include="VirtualProjectRepositoryTests.fs" />
+    <Compile Include="VirtualFsTests.fs" />
     <Compile Include="McpServer.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
