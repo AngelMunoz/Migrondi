@@ -102,7 +102,7 @@ module internal MigrondiserviceImpl =
 
         let dbPathTrimmed = dbPath.Trim()
 
-        let isWindowsRooted (path: string) =
+        let isWindowsRooted(path: string) =
           path.Length >= 3
           && Char.IsLetter(path[0])
           && path[1] = ':'
@@ -134,12 +134,10 @@ module internal MigrondiserviceImpl =
         appliedMigrations
         |> Seq.tryFind(fun applied ->
           applied.name = migration.name
-          && applied.timestamp = migration.timestamp
-        )
+          && applied.timestamp = migration.timestamp)
       with
       | Some _ -> None
-      | None -> Some migration
-    )
+      | None -> Some migration)
     |> Array.sortBy(_.timestamp)
 
   let obtainPendingDown
@@ -153,12 +151,10 @@ module internal MigrondiserviceImpl =
         appliedMigrations
         |> Seq.tryFind(fun applied ->
           applied.name = migration.name
-          && applied.timestamp = migration.timestamp
-        )
+          && applied.timestamp = migration.timestamp)
       with
       | Some _ -> Some migration
-      | None -> None
-    )
+      | None -> None)
     |> Array.sortByDescending(_.timestamp)
 
   let runUp
@@ -298,12 +294,10 @@ module internal MigrondiserviceImpl =
         appliedMigrations
         |> Seq.tryFind(fun applied ->
           applied.name = migration.name
-          && applied.timestamp = migration.timestamp
-        )
+          && applied.timestamp = migration.timestamp)
       with
       | Some _ -> Applied migration
-      | None -> Pending migration
-    )
+      | None -> Pending migration)
     :> IReadOnlyList<MigrationStatus>
 
   let scriptStatus
@@ -478,8 +472,7 @@ module internal MigrondiserviceImpl =
             appliedMigrations
             |> Seq.tryFind(fun applied ->
               applied.name = migration.name
-              && applied.timestamp = migration.timestamp
-            )
+              && applied.timestamp = migration.timestamp)
           with
           | Some _ -> Applied migration
           | None -> Pending migration
@@ -513,8 +506,7 @@ module internal MigrondiserviceImpl =
           .SetMinimumLevel(LogLevel.Information)
 #endif
           .AddSimpleConsole()
-        |> ignore
-      )
+        |> ignore)
 
 [<Class>]
 type Migrondi
@@ -525,22 +517,19 @@ type Migrondi
     logger: ILogger
   ) =
 
-  let getMigration
-    (name, timestamp, upContent, downContent, manualTransaction)
-    =
-    {
-      name = name
-      timestamp = timestamp
-      upContent =
-        defaultArg
-          upContent
-          "-- Add your SQL migration code below. You can delete this line but do not delete the comments above.\n\n"
-      downContent =
-        defaultArg
-          downContent
-          "-- Add your SQL rollback code below. You can delete this line but do not delete comment above.\n\n"
-      manualTransaction = defaultArg manualTransaction false
-    }
+  let getMigration(name, timestamp, upContent, downContent, manualTransaction) = {
+    name = name
+    timestamp = timestamp
+    upContent =
+      defaultArg
+        upContent
+        "-- Add your SQL migration code below. You can delete this line but do not delete the comments above.\n\n"
+    downContent =
+      defaultArg
+        downContent
+        "-- Add your SQL rollback code below. You can delete this line but do not delete comment above.\n\n"
+    manualTransaction = defaultArg manualTransaction false
+  }
 
   static member MigrondiFactory
     (

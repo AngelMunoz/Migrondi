@@ -37,8 +37,7 @@ module private MigrondiDriver =
       | "postgres" -> Decode.succeed MigrondiDriver.Postgresql
       | "mariadb"
       | "mysql" -> Decode.succeed MigrondiDriver.Mysql
-      | name -> Decode.fail $"Invalid driver name: '{name}'"
-    )
+      | name -> Decode.fail $"Invalid driver name: '{name}'")
 
 [<RequireQualifiedAccess;
   CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
@@ -68,7 +67,7 @@ module private MigrondiConfig =
   CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 
 module private Migration =
-  let migrationDelimiter (key: string, value: string option) =
+  let migrationDelimiter(key: string, value: string option) =
     let start =
       match value with
       | Some _ -> "-- "
@@ -92,7 +91,7 @@ module private Migration =
         "manualTransaction", Encode.bool migration.manualTransaction
       ]
 
-  let EncodeText (migration: Migration) : string =
+  let EncodeText(migration: Migration) : string =
     // GOAL: Migrations Format V1 have to be encoded like this:
     // -- Do not remove MIGRONDI comments.
     // -- MIGRONDI:NAME=AddUsersTable
@@ -217,7 +216,7 @@ module private Migration =
       }
     }
 
-  let DecodeTextV1 (content: string) : Result<Migration, string> = result {
+  let DecodeTextV1(content: string) : Result<Migration, string> = result {
     // GOAL: Migrations Format V1 are encoded like this:
     // -- Do not remove MIGRONDI comments.
     // -- MIGRONDI:Name=AddUsersTable
@@ -250,8 +249,7 @@ module private Migration =
           value.Groups["Key"].Value,
           "NAME",
           StringComparison.OrdinalIgnoreCase
-        )
-      )
+        ))
       |> fun value ->
           match value with
           | Some value -> value.Groups["Value"].Value |> Option.ofObj
@@ -265,8 +263,7 @@ module private Migration =
           value.Groups["Key"].Value,
           "TIMESTAMP",
           StringComparison.OrdinalIgnoreCase
-        )
-      )
+        ))
       |> fun value ->
           match value with
           | Some value -> value.Groups["Value"].Value |> Option.ofObj
@@ -276,11 +273,10 @@ module private Migration =
             try
               int64 value |> Ok
             with ex ->
-              Error $"Invalid timestamp: {ex.Message}"
-          )
+              Error $"Invalid timestamp: {ex.Message}")
 
     let manualTransaction =
-      let parseTransaction (value: string) =
+      let parseTransaction(value: string) =
         let value = if value = null then "" else value
 
         match value.ToLowerInvariant() with
@@ -294,8 +290,7 @@ module private Migration =
           value.Groups["Key"].Value,
           "ManualTransaction",
           StringComparison.OrdinalIgnoreCase
-        )
-      )
+        ))
       |> fun value ->
           match value with
           | Some value -> value.Groups["Value"].Value |> parseTransaction

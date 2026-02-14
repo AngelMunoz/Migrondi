@@ -26,7 +26,8 @@ module internal Matcher =
     val reg: Lazy<System.Text.RegularExpressions.Regex>
 
 
-  val (|V0Name|V1Name|NotMatched|): string -> Choice<string * int64, string * int64, unit>
+  val (|V0Name|V1Name|NotMatched|):
+    string -> Choice<string * int64, string * int64, unit>
 
 /// DU that represents the currently supported drivers
 [<RequireQualifiedAccess>]
@@ -52,19 +53,18 @@ type MigrondiDriver =
   static member FromString: value: string -> MigrondiDriver
 
 /// Represents the configuration that will be used to run migrations
-type MigrondiConfig =
-  {
-    /// An ADO compatible connection string
-    /// which will be used to connect to the database
-    connection: string
-    /// A relative path like string to the directory where migration files are stored
-    migrations: string
-    /// The name of the table that will be used to store migration information
-    tableName: string
-    /// a string that represents the drivers that can be used
-    /// mysql | postgres | mssql | sqlite
-    driver: MigrondiDriver
-  }
+type MigrondiConfig = {
+  /// An ADO compatible connection string
+  /// which will be used to connect to the database
+  connection: string
+  /// A relative path like string to the directory where migration files are stored
+  migrations: string
+  /// The name of the table that will be used to store migration information
+  tableName: string
+  /// a string that represents the drivers that can be used
+  /// mysql | postgres | mssql | sqlite
+  driver: MigrondiDriver
+} with
 
   static member Default: MigrondiConfig
 
@@ -73,26 +73,26 @@ type MigrondiConfig =
 /// The contents of the queries are not stored here as the purpose of this object is to
 /// be able to identify which migrations have been applied to the database.
 /// </summary>
-type MigrationRecord =
-  { id: int64
-    name: string
-    timestamp: int64 }
+type MigrationRecord = {
+  id: int64
+  name: string
+  timestamp: int64
+}
 
 /// <summary>
 /// Object that represents an SQL migration file on disk, and are often used provide more context
 /// or information while logging information about migrations.
 /// </summary>
-type Migration =
-  {
-    name: string
-    timestamp: int64
-    /// the actual SQL statements that will be used to run against the database
-    upContent: string
-    /// the actual SQL statements that will be used to run against the database
-    /// when rolling back migrations from the database
-    downContent: string
-    manualTransaction: bool
-  }
+type Migration = {
+  name: string
+  timestamp: int64
+  /// the actual SQL statements that will be used to run against the database
+  upContent: string
+  /// the actual SQL statements that will be used to run against the database
+  /// when rolling back migrations from the database
+  downContent: string
+  manualTransaction: bool
+} with
 
   /// <summary>
   /// Takes a filename and tries to extract the migration information from it
@@ -102,7 +102,8 @@ type Migration =
   /// A Result that may contain a tuple of the migration name and timestamp
   /// or a set of strings that may represent all of the found errors while validating the filename
   /// </returns>
-  static member ExtractFromFilename: filename: string -> Validation<string * int64, string>
+  static member ExtractFromFilename:
+    filename: string -> Validation<string * int64, string>
 
   /// <summary>
   /// Takes a path and tries to extract the migration information from it
@@ -115,7 +116,8 @@ type Migration =
   /// A Result that may contain a tuple of the migration name and timestamp
   /// or a set of strings that may represent all of the found errors while validating the path
   /// </returns>
-  static member ExtractFromPath: path: string -> Validation<string * int64, string>
+  static member ExtractFromPath:
+    path: string -> Validation<string * int64, string>
 
 /// Migration information can be obtained from a file or the database
 /// this DU allows to identify where the information is coming from
@@ -192,7 +194,10 @@ exception DeserializationFailed of Content: string * Reason: string
 /// This exception is thrown when the content cannot be deserialized from source.
 /// This tipically happens if required fields are removed from the source.
 /// </summary>
-exception MalformedSource of SourceName: string * Content: string * Reason: string
+exception MalformedSource of
+  SourceName: string *
+  Content: string *
+  Reason: string
 
 /// <summary>
 /// Provides functions for validating migration names.

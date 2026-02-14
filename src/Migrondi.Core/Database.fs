@@ -175,7 +175,7 @@ CREATE TABLE dbo.%s{tableName}(
 );
 GO"""
 
-  let getFirstResultQuery (tableName, driver) =
+  let getFirstResultQuery(tableName, driver) =
     match driver with
     | MigrondiDriver.Sqlite
     | MigrondiDriver.Postgresql
@@ -192,7 +192,7 @@ GO"""
 
 module MigrationsImpl =
 
-  let getConnection (connectionString: string, driver: MigrondiDriver) =
+  let getConnection(connectionString: string, driver: MigrondiDriver) =
     match driver with
     | MigrondiDriver.Mssql ->
       new Microsoft.Data.SqlClient.SqlConnection(connectionString)
@@ -458,8 +458,7 @@ module MigrationsImpl =
           let param = command.CreateParameter()
           param.ParameterName <- $"@name{i}"
           param.Value <- name
-          command.Parameters.Add(param) |> ignore
-        )
+          command.Parameters.Add(param) |> ignore)
 
         use reader = command.ExecuteReader()
 
@@ -772,8 +771,7 @@ module MigrationsAsyncImpl =
           let param = command.CreateParameter()
           param.ParameterName <- $"@name{i}"
           param.Value <- name
-          command.Parameters.Add(param) |> ignore
-        )
+          command.Parameters.Add(param) |> ignore)
 
         use! reader = command.ExecuteReaderAsync(token)
 

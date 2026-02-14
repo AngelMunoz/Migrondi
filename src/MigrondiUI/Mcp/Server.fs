@@ -21,26 +21,23 @@ module private ServerHelpers =
 
   open ModelContextProtocol.Protocol
 
-  let parseArgs (argv: string[]) : McpOptions option =
-    let hasFlag (flag: string) =
+  let parseArgs(argv: string[]) : McpOptions option =
+    let hasFlag(flag: string) =
       argv
       |> Array.exists(fun a ->
-        String.Equals(a, flag, StringComparison.OrdinalIgnoreCase)
-      )
+        String.Equals(a, flag, StringComparison.OrdinalIgnoreCase))
 
-    let getPort () =
+    let getPort() =
       argv
       |> Array.tryFindIndex(fun a ->
-        String.Equals(a, "--http", StringComparison.OrdinalIgnoreCase)
-      )
+        String.Equals(a, "--http", StringComparison.OrdinalIgnoreCase))
       |> Option.bind(fun i ->
         if i + 1 < argv.Length then
           match Int32.TryParse(argv.[i + 1]) with
           | true, port when port > 0 && port < 65536 -> Some port
           | _ -> None
         else
-          None
-      )
+          None)
       |> Option.defaultValue 8080
 
     if hasFlag "--stdio" then
@@ -68,7 +65,7 @@ module private ServerHelpers =
 
     let vMigrondiFactory = MigrondiExt.getMigrondiUI(loggerFactory, vProjects)
 
-    let localMigrondiFactory (config: MigrondiConfig, rootDir: string) =
+    let localMigrondiFactory(config: MigrondiConfig, rootDir: string) =
       let mLogger: ILogger = loggerFactory.CreateLogger<IMigrondi>()
 
       let migrondi: IMigrondi =

@@ -2,15 +2,17 @@ root = true
 
 [*]
 charset=utf-8
-indent_style=space
-indent_size = 2
+end_of_line=lf
+insert_final_newline=true
 trim_trailing_whitespace=true
-insert_final_newline=false
-end_of_line = lf
 
-[*.{fs,fsx}]
+[*.{fs,fsx,fsi}]
+indent_size = 2
 max_line_length = 80
-fsharp_space_before_lowercase_invocation = false
-fsharp_multi_line_lambda_closing_newline = true
 fsharp_multiline_bracket_style = stroustrup
+fsharp_space_before_parameter = false
+fsharp_space_before_lowercase_invocation = false
 fsharp_newline_before_multiline_computation_expression = false
+# Experimental settings
+fsharp_experimental_elmish = true
+fsharp_experimental_keep_indent_in_branch = true

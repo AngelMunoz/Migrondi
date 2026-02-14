@@ -32,7 +32,7 @@ module internal Matcher =
       | null -> ValueNone
       | group -> ValueSome group.Value
 
-  let (|V0Name|V1Name|NotMatched|) (filename: string) =
+  let (|V0Name|V1Name|NotMatched|)(filename: string) =
     match V0.reg.Value.Match filename with
     | HasGroup "Name" name & HasGroup "Timestamp" timestamp ->
       match Int64.TryParse timestamp with
@@ -144,7 +144,7 @@ type MigrationStatus =
 module Exceptions =
   open System.Runtime.ExceptionServices
 
-  let internal reriseCustom<'ReturnValue> (exn: exn) =
+  let internal reriseCustom<'ReturnValue>(exn: exn) =
     ExceptionDispatchInfo.Capture(exn).Throw()
     Unchecked.defaultof<'ReturnValue>
 

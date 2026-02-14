@@ -13,7 +13,7 @@ open Migrondi.Core.FileSystem
 
 [<RequireQualifiedAccess>]
 module internal Init =
-  let handler (path: DirectoryInfo, fs: IMiFileSystem, logger: ILogger) =
+  let handler(path: DirectoryInfo, fs: IMiFileSystem, logger: ILogger) =
     logger.LogInformation(
       "Initializing a new migrondi project at: {PathName}.",
       path.FullName
@@ -73,7 +73,7 @@ module internal Migrations =
 
       1
 
-  let runUp (amount: int option, logger: ILogger, migrondi: IMigrondi) =
+  let runUp(amount: int option, logger: ILogger, migrondi: IMigrondi) =
 
     try
       let appliedMigrations = migrondi.RunUp(?amount = amount)
@@ -94,7 +94,7 @@ module internal Migrations =
       1
 
 
-  let runDryUp (amount: int option, logger: ILogger, migrondi: IMigrondi) =
+  let runDryUp(amount: int option, logger: ILogger, migrondi: IMigrondi) =
     let migrations = migrondi.DryRunUp(?amount = amount)
 
     logger.LogInformation "DRY RUN: The following migrations would be applied:"
@@ -111,7 +111,7 @@ module internal Migrations =
 
     0
 
-  let runDown (amount: int option, logger: ILogger, migrondi: IMigrondi) =
+  let runDown(amount: int option, logger: ILogger, migrondi: IMigrondi) =
 
     try
       let reverted = migrondi.RunDown(?amount = amount)
@@ -131,7 +131,7 @@ module internal Migrations =
 
       1
 
-  let runDryDown (amount: int option, logger: ILogger, migrondi: IMigrondi) =
+  let runDryDown(amount: int option, logger: ILogger, migrondi: IMigrondi) =
     let migrations = migrondi.DryRunDown(?amount = amount)
 
     logger.LogInformation "DRY RUN: The following migrations would be reverted:"
@@ -159,7 +159,7 @@ module internal Migrations =
       migrondi: IMigrondi
     ) =
 
-    let printMigrationsTable (table: Table, migrations: Migration seq) =
+    let printMigrationsTable(table: Table, migrations: Migration seq) =
 
       table.AddColumns(
         TableColumn(Markup("[green]Name[/]")),
@@ -214,7 +214,7 @@ module internal Migrations =
       table.ShowHeaders <- true
       AnsiConsole.Write table
 
-    let printJson (migrations: Migration seq, status: string) =
+    let printJson(migrations: Migration seq, status: string) =
       let encoded = migrations |> Seq.map(fun m -> serializer.EncodeJson m)
 
       logger.LogInformation(
@@ -223,14 +223,13 @@ module internal Migrations =
         encoded
       )
 
-    let printJsonBoth (migrations: MigrationStatus seq) =
+    let printJsonBoth(migrations: MigrationStatus seq) =
       let encoded =
         migrations
         |> Seq.map(fun status ->
           match status with
           | Applied m -> ("Applied", serializer.EncodeJson m)
-          | Pending m -> ("Pending", serializer.EncodeJson m)
-        )
+          | Pending m -> ("Pending", serializer.EncodeJson m))
 
       logger.LogInformation("Listing migrations: {Migrations}", encoded)
 
@@ -243,8 +242,7 @@ module internal Migrations =
         |> Seq.choose(fun m ->
           match m with
           | Applied a -> Some a
-          | _ -> None
-        )
+          | _ -> None)
 
       if useJson then
         printJson(applied, "Applied")
@@ -258,8 +256,7 @@ module internal Migrations =
         |> Seq.choose(fun m ->
           match m with
           | Applied _ -> None
-          | Pending a -> Some a
-        )
+          | Pending a -> Some a)
 
       if useJson then
         printJson(pending, "Pending")
@@ -277,7 +274,7 @@ module internal Migrations =
 
     0
 
-  let migrationStatus (name: string, logger: ILogger, migrondi: IMigrondi) =
+  let migrationStatus(name: string, logger: ILogger, migrondi: IMigrondi) =
     let formatTimestamp timestamp =
       let date =
         DateTimeOffset.FromUnixTimeMilliseconds(timestamp).ToLocalTime()

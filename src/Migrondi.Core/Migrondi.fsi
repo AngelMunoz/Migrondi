@@ -20,7 +20,8 @@ type IMigrondi =
 
   abstract member Initialize: unit -> unit
 
-  abstract member InitializeAsync: [<Optional>] ?cancellationToken: CancellationToken -> Task
+  abstract member InitializeAsync:
+    [<Optional>] ?cancellationToken: CancellationToken -> Task
 
   /// <summary>
   /// Creates a new migration file with
@@ -92,7 +93,8 @@ type IMigrondi =
   /// <remarks>
   /// This method coordinates between the source scripts and the database
   /// </remarks>
-  abstract member RunUp: [<Optional>] ?amount: int -> MigrationRecord IReadOnlyList
+  abstract member RunUp:
+    [<Optional>] ?amount: int -> MigrationRecord IReadOnlyList
 
   /// <summary>
   /// Reverts all migrations that were previously applied
@@ -104,7 +106,8 @@ type IMigrondi =
   /// <remarks>
   /// This method coordinates between the source scripts and the database
   /// </remarks>
-  abstract member RunDown: [<Optional>] ?amount: int -> MigrationRecord IReadOnlyList
+  abstract member RunDown:
+    [<Optional>] ?amount: int -> MigrationRecord IReadOnlyList
 
   /// <summary>
   /// Makes a list of the pending migrations that would be applied
@@ -122,7 +125,8 @@ type IMigrondi =
   /// <returns>
   /// A list of all migrations that would be reverted
   /// </returns>
-  abstract member DryRunDown: [<Optional>] ?amount: int -> Migration IReadOnlyList
+  abstract member DryRunDown:
+    [<Optional>] ?amount: int -> Migration IReadOnlyList
 
   /// <summary>
   /// Makes a list of all migrations and their status
@@ -149,27 +153,36 @@ type IMigrondi =
   abstract member ScriptStatus: migrationPath: string -> MigrationStatus
 
   abstract member RunUpAsync:
-    [<Optional>] ?amount: int * [<Optional>] ?cancellationToken: CancellationToken ->
+    [<Optional>] ?amount: int *
+    [<Optional>] ?cancellationToken: CancellationToken ->
       Task<IReadOnlyList<MigrationRecord>>
 
   abstract member RunDownAsync:
-    [<Optional>] ?amount: int * [<Optional>] ?cancellationToken: CancellationToken ->
+    [<Optional>] ?amount: int *
+    [<Optional>] ?cancellationToken: CancellationToken ->
       Task<IReadOnlyList<MigrationRecord>>
 
   abstract member DryRunUpAsync:
-    [<Optional>] ?amount: int * [<Optional>] ?cancellationToken: CancellationToken -> Task<Migration IReadOnlyList>
+    [<Optional>] ?amount: int *
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Migration IReadOnlyList>
 
   abstract member DryRunDownAsync:
-    [<Optional>] ?amount: int * [<Optional>] ?cancellationToken: CancellationToken -> Task<Migration IReadOnlyList>
+    [<Optional>] ?amount: int *
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Migration IReadOnlyList>
 
   abstract member MigrationsListAsync:
-    [<Optional>] ?cancellationToken: CancellationToken -> Task<MigrationStatus IReadOnlyList>
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<MigrationStatus IReadOnlyList>
 
   abstract member ScriptStatusAsync:
-    string * [<Optional>] ?cancellationToken: CancellationToken -> Task<MigrationStatus>
+    string * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<MigrationStatus>
 
 module internal MigrondiserviceImpl =
-  val internal getConnectionStr: rootPath: string -> config: MigrondiConfig -> string
+  val internal getConnectionStr:
+    rootPath: string -> config: MigrondiConfig -> string
 
 [<Class>]
 type Migrondi =

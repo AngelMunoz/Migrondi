@@ -65,7 +65,8 @@ type internal IMiMigrationSerializer =
   /// <exception cref="Migrondi.Core.DeserializationFailed">
   /// Thrown when the serialization fails
   /// </exception>
-  abstract member DecodeText: content: string * [<Optional>] ?migrationName: string -> Migration
+  abstract member DecodeText:
+    content: string * [<Optional>] ?migrationName: string -> Migration
 
 
   /// <summary>
@@ -146,7 +147,8 @@ type MiSerializer =
   /// <exception cref="Migrondi.Core.DeserializationFailed">
   /// Thrown when the content cannot be decoded.
   /// </exception>
-  static member Decode: content: string * [<Optional>] ?migrationName: string -> Migration
+  static member Decode:
+    content: string * [<Optional>] ?migrationName: string -> Migration
 
   /// <summary>
   /// Encodes a <see cref="Migrondi.Core.MigrondiConfig">MigrondiConfig</see> to JSON.

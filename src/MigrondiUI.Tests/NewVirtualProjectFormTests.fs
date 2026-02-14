@@ -42,15 +42,19 @@ let ``NewVirtualProjectForm - should call onCreateVirtualProject with correct ar
   nameTextBox.RaiseEvent(
     TextChangedEventArgs(TextBox.TextChangedEvent, nameTextBox)
   )
+
   descriptionTextBox.RaiseEvent(
     TextChangedEventArgs(TextBox.TextChangedEvent, descriptionTextBox)
   )
+
   connectionTextBox.RaiseEvent(
     TextChangedEventArgs(TextBox.TextChangedEvent, connectionTextBox)
   )
+
   createButton.RaiseEvent(RoutedEventArgs(Button.ClickEvent))
 
   Avalonia.Threading.Dispatcher.UIThread.RunJobs()
+
   let expected = {
     name = "Test Project"
     description = "Test Description"

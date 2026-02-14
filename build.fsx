@@ -57,7 +57,7 @@ module Operations =
       )
   }
 
-  let fantomas (command: string) = make {
+  let fantomas(command: string) = make {
     let! result =
       Cmd.createWithArgs "dotnet" [ "fantomas"; command; yield! fsSources ]
       |> Cmd.checkExitCode Cmd.ExitCodeCheckOption.CheckCodeNone
@@ -70,10 +70,10 @@ module Operations =
     | _ -> return! Make.fail(nameof FantomasError.FailedToFormat)
   }
 
-  let dotnet (args: string) =
+  let dotnet(args: string) =
     Cmd.createWithArgs "dotnet" (args.Split(' ') |> List.ofArray) |> Cmd.run
 
-  let nugetPush (nupkg: string, apiKey) =
+  let nugetPush(nupkg: string, apiKey) =
     Cmd.createWithArgs "dotnet" [
       "nuget"
       "push"
@@ -123,8 +123,7 @@ module Steps =
     |> Array.Parallel.iter(fun runtime ->
       let sources = $"{outDir}/{runtime}"
       ZipFile.CreateFromDirectory(sources, $"{outDir}/{runtime}.zip")
-      Directory.Delete(sources, true)
-    )
+      Directory.Delete(sources, true))
 
     Console.info $"Binaries Zipped at '{outDir}'" |> ctx.Console.WriteLine
   }

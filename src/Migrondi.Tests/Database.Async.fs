@@ -25,8 +25,7 @@ type DatabaseAsyncTests() =
 
   let loggerFactory =
     LoggerFactory.Create(fun builder ->
-      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
-    )
+      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore)
 
   let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
 
@@ -89,7 +88,7 @@ type DatabaseAsyncTests() =
     task {
       let! operation = taskResult {
 
-        let insertStuff () =
+        let insertStuff() =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
@@ -160,7 +159,7 @@ type DatabaseAsyncTests() =
     task {
       let! operation = asyncResult {
 
-        let insertStuff () =
+        let insertStuff() =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
@@ -216,7 +215,7 @@ type DatabaseAsyncTests() =
     task {
       let! operation = asyncResult {
 
-        let insertStuff () =
+        let insertStuff() =
           use connection =
             MigrationsImpl.getConnection(config.connection, config.driver)
 
@@ -440,11 +439,9 @@ type DatabaseAsyncTests() =
         |> Seq.tryPick(fun ex ->
           match ex with
           | :? MigrationApplicationFailed as ae -> Some ae
-          | _ -> None
-        )
+          | _ -> None)
         |> Option.defaultWith(fun () ->
-          failwith "MigrationApplicationFailed Not found in inner exceptions"
-        )
+          failwith "MigrationApplicationFailed Not found in inner exceptions")
 
       Assert.AreEqual(failingMigration, thrown.Migration)
 
@@ -501,11 +498,9 @@ type DatabaseAsyncTests() =
         |> Seq.tryPick(fun ex ->
           match ex with
           | :? MigrationRollbackFailed as ae -> Some ae
-          | _ -> None
-        )
+          | _ -> None)
         |> Option.defaultWith(fun () ->
-          failwith "MigrationRollbackFailed Not found in inner exceptions"
-        )
+          failwith "MigrationRollbackFailed Not found in inner exceptions")
 
       Assert.AreEqual(failingMigration, thrown.Migration)
 

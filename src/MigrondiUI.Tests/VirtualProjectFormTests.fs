@@ -48,9 +48,11 @@ let ``VirtualProjectForm - should update project name``() =
   let nameTextBox, _, _, _, saveButton = getControls view
 
   nameTextBox.SetCurrentValue(TextBox.TextProperty, "New Project Name")
+
   nameTextBox.RaiseEvent(
     TextChangedEventArgs(TextBox.TextChangedEvent, nameTextBox)
   )
+
   saveButton.RaiseEvent(RoutedEventArgs(Button.ClickEvent))
   Avalonia.Threading.Dispatcher.UIThread.RunJobs()
   Assert.True(savedProject.IsSome)
@@ -70,9 +72,11 @@ let ``VirtualProjectForm - should update project description``() =
   let _, descriptionTextBox, _, _, saveButton = getControls view
 
   descriptionTextBox.Text <- "New Description"
+
   descriptionTextBox.RaiseEvent(
     TextChangedEventArgs(TextBox.TextChangedEvent, descriptionTextBox)
   )
+
   saveButton.RaiseEvent(RoutedEventArgs(Button.ClickEvent))
   Avalonia.Threading.Dispatcher.UIThread.RunJobs()
   Assert.Equal("New Description", savedProject |> _.description.Value)

@@ -16,7 +16,7 @@ open Migrondi.Core.Database
 
 module DatabaseData =
 
-  let getConfig (dbName: Guid) = {
+  let getConfig(dbName: Guid) = {
     connection =
       $"Data Source={IO.Path.Join(IO.Path.GetTempPath(), dbName.ToString())}.db"
     driver = MigrondiDriver.Sqlite
@@ -116,8 +116,7 @@ type DatabaseTests() =
 
   let loggerFactory =
     LoggerFactory.Create(fun builder ->
-      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
-    )
+      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore)
 
   let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
 
@@ -171,7 +170,7 @@ type DatabaseTests() =
     let operation = validation {
       do databaseEnv.SetupDatabase()
 
-      let insertStuff () =
+      let insertStuff() =
         use connection =
           MigrationsImpl.getConnection(config.connection, config.driver)
 
@@ -240,7 +239,7 @@ type DatabaseTests() =
     let operation = result {
       do databaseEnv.SetupDatabase()
 
-      let insertStuff () =
+      let insertStuff() =
         use connection =
           MigrationsImpl.getConnection(config.connection, config.driver)
 
@@ -284,7 +283,7 @@ type DatabaseTests() =
     let operation = result {
       do databaseEnv.SetupDatabase()
 
-      let insertStuff () =
+      let insertStuff() =
         use connection =
           MigrationsImpl.getConnection(config.connection, config.driver)
 
@@ -494,8 +493,7 @@ type DatabaseTests() =
     let thrown =
       Assert.ThrowsExactly<MigrationApplicationFailed>(
         Action(fun () ->
-          databaseEnv.ApplyMigrations(runnableMigrations) |> ignore
-        )
+          databaseEnv.ApplyMigrations(runnableMigrations) |> ignore)
       )
 
     Assert.AreEqual(failingMigration, thrown.Migration)
@@ -538,8 +536,7 @@ type DatabaseTests() =
     let thrown =
       Assert.ThrowsExactly<MigrationRollbackFailed>(
         Action(fun () ->
-          databaseEnv.RollbackMigrations(runnableMigrations) |> ignore
-        )
+          databaseEnv.RollbackMigrations(runnableMigrations) |> ignore)
       )
 
     Assert.AreEqual(failingMigration, thrown.Migration)

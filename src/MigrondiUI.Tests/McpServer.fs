@@ -81,14 +81,14 @@ module private TestHelpers =
       cmd.ExecuteNonQuery() |> ignore
       conn
 
-    let factory () =
+    let factory() =
       let conn = new SqliteConnection(connectionString)
       conn.Open()
       conn :> IDbConnection
 
     masterConnection, factory
 
-  let createTestLoggerFactory () =
+  let createTestLoggerFactory() =
     LoggerFactory.Create(fun builder -> builder.AddConsole() |> ignore)
 
   let insertLocalProject
@@ -209,7 +209,7 @@ module private TestHelpers =
 
     let vMigrondiFactory = MigrondiExt.getMigrondiUI(loggerFactory, vpr)
 
-    let localMigrondiFactory (config: MigrondiConfig, rootDir: string) =
+    let localMigrondiFactory(config: MigrondiConfig, rootDir: string) =
       let mLogger = loggerFactory.CreateLogger<IMigrondi>()
       let migrondi = Migrondi.MigrondiFactory(config, rootDir, mLogger)
       MigrondiExt.wrapLocalMigrondi(migrondi, config, rootDir)

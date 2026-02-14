@@ -17,7 +17,7 @@ open Migrondi.Core.Serialization
 module internal Configuration =
 
 
-  let configParser (values: string[]) =
+  let configParser(values: string[]) =
 
     let connectionOption =
       Input.option<string> "--connection"
@@ -54,8 +54,7 @@ module internal Configuration =
       description "Migrondi Configuration Parser"
 
       configure(fun cfg ->
-        cfg.RootCommand.TreatUnmatchedTokensAsErrors <- false
-      )
+        cfg.RootCommand.TreatUnmatchedTokensAsErrors <- false)
 
       inputs(connectionOption, migrationsOption, tableNameOption, driverOption)
 
@@ -69,8 +68,7 @@ module internal Configuration =
         cO <- binder c
         mO <- binder m
         tNO <- binder t
-        dO <- binder d
-      )
+        dO <- binder d)
     }
     |> ignore
 
@@ -107,8 +105,7 @@ module internal Configuration =
             value
           )
 
-          None
-      )
+          None)
 
     match config with
     | Some cfg -> {
@@ -159,8 +156,7 @@ module internal Configuration =
                   config.driver.AsString
                 )
 
-                None
-            )
+                None)
             |> Option.defaultValue config.driver
     }
 
@@ -187,8 +183,7 @@ module internal Configuration =
           reason
         )
 
-        None
-    )
+        None)
 
 
 

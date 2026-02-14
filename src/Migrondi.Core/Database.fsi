@@ -65,7 +65,8 @@ type internal IMiDatabaseHandler =
   /// This Method will throw an <see cref="MigrationApplicationFailed"/> exception if
   /// it fails to apply a migration
   /// </remarks>
-  abstract member ApplyMigrations: migrations: Migration seq -> MigrationRecord IReadOnlyList
+  abstract member ApplyMigrations:
+    migrations: Migration seq -> MigrationRecord IReadOnlyList
 
   /// <summary>
   /// Rolls back the given migrations from the database
@@ -77,7 +78,8 @@ type internal IMiDatabaseHandler =
   /// This Method will throw an <see cref="MigrationRollbackFailed"/> exception if
   /// it fails to rollback a migration
   /// </remarks>
-  abstract member RollbackMigrations: migrations: Migration seq -> MigrationRecord IReadOnlyList
+  abstract member RollbackMigrations:
+    migrations: Migration seq -> MigrationRecord IReadOnlyList
 
   /// <summary>
   /// Creates the required tables in the database.
@@ -85,7 +87,8 @@ type internal IMiDatabaseHandler =
   /// <returns>
   /// A result indicating whether the operation was successful or not
   /// </returns>
-  abstract member SetupDatabaseAsync: [<Optional>] ?cancellationToken: CancellationToken -> Task
+  abstract member SetupDatabaseAsync:
+    [<Optional>] ?cancellationToken: CancellationToken -> Task
 
   ///<summary>
   /// Tries to find a migration by name in the migrations table
@@ -96,7 +99,8 @@ type internal IMiDatabaseHandler =
   /// An optional migration record if the migration was found
   /// </returns>
   abstract member FindMigrationAsync:
-    name: string * [<Optional>] ?cancellationToken: CancellationToken -> Task<MigrationRecord option>
+    name: string * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<MigrationRecord option>
 
   /// <summary>
   /// Tries to find the last applied migration in the migrations table
@@ -105,7 +109,8 @@ type internal IMiDatabaseHandler =
   /// An optional migration record if the migration was found
   /// </returns>
   abstract member FindLastAppliedAsync:
-    [<Optional>] ?cancellationToken: CancellationToken -> Task<MigrationRecord option>
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<MigrationRecord option>
 
   /// <summary>
   /// Lists the migrations that exist in the database
@@ -114,7 +119,8 @@ type internal IMiDatabaseHandler =
   /// A list of migration records that currently exist in the database
   /// </returns>
   abstract member ListMigrationsAsync:
-    [<Optional>] ?cancellationToken: CancellationToken -> Task<MigrationRecord IReadOnlyList>
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<MigrationRecord IReadOnlyList>
 
   /// <summary>
   /// Applies the given migrations to the database
@@ -123,7 +129,8 @@ type internal IMiDatabaseHandler =
   /// A list of migration records that were applied to the database
   /// </returns>
   abstract member ApplyMigrationsAsync:
-    migrations: Migration seq * [<Optional>] ?cancellationToken: CancellationToken ->
+    migrations: Migration seq *
+    [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationRecord IReadOnlyList>
 
   /// <summary>
@@ -133,12 +140,14 @@ type internal IMiDatabaseHandler =
   /// A list of migration records that were rolled back from the database
   /// </returns>
   abstract member RollbackMigrationsAsync:
-    migrations: Migration seq * [<Optional>] ?cancellationToken: CancellationToken ->
+    migrations: Migration seq *
+    [<Optional>] ?cancellationToken: CancellationToken ->
       Task<MigrationRecord IReadOnlyList>
 
 module internal MigrationsImpl =
 
-  val getConnection: connectionString: string * driver: MigrondiDriver -> DbConnection
+  val getConnection:
+    connectionString: string * driver: MigrondiDriver -> DbConnection
 
 [<Class>]
 type internal MiDatabaseHandler =

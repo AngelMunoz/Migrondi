@@ -148,9 +148,7 @@ let private normalizeSqliteConnection (vProjectId: Guid) (connection: string) =
       $"Data Source={absolutePath}{restOfConnection}"
 
 
-let getMigrondiUI
-  (lf: ILoggerFactory, vpr: Projects.IVirtualProjectRepository)
-  =
+let getMigrondiUI(lf: ILoggerFactory, vpr: Projects.IVirtualProjectRepository) =
   let mufs = lf.CreateLogger<VirtualFs.MigrondiUIFs>()
   let ml = lf.CreateLogger<IMigrondi>()
   let vfs = VirtualFs.getVirtualFs(mufs, vpr)

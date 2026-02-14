@@ -32,7 +32,7 @@ type VirtualProjectResource =
   | Migration of projectId: Guid * migrationName: string
   | MigrationList of projectId: Guid
 
-let private parseVirtualProjectUri (uri: Uri) : VirtualProjectResource option =
+let private parseVirtualProjectUri(uri: Uri) : VirtualProjectResource option =
   if uri.Scheme <> "migrondi-ui" then
     None
   else

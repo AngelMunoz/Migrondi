@@ -61,10 +61,7 @@ let GetLocalProjectRepository createDbConnection =
 
       let json = File.ReadAllText path
 
-      return!
-        MiSerializer.DecodeConfig json
-        |> Ok
-        |> Result.toOption
+      return! MiSerializer.DecodeConfig json |> Ok |> Result.toOption
     with :? FileNotFoundException ->
       return! None
   }

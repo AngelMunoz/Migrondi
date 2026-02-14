@@ -125,7 +125,7 @@ module MigrondiCache =
     =
     cache.TryRemove(projectId) |> ignore
 
-  let clear (cache: ConcurrentDictionary<Guid, MigrondiExt.IMigrondiUI>) =
+  let clear(cache: ConcurrentDictionary<Guid, MigrondiExt.IMigrondiUI>) =
     cache.Clear()
 
 module McpRuntime =
@@ -156,17 +156,13 @@ module McpRuntime =
       | Some config ->
         let rootDir = IO.Path.GetDirectoryName p.migrondiConfigPath |> nonNull
 
-        MigrondiCache.getOrAdd
-          env.migrondiCache
-          p.id
-          (fun () -> env.localMigrondiFactory(config, rootDir))
+        MigrondiCache.getOrAdd env.migrondiCache p.id (fun () ->
+          env.localMigrondiFactory(config, rootDir))
         |> Some
     | Project.Virtual p ->
       let config = p.ToMigrondiConfig()
       let rootDir = "migrondi-ui://projects/virtual/"
 
-      MigrondiCache.getOrAdd
-        env.migrondiCache
-        p.id
-        (fun () -> env.vMigrondiFactory(config, rootDir, p.id))
+      MigrondiCache.getOrAdd env.migrondiCache p.id (fun () ->
+        env.vMigrondiFactory(config, rootDir, p.id))
       |> Some

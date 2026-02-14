@@ -109,10 +109,7 @@ type NewProjectVM
     let configPath = Path.Combine(directory, "migrondi.json")
     logger.LogDebug("Creating config file in {configfile}", configPath)
 
-    File.WriteAllText(
-      configPath,
-      MiSerializer.Encode config
-    )
+    File.WriteAllText(configPath, MiSerializer.Encode config)
 
     let! dirName = Path.GetFileNameWithoutExtension directory
 

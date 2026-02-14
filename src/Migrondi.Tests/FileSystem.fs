@@ -22,7 +22,7 @@ module MigrondiConfigData =
   [<Literal>]
   let fsMigrondiPath = directoryName + "/" + "migrondi.json"
 
-  let fsMigrondiConfigPath (root: string) =
+  let fsMigrondiConfigPath(root: string) =
     Path.Combine(root, directoryName, "migrondi.json")
 
   let fsRelativeMigrondiConfigPath =
@@ -41,7 +41,7 @@ module MigrationData =
 
   let nameSchema = Text.RegularExpressions.Regex("(.+)_([0-9]+).(sql|SQL)")
 
-  let getMigrationObjects (amount: int) = [
+  let getMigrationObjects(amount: int) = [
     for i in 1 .. amount + 1 do
       // ensure the timestamps are different
       let timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 1L
@@ -77,8 +77,7 @@ type FileSystemTests() =
 
   let loggerFactory =
     LoggerFactory.Create(fun builder ->
-      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
-    )
+      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore)
 
   let logger = loggerFactory.CreateLogger("Migrondi:Tests.Database")
 
@@ -204,21 +203,18 @@ type FileSystemTests() =
           (serializer :> IMiMigrationSerializer).EncodeText migration
 
         let name = Path.GetFileName(name)
-        name, encoded
-      )
+        name, encoded)
       |> Map.ofList
 
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(migration, name)
-    )
+      fileSystem.WriteMigration(migration, name))
 
     let files =
       Directory.GetFiles migrationsDirPath
       |> Array.Parallel.map(fun file ->
-        (Path.GetFileName file), (File.ReadAllText file)
-      )
+        (Path.GetFileName file), (File.ReadAllText file))
       |> Array.toList
 
     let validations =
@@ -226,15 +222,13 @@ type FileSystemTests() =
       |> List.traverseResultA(fun (name, actual) ->
         match encoded |> Map.tryFind name with
         | Some expected -> Ok(expected, actual)
-        | None -> Error $"Could not find file: '{name}' in expected files map"
-      )
+        | None -> Error $"Could not find file: '{name}' in expected files map")
 
     match validations with
     | Ok validations ->
       validations
       |> List.iter(fun (expected, actual) ->
-        Assert.AreEqual<string>(expected, actual)
-      )
+        Assert.AreEqual<string>(expected, actual))
     | Error errs ->
       let errors = String.Join('\n', errs)
       Assert.Fail("Could not validate files:\n" + errors)
@@ -255,8 +249,7 @@ type FileSystemTests() =
             (serializer :> IMiMigrationSerializer).EncodeText migration
 
           let name = Path.GetFileName(name)
-          name, encoded
-        )
+          name, encoded)
         |> Map.ofList
 
       // write them to disk
@@ -287,8 +280,7 @@ type FileSystemTests() =
       | Ok validations ->
         validations
         |> List.iter(fun (expected, actual) ->
-          Assert.AreEqual<string>(expected, actual)
-        )
+          Assert.AreEqual<string>(expected, actual))
       | Error errs ->
         let errors = String.Join('\n', errs)
         Assert.Fail("Could not validate files:\n" + errors)
@@ -308,8 +300,7 @@ type FileSystemTests() =
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(migration, name)
-    )
+      fileSystem.WriteMigration(migration, name))
 
     let foundMigrations =
       migrations
@@ -320,16 +311,14 @@ type FileSystemTests() =
         | :? SourceNotFound as e ->
           Error($"File '{e.name}' not found at '{e.path}'")
         | :? MalformedSource as e ->
-          Error($"File '{e.SourceName}' is malformed: {e.Reason}\n{e.Content}")
-      )
+          Error($"File '{e.SourceName}' is malformed: {e.Reason}\n{e.Content}"))
 
     match foundMigrations with
     | Ok actual ->
       actual
       |> List.iter(fun actual ->
         let expected = indexedMigration |> Map.find actual.name
-        Assert.AreEqual(expected, actual)
-      )
+        Assert.AreEqual(expected, actual))
     | Error error ->
       let error = String.Join('\n', error)
       Assert.Fail($"Could not read migrations: {error}")
@@ -376,8 +365,7 @@ type FileSystemTests() =
         actual
         |> List.iter(fun actual ->
           let expected = indexedMigration |> Map.find actual.name
-          Assert.AreEqual(expected, actual)
-        )
+          Assert.AreEqual(expected, actual))
       | Error error ->
         let error = String.Join('\n', error)
         Assert.Fail($"Could not read migrations: {error}")
@@ -397,8 +385,7 @@ type FileSystemTests() =
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(migration, name)
-    )
+      fileSystem.WriteMigration(migration, name))
 
     let foundMigrations =
       try
@@ -409,15 +396,13 @@ type FileSystemTests() =
           if err.GetType() = typeof<MalformedSource> then
             true
           else
-            false
-        )
+            false)
         |> List.ofSeq
         |> List.traverseResultA(fun err ->
           let err = err :?> MalformedSource
 
           Error
-            $"File '{err.SourceName}' is malformed: {err.Reason}\n{err.Content}"
-        )
+            $"File '{err.SourceName}' is malformed: {err.Reason}\n{err.Content}")
 
 
     match foundMigrations with
@@ -425,8 +410,7 @@ type FileSystemTests() =
       actual
       |> List.iter(fun actual ->
         let expected = indexedMigrations |> Map.find actual.name
-        Assert.AreEqual(expected, actual)
-      )
+        Assert.AreEqual(expected, actual))
     | Error error ->
       let error = String.Join('\n', error)
       Assert.Fail($"Could not read migrations: {error}")
@@ -444,8 +428,7 @@ type FileSystemTests() =
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(migration, name)
-    )
+      fileSystem.WriteMigration(migration, name))
 
     let foundMigrations =
       try
@@ -456,23 +439,20 @@ type FileSystemTests() =
           if err.GetType() = typeof<MalformedSource> then
             true
           else
-            false
-        )
+            false)
         |> List.ofSeq
         |> List.traverseResultA(fun err ->
           let err = err :?> MalformedSource
 
           Error
-            $"File '{err.SourceName}' is malformed: {err.Reason}\n{err.Content}"
-        )
+            $"File '{err.SourceName}' is malformed: {err.Reason}\n{err.Content}")
 
     match foundMigrations with
     | Ok actual ->
       actual
       |> List.iter(fun actual ->
         let expected = indexedMigrations |> Map.find actual.name
-        Assert.AreEqual(expected, actual)
-      )
+        Assert.AreEqual(expected, actual))
     | Error error ->
       let error = String.Join('\n', error)
       Assert.Fail($"Could not read migrations: {error}")
@@ -504,8 +484,7 @@ type FileSystemTests() =
     // write them to disk
     migrations
     |> List.iter(fun (migration, name) ->
-      fileSystem.WriteMigration(migration, name)
-    )
+      fileSystem.WriteMigration(migration, name))
 
     let foundMigrations =
       try
@@ -516,23 +495,20 @@ type FileSystemTests() =
           if err.GetType() = typeof<MalformedSource> then
             true
           else
-            false
-        )
+            false)
         |> List.ofSeq
         |> List.traverseResultA(fun err ->
           let err = err :?> MalformedSource
 
           Error
-            $"File '{err.SourceName}' is malformed: {err.Reason}\n{err.Content}"
-        )
+            $"File '{err.SourceName}' is malformed: {err.Reason}\n{err.Content}")
 
     match foundMigrations with
     | Ok actual ->
       actual
       |> List.iter(fun actual ->
         let expected = indexedMigrations |> Map.find actual.name
-        Assert.AreEqual(expected, actual)
-      )
+        Assert.AreEqual(expected, actual))
     | Error error ->
       let error = String.Join('\n', error)
       Assert.Fail($"Could not read migrations: {error}")

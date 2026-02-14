@@ -43,7 +43,7 @@ module SharedArguments =
 module ListArgs =
   let MigrationKind =
     let op =
-      let parseArgument (result: ArgumentResult) =
+      let parseArgument(result: ArgumentResult) =
         match result.Tokens |> Seq.tryHead with
         | Some token when token.Value.ToLowerInvariant() = "up" ->
           Some MigrationType.Up

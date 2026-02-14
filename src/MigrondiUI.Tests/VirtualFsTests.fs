@@ -64,14 +64,14 @@ module private TestHelpers =
       cmd.ExecuteNonQuery() |> ignore
       conn
 
-    let factory () =
+    let factory() =
       let conn = new SqliteConnection(connectionString)
       conn.Open()
       conn :> IDbConnection
 
     masterConnection, factory
 
-  let createTestLoggerFactory () =
+  let createTestLoggerFactory() =
     LoggerFactory.Create(fun builder -> builder.AddConsole() |> ignore)
 
   let insertVirtualProject
@@ -83,8 +83,10 @@ module private TestHelpers =
     let virtualProjectId = Guid.NewGuid()
 
     use cmd = connection.CreateCommand()
+
     cmd.CommandText <-
       "INSERT INTO projects (id, name, description) VALUES (@id, @name, @description)"
+
     let p1 = cmd.CreateParameter()
     p1.ParameterName <- "@id"
     p1.Value <- baseProjectId.ToString()
@@ -100,8 +102,10 @@ module private TestHelpers =
     cmd.ExecuteNonQuery() |> ignore
 
     use cmd2 = connection.CreateCommand()
+
     cmd2.CommandText <-
       "INSERT INTO virtual_projects (id, connection, table_name, driver, project_id) VALUES (@id, @connection, @table_name, @driver, @project_id)"
+
     let p4 = cmd2.CreateParameter()
     p4.ParameterName <- "@id"
     p4.Value <- virtualProjectId.ToString()
@@ -137,8 +141,10 @@ module private TestHelpers =
     let migrationId = Guid.NewGuid()
 
     use cmd = connection.CreateCommand()
+
     cmd.CommandText <-
       "INSERT INTO virtual_migrations (id, name, timestamp, up_content, down_content, virtual_project_id, manual_transaction) VALUES (@id, @name, @timestamp, @up_content, @down_content, @virtual_project_id, @manual_transaction)"
+
     let p1 = cmd.CreateParameter()
     p1.ParameterName <- "@id"
     p1.Value <- migrationId.ToString()
@@ -172,10 +178,17 @@ module private TestHelpers =
     migrationId
 
 type VirtualFsTests() =
-  let masterConnection, connectionFactory = TestHelpers.createTestConnectionFactory()
+  let masterConnection, connectionFactory =
+    TestHelpers.createTestConnectionFactory()
+
   let loggerFactory = TestHelpers.createTestLoggerFactory()
   let _, vProjects = Projects.GetRepositories connectionFactory
-  let vfs = VirtualFs.getVirtualFs(loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>(), vProjects)
+
+  let vfs =
+    VirtualFs.getVirtualFs(
+      loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>(),
+      vProjects
+    )
 
   interface IDisposable with
     member _.Dispose() =
@@ -188,8 +201,12 @@ type VirtualFsTests() =
     let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 
     use conn = connectionFactory()
-    let projectId1 = TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
-    let projectId2 = TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
+
+    let projectId1 =
+      TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
+
+    let projectId2 =
+      TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
 
     TestHelpers.insertMigration
       conn
@@ -209,8 +226,15 @@ type VirtualFsTests() =
       "DROP TABLE users;"
     |> ignore
 
-    let uri1 = Uri($"migrondi-ui://projects/virtual/{projectId1}/{timestamp}_create_users.sql")
-    let uri2 = Uri($"migrondi-ui://projects/virtual/{projectId2}/{timestamp}_create_users.sql")
+    let uri1 =
+      Uri(
+        $"migrondi-ui://projects/virtual/{projectId1}/{timestamp}_create_users.sql"
+      )
+
+    let uri2 =
+      Uri(
+        $"migrondi-ui://projects/virtual/{projectId2}/{timestamp}_create_users.sql"
+      )
 
     let! content1 = vfs.ReadContentAsync(uri1, ct)
     let! content2 = vfs.ReadContentAsync(uri2, ct)
@@ -225,8 +249,12 @@ type VirtualFsTests() =
     let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 
     use conn = connectionFactory()
-    let projectId1 = TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
-    let projectId2 = TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
+
+    let projectId1 =
+      TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
+
+    let projectId2 =
+      TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
 
     TestHelpers.insertMigration
       conn
@@ -246,7 +274,10 @@ type VirtualFsTests() =
       "DROP TABLE users;"
     |> ignore
 
-    let uri1 = Uri($"migrondi-ui://projects/virtual/{projectId1}/{timestamp}_create_users.sql")
+    let uri1 =
+      Uri(
+        $"migrondi-ui://projects/virtual/{projectId1}/{timestamp}_create_users.sql"
+      )
 
     let updatedContent =
       MiSerializer.Encode {
@@ -262,31 +293,47 @@ type VirtualFsTests() =
     let! migration1 = vProjects.GetMigrationByName projectId1 "create_users" ct
     let! migration2 = vProjects.GetMigrationByName projectId2 "create_users" ct
 
-    Assert.Equal("CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);", migration1.Value.upContent)
+    Assert.Equal(
+      "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);",
+      migration1.Value.upContent
+    )
+
     Assert.Equal("CREATE TABLE users (id INTEGER);", migration2.Value.upContent)
   }
 
   [<Fact>]
-  member _.``ReadContentAsync returns not found when migration exists in different project``() = task {
-    let ct = CancellationToken.None
-    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+  member _.``ReadContentAsync returns not found when migration exists in different project``
+    ()
+    =
+    task {
+      let ct = CancellationToken.None
+      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 
-    use conn = connectionFactory()
-    let projectId1 = TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
-    let projectId2 = TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
+      use conn = connectionFactory()
 
-    TestHelpers.insertMigration
-      conn
-      projectId1
-      "create_users"
-      timestamp
-      "CREATE TABLE users (id INTEGER PRIMARY KEY);"
-      "DROP TABLE users;"
-    |> ignore
+      let projectId1 =
+        TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
 
-    let uri2 = Uri($"migrondi-ui://projects/virtual/{projectId2}/{timestamp}_create_users.sql")
+      let projectId2 =
+        TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
 
-    let! ex = Assert.ThrowsAsync<Exception>(fun () -> vfs.ReadContentAsync(uri2, ct) :> Task)
+      TestHelpers.insertMigration
+        conn
+        projectId1
+        "create_users"
+        timestamp
+        "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+        "DROP TABLE users;"
+      |> ignore
 
-    Assert.Contains("not found", ex.Message.ToLower())
-  }
+      let uri2 =
+        Uri(
+          $"migrondi-ui://projects/virtual/{projectId2}/{timestamp}_create_users.sql"
+        )
+
+      let! ex =
+        Assert.ThrowsAsync<Exception>(fun () ->
+          vfs.ReadContentAsync(uri2, ct) :> Task)
+
+      Assert.Contains("not found", ex.Message.ToLower())
+    }

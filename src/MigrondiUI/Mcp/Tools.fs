@@ -13,7 +13,7 @@ open McpResultMapper
 
 module McpTools =
 
-  let listProjects (env: McpEnvironment) = cancellableTask {
+  let listProjects(env: McpEnvironment) = cancellableTask {
     let! localProjects = env.lProjects.GetProjects()
     let! vProjects = env.vProjects.GetProjects()
 
@@ -450,8 +450,7 @@ module McpWriteTools =
                 try
                   MigrondiDriver.FromString d |> Some
                 with _ ->
-                  None
-              )
+                  None)
               |> Option.defaultValue p.driver
 
             let updatedProject: VirtualProject = {

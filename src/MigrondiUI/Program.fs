@@ -33,7 +33,7 @@ Log.Logger <-
 
 let loggerFactory = (new LoggerFactory()).AddSerilog Log.Logger
 
-let BuildMainWindow (dialogManager, toastManager) =
+let BuildMainWindow(dialogManager, toastManager) =
   let win =
     (new SukiWindow())
       .BackgroundStyle(SukiBackgroundStyle.Bubble)
@@ -48,7 +48,7 @@ let BuildMainWindow (dialogManager, toastManager) =
 
   win
 
-let Orchestrate () =
+let Orchestrate() =
   // This is for the current application's database
   // each project is dealt with accordingly
   Migrations.GetMigrondi loggerFactory

@@ -47,8 +47,7 @@ let main argv =
 
     configure(fun pipeline ->
       // enable passing configuration flags before the actual commands
-      pipeline.RootCommand.TreatUnmatchedTokensAsErrors <- false
-    )
+      pipeline.RootCommand.TreatUnmatchedTokensAsErrors <- false)
 
     noAction
 

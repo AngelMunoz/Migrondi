@@ -53,7 +53,7 @@ module internal ArgumentMapper =
 module internal Commands =
   open Microsoft.Extensions.Logging
 
-  let setup (appEnv: AppEnv) =
+  let setup(appEnv: AppEnv) =
     let db = appEnv.Database
 
     try

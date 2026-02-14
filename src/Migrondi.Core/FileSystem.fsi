@@ -38,7 +38,9 @@ type IMiMigrationSource =
   /// <exception cref="Migrondi.Core.FileSystem.SourceNotFound">
   /// Thrown when the resource is not found
   /// </exception>
-  abstract member ReadContentAsync: uri: Uri * [<Optional>] ?cancellationToken: CancellationToken -> Task<string>
+  abstract member ReadContentAsync:
+    uri: Uri * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<string>
 
   /// <summary>
   /// Writes raw string content to a URI
@@ -54,7 +56,10 @@ type IMiMigrationSource =
   /// <param name="content">The raw content to write</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   abstract member WriteContentAsync:
-    uri: Uri * content: string * [<Optional>] ?cancellationToken: CancellationToken -> Task
+    uri: Uri *
+    content: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task
 
   /// <summary>
   /// Lists migration URIs at a location
@@ -69,7 +74,9 @@ type IMiMigrationSource =
   /// <param name="locationUri">Full URI to the directory-like location</param>
   /// <param name="cancellationToken">A cancellation token that can be used to cancel the operation</param>
   /// <returns>A sequence of URIs to migration files</returns>
-  abstract member ListFilesAsync: locationUri: Uri * [<Optional>] ?cancellationToken: CancellationToken -> Task<Uri seq>
+  abstract member ListFilesAsync:
+    locationUri: Uri * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Uri seq>
 
 
 /// <summary>
@@ -109,14 +116,16 @@ type internal IMiFileSystem =
   /// Thrown when the file is found but can't be deserialized from the source
   /// </exception>
   abstract member ReadConfigurationAsync:
-    readFrom: string * [<Optional>] ?cancellationToken: CancellationToken -> Task<MigrondiConfig>
+    readFrom: string * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<MigrondiConfig>
 
   /// <summary>
   /// Take a configuration object and writes it to a location dictated by the `writeTo` parameter
   /// </summary>
   /// <param name="config">The configuration object</param>
   /// <param name="writeTo">The path to the configuration file</param>
-  abstract member WriteConfiguration: config: MigrondiConfig * writeTo: string -> unit
+  abstract member WriteConfiguration:
+    config: MigrondiConfig * writeTo: string -> unit
 
   /// <summary>
   /// Take a configuration object and writes it to a file
@@ -129,7 +138,10 @@ type internal IMiFileSystem =
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member WriteConfigurationAsync:
-    config: MigrondiConfig * writeTo: string * [<Optional>] ?cancellationToken: CancellationToken -> Task
+    config: MigrondiConfig *
+    writeTo: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task
 
   /// <summary>
   /// Takes a path to a migration, reads its contents and transforms it into a Migration object
@@ -160,7 +172,8 @@ type internal IMiFileSystem =
   ///  Thrown when the file is not found
   /// </exception>
   abstract member ReadMigrationAsync:
-    migrationName: string * [<Optional>] ?cancellationToken: CancellationToken -> Task<Migration>
+    migrationName: string * [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Migration>
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
@@ -170,7 +183,8 @@ type internal IMiFileSystem =
   /// <returns>
   /// A unit result object that means that the operation was successful
   /// </returns>
-  abstract member WriteMigration: migration: Migration * migrationName: string -> unit
+  abstract member WriteMigration:
+    migration: Migration * migrationName: string -> unit
 
   /// <summary>
   /// Takes a migration and serializes its contents into a location dictated by the path
@@ -182,7 +196,10 @@ type internal IMiFileSystem =
   /// A unit result object that means that the operation was successful
   /// </returns>
   abstract member WriteMigrationAsync:
-    migration: Migration * migrationName: string * [<Optional>] ?cancellationToken: CancellationToken -> Task
+    migration: Migration *
+    migrationName: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
@@ -196,7 +213,8 @@ type internal IMiFileSystem =
   /// A list of exceptions in case the sources were not readable or malformed
   /// This normally includes exceptions of the type <see cref="Migrondi.Core.FileSystem.MalformedSource">MalformedSource</see>
   /// </exception>
-  abstract member ListMigrations: migrationsLocation: string -> Migration IReadOnlyList
+  abstract member ListMigrations:
+    migrationsLocation: string -> Migration IReadOnlyList
 
   /// <summary>
   /// Takes a path to a directory-like source, and reads the sql scripts inside it
@@ -208,7 +226,9 @@ type internal IMiFileSystem =
   /// or a <see cref="Migrondi.Core.FileSystem.ReadFileError">ReadFileError</see>
   /// </returns>
   abstract member ListMigrationsAsync:
-    migrationsLocation: string * [<Optional>] ?cancellationToken: CancellationToken -> Task<Migration IReadOnlyList>
+    migrationsLocation: string *
+    [<Optional>] ?cancellationToken: CancellationToken ->
+      Task<Migration IReadOnlyList>
 
 
 [<Class>]

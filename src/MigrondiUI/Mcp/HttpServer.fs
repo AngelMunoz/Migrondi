@@ -67,7 +67,7 @@ module private HttpServerHelpers =
       sessions.TryRemove(sessionId) |> ignore
     | false, _ -> ()
 
-  let cleanupSessions (sessions: ConcurrentDictionary<string, McpHttpSession>) =
+  let cleanupSessions(sessions: ConcurrentDictionary<string, McpHttpSession>) =
     for kvp in sessions do
       kvp.Value.transport.DisposeAsync().AsTask() |> ignore
       kvp.Value.server.DisposeAsync().AsTask() |> ignore
@@ -87,7 +87,7 @@ module private HttpServerHelpers =
 
     context.Response.Close()
 
-  let getSessionId (context: Net.HttpListenerContext) =
+  let getSessionId(context: Net.HttpListenerContext) =
     match context.Request.Headers.["Mcp-Session-Id"] with
     | null -> None
     | id -> Some(string id)
@@ -190,7 +190,7 @@ module private HttpServerHelpers =
       context.Response.StatusCode <- 200
       context.Response.Close()
 
-  let handleUnknownMethod (context: Net.HttpListenerContext) : unit =
+  let handleUnknownMethod(context: Net.HttpListenerContext) : unit =
     context.Response.StatusCode <- 405
     context.Response.Close()
 
@@ -213,7 +213,7 @@ module HttpServer =
 
       use linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct)
 
-      let handleRequest (context: Net.HttpListenerContext) = task {
+      let handleRequest(context: Net.HttpListenerContext) = task {
         match context.Request.HttpMethod with
         | "POST" ->
           do!
@@ -224,12 +224,13 @@ module HttpServer =
               loggerFactory
               serviceProvider
               linkedCts
-        | "GET" -> do! HttpServerHelpers.handleGetRequest context sessions linkedCts
+        | "GET" ->
+          do! HttpServerHelpers.handleGetRequest context sessions linkedCts
         | "DELETE" -> HttpServerHelpers.handleDeleteRequest context sessions
         | _ -> HttpServerHelpers.handleUnknownMethod context
       }
 
-      let fireAndForgetRequest (context: Net.HttpListenerContext) =
+      let fireAndForgetRequest(context: Net.HttpListenerContext) =
         asyncEx {
           let! result = handleRequest context |> Async.AwaitTask |> Async.Catch
 

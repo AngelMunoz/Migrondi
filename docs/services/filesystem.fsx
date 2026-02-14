@@ -54,7 +54,7 @@ To implement a custom storage backend, you implement the `IMiMigrationSource` in
 Using an object expression is the recommended way to implement this interface:
 *)
 
-let createCustomSource (logger: ILogger) =
+let createCustomSource(logger: ILogger) =
   { new IMiMigrationSource with
       member _.ReadContent(uri: Uri) =
         logger.LogDebug("Reading content from {Path}", uri.ToString())

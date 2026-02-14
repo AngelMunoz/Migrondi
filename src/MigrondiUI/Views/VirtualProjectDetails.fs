@@ -40,7 +40,7 @@ type VirtualProjectDetailsVM
 
   let _project = cval project
 
-  let handleError (work: Async<unit>) = asyncEx {
+  let handleError(work: Async<unit>) = asyncEx {
     let! result = work |> Async.Catch
 
     match result with
@@ -213,8 +213,7 @@ let virtualProjectView
         else
           description
 
-      $"{p.name} - {description}"
-    )
+      $"{p.name} - {description}")
 
   Expander()
     .Header(
@@ -251,8 +250,7 @@ let toolbar
         if String.IsNullOrWhiteSpace txtBox.Text |> not then
           isEnabled.setValue true
         else
-          isEnabled.setValue false
-      )
+          isEnabled.setValue false)
 
   let createButton =
     Button()
@@ -261,8 +259,7 @@ let toolbar
       .OnClickHandler(fun _ _ ->
         let text = (nameTextBox.Text |> nonNull).Trim().Replace(' ', '-')
         onNewMigration text
-        nameTextBox.Text <- ""
-      )
+        nameTextBox.Text <- "")
 
   Toolbar
     .get(Spacing 8., Orientation Horizontal)
@@ -278,7 +275,7 @@ type VProjectDetailsView
   (logger: ILogger, vm: VirtualProjectDetailsVM, onNavigateBack) =
   inherit UserControl()
 
-  let onNewMigration (name: string) =
+  let onNewMigration(name: string) =
     asyncEx {
       logger.LogDebug("Creating new migration with name: {name}", name)
       do! vm.CreateNewMigration name
@@ -286,10 +283,10 @@ type VProjectDetailsView
     }
     |> Async.StartImmediate
 
-  let onRefresh () =
+  let onRefresh() =
     vm.ListMigrations() |> Async.StartImmediate
 
-  let onSaveRequested (migration: Migration) = asyncEx {
+  let onSaveRequested(migration: Migration) = asyncEx {
     logger.LogDebug("Saving migration: {migration}", migration)
     let! result = vm.SaveMigration(migration)
     logger.LogDebug("Migrations listed")
@@ -312,8 +309,7 @@ type VProjectDetailsView
         migrationStatus,
         onSaveRequested,
         onRemoveRequested migrationStatus.Migration
-      )
-    )
+      ))
 
   let onRunMigrationsRequested args =
     vm.RunMigrations args |> Async.StartImmediate
@@ -392,12 +388,12 @@ let buildDetailsView
     return VProjectDetailsView(logger, vm, onNavigateBack) :> Control
   }
 
-let buildProjectNotFound (id: Guid) : Control =
+let buildProjectNotFound(id: Guid) : Control =
   UserControl()
     .Name("VirtualProjectDetails")
     .Content(TextBlock().Text($"Project with the given id {id} was not found."))
 
-let buildLoading (id: Guid) : Control =
+let buildLoading(id: Guid) : Control =
   UserControl()
     .Name("VirtualProjectDetails")
     .Content(TextBlock().Text($"Loading project with the given id {id}..."))
@@ -418,7 +414,7 @@ let View
     let projectId = defaultArg projectId Guid.Empty
     cval(buildLoading projectId)
 
-  let onNavigateBack () =
+  let onNavigateBack() =
     asyncEx {
       match! nav.NavigateByName("landing") with
       | Ok _ -> ()

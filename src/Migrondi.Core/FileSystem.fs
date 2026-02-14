@@ -58,7 +58,7 @@ type IMiMigrationSource =
 
 module PhysicalMigrationSourceImpl =
 
-  let readContent (logger: ILogger, uri: Uri) =
+  let readContent(logger: ILogger, uri: Uri) =
     logger.LogDebug("Reading content from {Path}", uri.LocalPath)
 
     try
@@ -70,7 +70,7 @@ module PhysicalMigrationSourceImpl =
         SourceNotFound(uri.LocalPath |> Path.GetFileName, uri.LocalPath)
       )
 
-  let readContentAsync (logger: ILogger, uri: Uri) = cancellableTask {
+  let readContentAsync(logger: ILogger, uri: Uri) = cancellableTask {
     let! token = CancellableTask.getCancellationToken()
     logger.LogDebug("Reading content from {Path}", uri.LocalPath)
 
@@ -85,13 +85,13 @@ module PhysicalMigrationSourceImpl =
         )
   }
 
-  let writeContent (logger: ILogger, uri: Uri, content: string) =
+  let writeContent(logger: ILogger, uri: Uri, content: string) =
     logger.LogDebug("Writing content to {Path}", uri.LocalPath)
     let file = FileInfo(uri.LocalPath)
     file.Directory.Create()
     File.WriteAllText(uri.LocalPath, content)
 
-  let writeContentAsync (logger: ILogger, uri: Uri, content: string) = cancellableTask {
+  let writeContentAsync(logger: ILogger, uri: Uri, content: string) = cancellableTask {
     logger.LogDebug("Writing content to {Path}", uri.LocalPath)
     let! token = CancellableTask.getCancellationToken()
     let file = FileInfo(uri.LocalPath)
@@ -101,7 +101,7 @@ module PhysicalMigrationSourceImpl =
       File.WriteAllTextAsync(uri.LocalPath, content, cancellationToken = token)
   }
 
-  let listFiles (logger: ILogger, locationUri: Uri) =
+  let listFiles(logger: ILogger, locationUri: Uri) =
     logger.LogDebug("Listing files in {Path}", locationUri.LocalPath)
     let directory = DirectoryInfo(locationUri.LocalPath)
 
@@ -110,10 +110,9 @@ module PhysicalMigrationSourceImpl =
       match file.Name with
       | V0Name _
       | V1Name _ -> Some(Uri(file.FullName))
-      | _ -> None
-    )
+      | _ -> None)
 
-  let listFilesAsync (logger: ILogger, locationUri: Uri) = cancellableTask {
+  let listFilesAsync(logger: ILogger, locationUri: Uri) = cancellableTask {
     logger.LogDebug("Listing files in {Path}", locationUri.LocalPath)
     let directory = DirectoryInfo(locationUri.LocalPath)
 
@@ -123,11 +122,10 @@ module PhysicalMigrationSourceImpl =
         match file.Name with
         | V0Name _
         | V1Name _ -> Some(Uri(file.FullName))
-        | _ -> None
-      )
+        | _ -> None)
   }
 
-  let create (logger: ILogger) =
+  let create(logger: ILogger) =
     { new IMiMigrationSource with
         member _.ReadContent(uri: Uri) = readContent(logger, uri)
 
@@ -396,8 +394,7 @@ module PhysicalFileSystemImpl =
           try
             serializer.DecodeText(content, name) |> Ok
           with :? DeserializationFailed as ex ->
-            MalformedSource(name, ex.Reason, ex.Source) |> Error
-        )
+            MalformedSource(name, ex.Reason, ex.Source) |> Error)
     }
 
     match operation with
@@ -448,8 +445,7 @@ module PhysicalFileSystemImpl =
           try
             serializer.DecodeText(contents, name) |> Ok
           with :? DeserializationFailed as ex ->
-            MalformedSource(name, ex.Reason, ex.Source) |> Error
-        )
+            MalformedSource(name, ex.Reason, ex.Source) |> Error)
 
       return
         match operation with

@@ -126,8 +126,7 @@ type MigrondiFactoryTests() =
 
   let loggerFactory =
     LoggerFactory.Create(fun builder ->
-      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore
-    )
+      builder.SetMinimumLevel(LogLevel.Debug).AddSimpleConsole() |> ignore)
 
   let logger = loggerFactory.CreateLogger("Migrondi:Tests.MigrondiFactory")
 
