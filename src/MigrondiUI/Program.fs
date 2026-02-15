@@ -49,19 +49,21 @@ let BuildMainWindow(dialogManager, toastManager) =
   win
 
 let Orchestrate() =
-  // This is for the current application's database
-  // each project is dealt with accordingly
   Migrations.GetMigrondi loggerFactory
   |> ValueOption.defaultWith(fun () -> failwith "No migrondi found")
   |> Migrations.Migrate
 
-  let lProjects, vProjects = Projects.GetRepositories Database.ConnectionFactory
+  let projects =
+    Services.ProjectCollection(
+      loggerFactory.CreateLogger(),
+      Database.ConnectionFactory
+    )
 
-  let migrondiui = MigrondiExt.getMigrondiUI(loggerFactory, vProjects)
-
-  let vfs =
-    let logger = loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>()
-    VirtualFs.getVirtualFs(logger, vProjects)
+  let migrondiFactory =
+    Services.MigrationOperationsFactory(
+      loggerFactory,
+      Database.ConnectionFactory
+    )
 
   let dialogManager: ISukiDialogManager = SukiDialogManager()
   let toastManager: ISukiToastManager = new SukiToastManager()
@@ -71,10 +73,8 @@ let Orchestrate() =
   let host =
     MigrondiUIAppHost {
       lf = loggerFactory
-      lProjects = lProjects
-      vProjects = vProjects
-      vfs = vfs
-      vMigrondiFactory = migrondiui
+      projects = projects
+      migrondiFactory = migrondiFactory
       dialogManager = dialogManager
       toastManager = toastManager
       window = window

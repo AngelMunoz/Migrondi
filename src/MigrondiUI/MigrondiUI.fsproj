@@ -12,8 +12,9 @@
     <Compile Include="Extensions.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Database.fs" />
-    <Compile Include="Projects.fs" />
     <Compile Include="VirtualFs.fs" />
+    <Compile Include="Services.fs" />
+    <Compile Include="Projects.fs" />
     <Compile Include="MigrondiExt.fs" />
     <Compile Include="OsOperations.fs" />
     <Compile Include="Components/Toolbar.fs" />

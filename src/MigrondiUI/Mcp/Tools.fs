@@ -4,169 +4,167 @@ open System
 
 open IcedTasks
 
-open MigrondiUI.Projects
+open MigrondiUI
 open Migrondi.Core
-
-open McpResults
-open McpRuntime
-open McpResultMapper
 
 module McpTools =
 
   let listProjects(env: McpEnvironment) = cancellableTask {
-    let! localProjects = env.lProjects.GetProjects()
-    let! vProjects = env.vProjects.GetProjects()
+    let! projects = env.projects.List()
 
     let result: McpResults.ListProjectsResult = {
       local =
-        localProjects
-        |> List.map McpResults.LocalProjectSummary.FromLocalProject
+        projects
+        |> List.choose (function
+          | Local p -> Some(McpResults.LocalProjectSummary.FromLocalProject p)
+          | Virtual _ -> None)
       virtualProjects =
-        vProjects
-        |> List.map McpResults.VirtualProjectSummary.FromVirtualProject
+        projects
+        |> List.choose (function
+          | Virtual p ->
+            Some(McpResults.VirtualProjectSummary.FromVirtualProject p)
+          | Local _ -> None)
     }
 
     return
-      McpResultMapper.fromEncoder McpResults.ListProjectsResult.Encoder result
+      result
+      |> McpResultMapper.fromEncoder McpResults.ListProjectsResult.Encoder
   }
 
-  let getProject (env: McpEnvironment) (projectId: string) = cancellableTask {
-    match Guid.TryParse projectId with
-    | false, _ ->
+  let getProject (env: McpEnvironment) (projectId: Guid) = cancellableTask {
+    let! project = env.projects.Get projectId
+
+    match project with
+    | Some(Local p) ->
       return
-        McpResultMapper.fromEncoder
-          McpResults.GetProjectResult.Encoder
-          (McpResults.GetProjectResult.ProjectNotFound
-            "projectId must be a valid GUID")
-    | true, id ->
-      let! localProject = env.lProjects.GetProjectById id
+        McpResults.LocalProjectDetail.FromLocalProject p
+        |> McpResults.GetProjectResult.LocalProject
+        |> McpResultMapper.fromEncoder McpResults.GetProjectResult.Encoder
 
-      match localProject with
-      | Some p ->
-        return
-          McpResultMapper.fromEncoder
-            McpResults.GetProjectResult.Encoder
-            (McpResults.GetProjectResult.LocalProject(
-              McpResults.LocalProjectDetail.FromLocalProject p
-            ))
-      | None ->
-        let! vProject = env.vProjects.GetProjectById id
-
-        match vProject with
-        | Some p ->
-          return
-            McpResultMapper.fromEncoder
-              McpResults.GetProjectResult.Encoder
-              (McpResults.GetProjectResult.VirtualProject(
-                McpResults.VirtualProjectDetail.FromVirtualProject p
-              ))
-        | None ->
-          return
-            McpResultMapper.fromEncoder
-              McpResults.GetProjectResult.Encoder
-              (McpResults.GetProjectResult.ProjectNotFound
-                $"Project {projectId} not found")
-  }
-
-  let listMigrations (env: McpEnvironment) (projectId: string) = cancellableTask {
-    let! result = cancellableTask {
-      match Guid.TryParse projectId with
-      | false, _ -> return McpResults.ListMigrationsResult.Empty
-      | true, id ->
-        match! McpRuntime.findProject env.lProjects env.vProjects id with
-        | None -> return McpResults.ListMigrationsResult.Empty
-        | Some project ->
-          match McpRuntime.getMigrondi env project with
-          | None -> return McpResults.ListMigrationsResult.Empty
-          | Some migrondi ->
-            let! ct = CancellableTask.getCancellationToken()
-            let! migrations = migrondi.MigrationsListAsync ct
-            return McpResults.ListMigrationsResult.FromMigrations migrations
-    }
-
-    return
-      McpResultMapper.fromEncoder McpResults.ListMigrationsResult.Encoder result
-  }
-
-  let getMigration (env: McpEnvironment) (guid: Guid) (migrationName: string) = cancellableTask {
-    match! env.vProjects.GetMigrationByName guid migrationName with
+    | Some(Virtual p) ->
+      return
+        McpResults.VirtualProjectDetail.FromVirtualProject p
+        |> McpResults.GetProjectResult.VirtualProject
+        |> McpResultMapper.fromEncoder McpResults.GetProjectResult.Encoder
     | None ->
       return
-        McpResultMapper.fromEncoder
-          McpResults.GetMigrationResult.Encoder
-          (McpResults.GetMigrationResult.MigrationNotFound
-            $"Migration '{migrationName}' not found")
-    | Some m ->
-      return
-        McpResultMapper.fromEncoder
-          McpResults.GetMigrationResult.Encoder
-          (McpResults.GetMigrationResult.MigrationFound(
-            McpResults.MigrationDetail.FromVirtualMigration m
-          ))
+        McpResults.GetProjectResult.ProjectNotFound
+          $"Project {projectId} not found"
+        |> McpResultMapper.fromEncoder McpResults.GetProjectResult.Encoder
   }
+
+  let listMigrations (env: McpEnvironment) (projectId: Guid) = cancellableTask {
+    let! result = cancellableTask {
+      match! env.projects.Get projectId with
+      | None -> return McpResults.ListMigrationsResult.Empty
+      | Some project ->
+        let ops = env.migrondiFactory.Create project
+        let! ct = CancellableTask.getCancellationToken()
+        let! migrations = ops.Core.MigrationsListAsync ct
+        return McpResults.ListMigrationsResult.FromMigrations migrations
+    }
+
+    return
+      result
+      |> McpResultMapper.fromEncoder McpResults.ListMigrationsResult.Encoder
+  }
+
+  let getMigration
+    (env: McpEnvironment)
+    (projectId: Guid)
+    (migrationName: string)
+    =
+    cancellableTask {
+      match! env.projects.Get projectId with
+      | None ->
+        return
+          McpResults.GetMigrationResult.MigrationNotFound
+            $"Project {projectId} not found"
+          |> McpResultMapper.fromEncoder McpResults.GetMigrationResult.Encoder
+      | Some project ->
+        match project with
+        | Local _ ->
+          return
+            McpResults.GetMigrationResult.MigrationNotFound
+              "Get migration is only supported for virtual projects"
+            |> McpResultMapper.fromEncoder McpResults.GetMigrationResult.Encoder
+        | Virtual _ ->
+          let ops = env.migrondiFactory.Create project
+          let! migration = ops.GetMigration migrationName
+
+          match migration with
+          | None ->
+            return
+              McpResults.GetMigrationResult.MigrationNotFound
+                $"Migration '{migrationName}' not found"
+              |> McpResultMapper.fromEncoder
+                McpResults.GetMigrationResult.Encoder
+          | Some m ->
+            return
+              {
+                id = Guid.NewGuid()
+                name = m.name
+                timestamp = m.timestamp
+                upContent = m.upContent
+                downContent = m.downContent
+                projectId = projectId
+                manualTransaction = m.manualTransaction
+              }
+              |> McpResults.MigrationDetail.FromVirtualMigration
+              |> McpResults.GetMigrationResult.MigrationFound
+              |> McpResultMapper.fromEncoder
+                McpResults.GetMigrationResult.Encoder
+    }
 
   let dryRunMigrations
     (env: McpEnvironment)
-    (projectId: string)
+    (projectId: Guid)
     (amount: int option)
     =
     cancellableTask {
       let! result = cancellableTask {
-        match Guid.TryParse projectId with
-        | false, _ -> return McpResults.DryRunResult.Empty
-        | true, id ->
-          match! McpRuntime.findProject env.lProjects env.vProjects id with
-          | None -> return McpResults.DryRunResult.Empty
-          | Some project ->
-            match McpRuntime.getMigrondi env project with
-            | None -> return McpResults.DryRunResult.Empty
-            | Some migrondi ->
-              let! ct = CancellableTask.getCancellationToken()
+        match! env.projects.Get projectId with
+        | None -> return McpResults.DryRunResult.Empty
+        | Some project ->
+          let ops = env.migrondiFactory.Create project
+          let! ct = CancellableTask.getCancellationToken()
 
-              let! migrations =
-                match amount with
-                | Some a ->
-                  migrondi.DryRunUpAsync(amount = a, cancellationToken = ct)
-                | None -> migrondi.DryRunUpAsync(cancellationToken = ct)
+          let! migrations =
+            match amount with
+            | Some a -> ops.Core.DryRunUpAsync(a, cancellationToken = ct)
+            | None -> ops.Core.DryRunUpAsync(cancellationToken = ct)
 
-              return McpResults.DryRunResult.FromMigrations migrations
+          return McpResults.DryRunResult.FromMigrations migrations
       }
 
-      return McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder result
+      return
+        result |> McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder
     }
 
   let dryRunRollback
     (env: McpEnvironment)
-    (projectId: string)
+    (projectId: Guid)
     (amount: int option)
     =
     cancellableTask {
       let! result = cancellableTask {
-        match Guid.TryParse projectId with
-        | false, _ -> return McpResults.DryRunResult.Empty
-        | true, id ->
-          match! McpRuntime.findProject env.lProjects env.vProjects id with
-          | None -> return McpResults.DryRunResult.Empty
-          | Some project ->
-            match McpRuntime.getMigrondi env project with
-            | None -> return McpResults.DryRunResult.Empty
-            | Some migrondi ->
-              let! ct = CancellableTask.getCancellationToken()
+        match! env.projects.Get projectId with
+        | None -> return McpResults.DryRunResult.Empty
+        | Some project ->
+          let ops = env.migrondiFactory.Create project
+          let! ct = CancellableTask.getCancellationToken()
 
-              let! migrations =
-                match amount with
-                | Some a ->
-                  migrondi.DryRunDownAsync(amount = a, cancellationToken = ct)
-                | None -> migrondi.DryRunDownAsync(cancellationToken = ct)
+          let! migrations =
+            match amount with
+            | Some a -> ops.Core.DryRunDownAsync(a, cancellationToken = ct)
+            | None -> ops.Core.DryRunDownAsync(cancellationToken = ct)
 
-              return McpResults.DryRunResult.FromMigrations migrations
+          return McpResults.DryRunResult.FromMigrations migrations
       }
 
-      return McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder result
+      return
+        result |> McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder
     }
-
-module McpWriteTools =
-  open MigrondiUI
 
   let runMigrations
     (env: McpEnvironment)
@@ -180,37 +178,33 @@ module McpWriteTools =
           return
             McpResults.MigrationsResult.Error "projectId must be a valid GUID"
         | true, id ->
-          match! McpRuntime.findProject env.lProjects env.vProjects id with
+          match! env.projects.Get id with
           | None ->
             return
               McpResults.MigrationsResult.Error $"Project {projectId} not found"
           | Some project ->
-            match McpRuntime.getMigrondi env project with
-            | None ->
+            let ops = env.migrondiFactory.Create project
+
+            try
+              let! ct = CancellableTask.getCancellationToken()
+
+              let! migrations =
+
+                match amount with
+                | Some a ->
+                  ops.Core.RunUpAsync(amount = a, cancellationToken = ct)
+                | None -> ops.Core.RunUpAsync(cancellationToken = ct)
+
+              return McpResults.MigrationsResult.FromMigrationRecords migrations
+            with ex ->
               return
                 McpResults.MigrationsResult.Error
-                  "Project has no valid configuration"
-            | Some migrondi ->
-              try
-                let! ct = CancellableTask.getCancellationToken()
-
-                let! migrations =
-
-                  match amount with
-                  | Some a ->
-                    migrondi.RunUpAsync(amount = a, cancellationToken = ct)
-                  | None -> migrondi.RunUpAsync(cancellationToken = ct)
-
-                return
-                  McpResults.MigrationsResult.FromMigrationRecords migrations
-              with ex ->
-                return
-                  McpResults.MigrationsResult.Error
-                    $"Failed to apply migrations: {ex.Message}"
+                  $"Failed to apply migrations: {ex.Message}"
       }
 
       return
-        McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder result
+        result
+        |> McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder
     }
 
   let runRollback
@@ -225,36 +219,32 @@ module McpWriteTools =
           return
             McpResults.MigrationsResult.Error "projectId must be a valid GUID"
         | true, id ->
-          match! McpRuntime.findProject env.lProjects env.vProjects id with
+          match! env.projects.Get id with
           | None ->
             return
               McpResults.MigrationsResult.Error $"Project {projectId} not found"
           | Some project ->
-            match McpRuntime.getMigrondi env project with
-            | None ->
+            let ops = env.migrondiFactory.Create project
+
+            try
+              let! ct = CancellableTask.getCancellationToken()
+
+              let! migrations =
+                match amount with
+                | Some a ->
+                  ops.Core.RunDownAsync(amount = a, cancellationToken = ct)
+                | None -> ops.Core.RunDownAsync(cancellationToken = ct)
+
+              return McpResults.MigrationsResult.FromMigrationRecords migrations
+            with ex ->
               return
                 McpResults.MigrationsResult.Error
-                  "Project has no valid configuration"
-            | Some migrondi ->
-              try
-                let! ct = CancellableTask.getCancellationToken()
-
-                let! migrations =
-                  match amount with
-                  | Some a ->
-                    migrondi.RunDownAsync(amount = a, cancellationToken = ct)
-                  | None -> migrondi.RunDownAsync(cancellationToken = ct)
-
-                return
-                  McpResults.MigrationsResult.FromMigrationRecords migrations
-              with ex ->
-                return
-                  McpResults.MigrationsResult.Error
-                    $"Failed to rollback migrations: {ex.Message}"
+                  $"Failed to rollback migrations: {ex.Message}"
       }
 
       return
-        McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder result
+        result
+        |> McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder
     }
 
   let createMigration
@@ -271,36 +261,33 @@ module McpWriteTools =
           return
             McpResults.CreateMigrationResult.CreateMigrationError
               "projectId must be a valid GUID"
-        | true, projectId ->
-          match! env.vProjects.GetProjectById projectId with
+        | true, id ->
+          match! env.projects.Get id with
           | None ->
             return
               McpResults.CreateMigrationResult.CreateMigrationError
-                $"Virtual project {projectId} not found"
-          | Some _ ->
+                $"Project {projectId} not found"
+          | Some project ->
             match MigrationName.Validate name with
             | Error errorMsg ->
               return
                 McpResults.CreateMigrationResult.CreateMigrationError errorMsg
             | Ok _ ->
-              let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-
-              let migration: VirtualMigration = {
-                id = Guid.NewGuid()
-                name = name
-                timestamp = timestamp
-                upContent = defaultArg upContent ""
-                downContent = defaultArg downContent ""
-                projectId = projectId
-                manualTransaction = false
-              }
+              let ops = env.migrondiFactory.Create project
+              let! ct = CancellableTask.getCancellationToken()
 
               try
-                let! id = env.vProjects.InsertMigration migration
+                let! migration =
+                  ops.Core.RunNewAsync(
+                    name,
+                    ?upContent = upContent,
+                    ?downContent = downContent,
+                    cancellationToken = ct
+                  )
 
                 return
                   McpResults.CreateMigrationResult.MigrationCreated {|
-                    id = id
+                    id = Guid.NewGuid()
                     name = migration.name
                     timestamp = migration.timestamp
                     fullName = $"{migration.timestamp}_{migration.name}"
@@ -312,9 +299,8 @@ module McpWriteTools =
       }
 
       return
-        McpResultMapper.fromEncoder
-          McpResults.CreateMigrationResult.Encoder
-          result
+        result
+        |> McpResultMapper.fromEncoder McpResults.CreateMigrationResult.Encoder
     }
 
   let updateMigration
@@ -326,50 +312,71 @@ module McpWriteTools =
     =
     cancellableTask {
       let! result = cancellableTask {
-        match! env.vProjects.GetMigrationByName guid name with
+        match! env.projects.Get guid with
         | None ->
-          return McpResults.SuccessResult.Error $"Migration '{name}' not found"
-        | Some m ->
-          let updatedMigration: VirtualMigration = {
-            m with
-                upContent = upContent
-                downContent = downContent
-          }
+          return McpResults.SuccessResult.Error $"Project {guid} not found"
+        | Some project ->
+          let ops = env.migrondiFactory.Create project
+          let! existing = ops.GetMigration name
 
-          try
-            do! env.vProjects.UpdateMigration updatedMigration
+          match existing with
+          | None ->
+            return
+              McpResults.SuccessResult.Error $"Migration '{name}' not found"
+          | Some m ->
+            let updatedMigration = {
+              m with
+                  upContent = upContent
+                  downContent = downContent
+            }
 
-            return
-              McpResults.SuccessResult.Ok
-                $"Migration '{name}' updated successfully"
-          with ex ->
-            return
-              McpResults.SuccessResult.Error
-                $"Failed to update migration: {ex.Message}"
+            let! result = ops.UpdateMigration updatedMigration
+
+            match result with
+            | Ok _ ->
+              return
+                McpResults.SuccessResult.Ok
+                  $"Migration '{name}' updated successfully"
+            | Error(Services.MigrationCrudError.AlreadyApplied n) ->
+              return
+                McpResults.SuccessResult.Error
+                  $"Migration '{n}' has already been applied"
+            | Error(Services.MigrationCrudError.NotFound n) ->
+              return McpResults.SuccessResult.Error $"Migration '{n}' not found"
+            | Error(Services.MigrationCrudError.DatabaseError msg) ->
+              return McpResults.SuccessResult.Error msg
       }
 
-      return McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder result
+      return
+        result |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
     }
 
   let deleteMigration (env: McpEnvironment) (guid: Guid) (name: string) = cancellableTask {
     let! result = cancellableTask {
-      match! env.vProjects.GetMigrationByName guid name with
+      match! env.projects.Get guid with
       | None ->
-        return McpResults.SuccessResult.Error $"Migration '{name}' not found"
-      | Some _ ->
-        try
-          do! env.vProjects.RemoveMigrationByName guid name
+        return McpResults.SuccessResult.Error $"Project {guid} not found"
+      | Some project ->
+        let ops = env.migrondiFactory.Create project
+        let! result = ops.DeleteMigration name
 
+        match result with
+        | Ok _ ->
           return
             McpResults.SuccessResult.Ok
               $"Migration '{name}' deleted successfully"
-        with ex ->
+        | Error(Services.MigrationCrudError.AlreadyApplied n) ->
           return
             McpResults.SuccessResult.Error
-              $"Failed to delete migration: {ex.Message}"
+              $"Migration '{n}' has already been applied"
+        | Error(Services.MigrationCrudError.NotFound n) ->
+          return McpResults.SuccessResult.Error $"Migration '{n}' not found"
+        | Error(Services.MigrationCrudError.DatabaseError msg) ->
+          return McpResults.SuccessResult.Error msg
     }
 
-    return McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder result
+    return
+      result |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
   }
 
   let createVirtualProject
@@ -394,23 +401,23 @@ module McpWriteTools =
             McpResults.CreateProjectResult.CreateProjectError
               $"Invalid driver '{driver}'. Valid options: sqlite, postgres, mysql, mssql"
         | Some driver ->
-          let newProject: NewVirtualProjectArgs = {
+          let args: Database.InsertVirtualProjectArgs = {
             name = name
-            description = defaultArg description ""
+            description = description
             connection = connection
             tableName = defaultArg tableName "migrations"
-            driver = driver
+            driver = driver.AsString
           }
 
           try
-            let! projectId = env.vProjects.InsertProject newProject
+            let! projectId = env.projects.CreateVirtual args
 
             return
               McpResults.CreateProjectResult.ProjectCreated {|
                 id = projectId
                 name = name
                 driver = driver.AsString
-                tableName = newProject.tableName
+                tableName = args.tableName
               |}
           with ex ->
             return
@@ -419,9 +426,8 @@ module McpWriteTools =
       }
 
       return
-        McpResultMapper.fromEncoder
-          McpResults.CreateProjectResult.Encoder
-          result
+        result
+        |> McpResultMapper.fromEncoder McpResults.CreateProjectResult.Encoder
     }
 
   let updateVirtualProject
@@ -438,12 +444,11 @@ module McpWriteTools =
         | false, _ ->
           return McpResults.SuccessResult.Error "projectId must be a valid GUID"
         | true, id ->
-          match! env.vProjects.GetProjectById id with
+          match! env.projects.Get id with
           | None ->
             return
-              McpResults.SuccessResult.Error
-                $"Virtual project {projectId} not found"
-          | Some p ->
+              McpResults.SuccessResult.Error $"Project {projectId} not found"
+          | Some(Virtual p) ->
             let driverValue =
               driver
               |> Option.bind(fun d ->
@@ -462,8 +467,7 @@ module McpWriteTools =
             }
 
             try
-              do! env.vProjects.UpdateProject updatedProject
-              MigrondiCache.invalidate env.migrondiCache p.id
+              do! env.projects.UpdateVirtual updatedProject
 
               return
                 McpResults.SuccessResult.Ok
@@ -472,9 +476,14 @@ module McpWriteTools =
               return
                 McpResults.SuccessResult.Error
                   $"Failed to update project: {ex.Message}"
+          | Some(Local _) ->
+            return
+              McpResults.SuccessResult.Error
+                "Cannot update local projects via MCP"
       }
 
-      return McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder result
+      return
+        result |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
     }
 
   let deleteProject (env: McpEnvironment) (projectId: string) = cancellableTask {
@@ -483,23 +492,20 @@ module McpWriteTools =
       | false, _ ->
         return McpResults.ErrorResult.Create "projectId must be a valid GUID"
       | true, id ->
-        match! env.lProjects.GetProjectById id with
-        | Some _ ->
+        match! env.projects.DeleteProject(id, Services.DeleteKind.Soft) with
+        | Ok _ ->
+          return
+            McpResults.SuccessResult.Ok $"Project {projectId} deleted"
+            |> fun r -> box r |> unbox
+        | Error Services.ProjectDeleteError.NotFound ->
+          return McpResults.ErrorResult.Create $"Project {projectId} not found"
+        | Error Services.ProjectDeleteError.HasAppliedMigrations ->
           return
             McpResults.ErrorResult.Create
-              "Deleting local projects is not supported via MCP. Remove the project manually or use the GUI."
-        | None ->
-          match! env.vProjects.GetProjectById id with
-          | None ->
-            return
-              McpResults.ErrorResult.Create $"Project {projectId} not found"
-          | Some _ ->
-            return
-              McpResults.ErrorResult.Create
-                "Deleting virtual projects is not yet implemented"
+              "Cannot delete project with applied migrations"
     }
 
-    return McpResultMapper.fromEncoder McpResults.ErrorResult.Encoder result
+    return result |> McpResultMapper.fromEncoder McpResults.ErrorResult.Encoder
   }
 
   let exportVirtualProject
@@ -514,14 +520,14 @@ module McpWriteTools =
           return
             McpResults.ExportResult.ExportError "projectId must be a valid GUID"
         | true, id ->
-          match! env.vProjects.GetProjectById id with
+          match! env.projects.Get id with
           | None ->
             return
               McpResults.ExportResult.ExportError
-                $"Virtual project {projectId} not found"
-          | Some p ->
+                $"Project {projectId} not found"
+          | Some(Virtual _) ->
             try
-              let! exportedPath = env.vfs.ExportToLocal(p.id, exportPath)
+              let! exportedPath = env.projects.Export(id, exportPath)
 
               return
                 McpResults.ExportResult.ExportSuccess {| path = exportedPath |}
@@ -529,15 +535,19 @@ module McpWriteTools =
               return
                 McpResults.ExportResult.ExportError
                   $"Failed to export project: {ex.Message}"
+          | Some(Local _) ->
+            return
+              McpResults.ExportResult.ExportError "Cannot export local projects"
       }
 
-      return McpResultMapper.fromEncoder McpResults.ExportResult.Encoder result
+      return
+        result |> McpResultMapper.fromEncoder McpResults.ExportResult.Encoder
     }
 
   let importFromLocal (env: McpEnvironment) (configPath: string) = cancellableTask {
     let! result = cancellableTask {
       try
-        let! projectId = env.vfs.ImportFromLocal configPath
+        let! projectId = env.projects.Import configPath
 
         return McpResults.ImportResult.ImportSuccess {| projectId = projectId |}
       with ex ->
@@ -546,5 +556,5 @@ module McpWriteTools =
             $"Failed to import project: {ex.Message}"
     }
 
-    return McpResultMapper.fromEncoder McpResults.ImportResult.Encoder result
+    return result |> McpResultMapper.fromEncoder McpResults.ImportResult.Encoder
   }

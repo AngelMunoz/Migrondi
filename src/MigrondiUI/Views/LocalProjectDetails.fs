@@ -11,6 +11,7 @@ open Avalonia.Controls
 open NXUI.Extensions
 
 open IcedTasks
+open IcedTasks.Polyfill.Async.PolyfillBuilders
 open FsToolkit.ErrorHandling
 open FSharp.Data.Adaptive
 
@@ -19,7 +20,7 @@ open Navs.Avalonia
 open Migrondi.Core
 
 open MigrondiUI
-open MigrondiUI.Projects
+open MigrondiUI.Services
 open MigrondiUI.Components
 open MigrondiUI.Components.MigrationRunnerToolbar
 open MigrondiUI.Components.Fields
@@ -27,7 +28,8 @@ open MigrondiUI.Components.Fields
 type LocalProjectDetailsVM
   (
     logger: ILogger<LocalProjectDetailsVM>,
-    migrondi: IMigrondi,
+    projects: Services.IProjectCollection,
+    migrondiFactory: Services.IMigrationOperationsFactory,
     project: LocalProject
   ) =
 
@@ -47,9 +49,11 @@ type LocalProjectDetailsVM
       return ()
   }
 
+  let ops = migrondiFactory.Create(Local project)
+
   do
     logger.LogDebug "LocalProjectDetailsVM created"
-    migrondi.Initialize()
+    ops.Core.Initialize()
 
   member _.Project = project
 
@@ -73,8 +77,8 @@ type LocalProjectDetailsVM
 
   member _.ListMigrations() = asyncEx {
     logger.LogDebug "Listing migrations"
-    let! token = Async.CancellationToken
-    let! migrations = migrondi.MigrationsListAsync token
+    let! ct = Async.CancellationToken
+    let! migrations = ops.Core.MigrationsListAsync ct
 
     logger.LogDebug("Migrations listed: {migrations}", migrations.Count)
 
@@ -90,36 +94,36 @@ type LocalProjectDetailsVM
   member this.NewMigration(name: string) =
     asyncEx {
       logger.LogDebug "Creating new migration"
-      let! token = Async.CancellationToken
+      let! ct = Async.CancellationToken
 
       logger.LogDebug("New migration name: {name}", name)
-      let! migration = migrondi.RunNewAsync(name, cancellationToken = token)
-      logger.LogDebug("New migration created: {migration}", migration)
+      let! _ = ops.Core.RunNewAsync(name, cancellationToken = ct)
+      logger.LogDebug("New migration created")
       return! this.ListMigrations()
     }
     |> handleException
 
   member this.RunMigrations(kind: ProjectDetails.RunMigrationKind, steps: int) =
     asyncEx {
-      let! token = Async.CancellationToken
+      let! ct = Async.CancellationToken
       logger.LogDebug("Running migrations: {kind}, {steps}", kind, steps)
 
       match kind with
       | ProjectDetails.RunMigrationKind.Up ->
         logger.LogDebug("Running migrations up")
-        do! migrondi.RunUpAsync(steps, cancellationToken = token) :> Task
+        do! ops.Core.RunUpAsync(steps, cancellationToken = ct) :> Task
         do! this.ListMigrations()
         logger.LogDebug("Migrations up completed")
         return ()
       | ProjectDetails.RunMigrationKind.Down ->
         logger.LogDebug("Running migrations down")
-        do! migrondi.RunDownAsync(steps, cancellationToken = token) :> Task
+        do! ops.Core.RunDownAsync(steps, cancellationToken = ct) :> Task
         do! this.ListMigrations()
         logger.LogDebug("Migrations down completed")
         return ()
       | ProjectDetails.RunMigrationKind.DryUp ->
         logger.LogDebug("Running migrations dry up")
-        let! run = migrondi.DryRunUpAsync(steps, cancellationToken = token)
+        let! run = ops.Core.DryRunUpAsync(steps, cancellationToken = ct)
 
         logger.LogDebug(
           "Dry run up completed and found {count} migrations",
@@ -136,7 +140,7 @@ type LocalProjectDetailsVM
         return ()
       | ProjectDetails.RunMigrationKind.DryDown ->
         logger.LogDebug("Running migrations dry down")
-        let! run = migrondi.DryRunDownAsync(steps, cancellationToken = token)
+        let! run = ops.Core.DryRunDownAsync(steps, cancellationToken = ct)
 
         logger.LogDebug(
           "Dry run down completed and found {count} migrations",
@@ -153,8 +157,6 @@ type LocalProjectDetailsVM
         return ()
     }
     |> handleException
-
-// Reusing shared component from SharedComponents module
 
 let localProjectView
   (
@@ -309,25 +311,20 @@ let buildDetailsView
   (
     projectId: Guid,
     logger: ILogger<LocalProjectDetailsVM>,
-    mLogger: ILogger<IMigrondi>,
-    projects: ILocalProjectRepository,
+    projects: Services.IProjectCollection,
+    migrondiFactory: Services.IMigrationOperationsFactory,
     onNavigateBack: unit -> unit
   ) =
-  asyncOption {
-    let! cancellationToken = Async.CancellationToken
-    let! project = projects.GetProjectById projectId cancellationToken
+  asyncEx {
+    let! project = projects.Get projectId
 
-    logger.LogDebug("Project from repository: {project}", project)
-
-    let! config = project.config
-
-    let projectRoot =
-      Path.GetDirectoryName project.migrondiConfigPath |> nonNull
-
-    let migrondi = Migrondi.MigrondiFactory(config, projectRoot, mLogger)
-
-    let vm = LocalProjectDetailsVM(logger, migrondi, project)
-    return LProjectDetailsView(vm, onNavigateBack) :> Control
+    match project with
+    | Some(Local p) ->
+      let vm = LocalProjectDetailsVM(logger, projects, migrondiFactory, p)
+      return Some(LProjectDetailsView(vm, onNavigateBack) :> Control)
+    | Some(Virtual _) ->
+      return failwith "Expected local project but got virtual"
+    | None -> return None
   }
 
 let buildProjectNotFound(id: Guid) : Control =
@@ -343,8 +340,8 @@ let buildLoading(id: Guid) : Control =
 let View
   (
     logger: ILogger<LocalProjectDetailsVM>,
-    mLogger: ILogger<IMigrondi>,
-    projects: ILocalProjectRepository
+    projects: Services.IProjectCollection,
+    migrondiFactory: Services.IMigrationOperationsFactory
   )
   (context: RouteContext)
   (nav: INavigable<Control>)
@@ -370,7 +367,13 @@ let View
 
     asyncEx {
       match!
-        buildDetailsView(projectId, logger, mLogger, projects, onNavigateBack)
+        buildDetailsView(
+          projectId,
+          logger,
+          projects,
+          migrondiFactory,
+          onNavigateBack
+        )
       with
       | Some builtView -> view.setValue(builtView)
       | None -> view.setValue(buildProjectNotFound projectId)

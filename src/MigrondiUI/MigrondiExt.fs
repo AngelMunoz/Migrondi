@@ -127,7 +127,7 @@ let private normalizeSqliteConnection (vProjectId: Guid) (connection: string) =
   if not m.Success then
     connection
   else
-    let dataSource = m.Groups.[1].Value.Trim()
+    let dataSource = m.Groups[1].Value.Trim()
 
     if Path.IsPathRooted dataSource then
       connection
@@ -148,10 +148,14 @@ let private normalizeSqliteConnection (vProjectId: Guid) (connection: string) =
       $"Data Source={absolutePath}{restOfConnection}"
 
 
-let getMigrondiUI(lf: ILoggerFactory, vpr: Projects.IVirtualProjectRepository) =
+let getMigrondiUI
+  (lf: ILoggerFactory, createConnection: unit -> System.Data.IDbConnection)
+  =
   let mufs = lf.CreateLogger<VirtualFs.MigrondiUIFs>()
   let ml = lf.CreateLogger<IMigrondi>()
-  let vfs = VirtualFs.getVirtualFs(mufs, vpr)
+  let vfs = VirtualFs.getVirtualFs(mufs, createConnection)
+
+  let updateVirtualMigration = Database.UpdateVirtualMigration createConnection
 
   fun (config: MigrondiConfig, rootDir: string, projectId: Guid) ->
 
@@ -248,7 +252,16 @@ let getMigrondiUI(lf: ILoggerFactory, vpr: Projects.IVirtualProjectRepository) =
           (migration: VirtualMigration, ?cancellationToken)
           : Task =
           let ct = defaultArg cancellationToken CancellationToken.None
-          vpr.UpdateMigration migration ct
+
+          updateVirtualMigration
+            {
+              virtualProjectId = migration.projectId
+              name = migration.name
+              upContent = migration.upContent
+              downContent = migration.downContent
+              manualTransaction = migration.manualTransaction
+            }
+            ct
 
         member _.ScriptStatus(migrationPath: string) : MigrationStatus =
           migrondi.ScriptStatus(migrationPath)

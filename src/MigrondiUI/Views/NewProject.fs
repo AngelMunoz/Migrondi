@@ -6,6 +6,7 @@ open System.IO
 open Microsoft.Extensions.Logging
 
 open IcedTasks
+open IcedTasks.Polyfill.Async.PolyfillBuilders
 
 open Avalonia.Controls
 open Avalonia.Platform.Storage
@@ -20,22 +21,15 @@ open Navs.Avalonia
 open Migrondi.Core
 open Migrondi.Core.Serialization
 open MigrondiUI
-open MigrondiUI.Projects
+open MigrondiUI.Services
 open MigrondiUI.Components.NewVirtualProjectForm
-open MigrondiUI.VirtualFs
 open SukiUI.Controls
 
 type LocalProjectTarget =
   | CreateLocal
   | ImportToVirtual
 
-type NewProjectVM
-  (
-    logger: ILogger<NewProjectVM>,
-    projects: ILocalProjectRepository,
-    vProjects: IVirtualProjectRepository,
-    vfs: MigrondiUIFs
-  ) =
+type NewProjectVM(logger: ILogger<NewProjectVM>, projects: IProjectCollection) =
 
   do logger.LogDebug "NewProjectVM created"
 
@@ -65,12 +59,7 @@ type NewProjectVM
 
     logger.LogDebug("Selected file: {File}", file.Name)
 
-    let! pid =
-      projects.InsertProject
-        (name,
-         // TODO: handle uris when we're not on desktop platforms
-         configPath = file.Path.LocalPath)
-        token
+    let! pid = projects.RegisterLocal (file.Path.LocalPath, name = name) token
 
     return pid
   }
@@ -113,26 +102,18 @@ type NewProjectVM
 
     let! dirName = Path.GetFileNameWithoutExtension directory
 
-    logger.LogDebug("Inserting local project with name {Name}", dirName)
+    logger.LogDebug("Registering local project with name {Name}", dirName)
 
-    logger.LogDebug(
-      "Inserting local project with config path {Path}",
-      directory
-    )
+    let! pid = projects.RegisterLocal(configPath, name = dirName)
 
-    logger.LogDebug("Inserting local project with config {Config}", config)
-
-    let configPath = Path.Combine(directory, "migrondi.json")
-
-    let! pid = projects.InsertProject (dirName, configPath = configPath) token
-
-    logger.LogDebug("Inserted local project with id {Id}", pid)
+    logger.LogDebug("Registered local project with id {Id}", pid)
     return pid
   }
 
-  member _.CreateNewVirtualProject(args: NewVirtualProjectArgs) = asyncEx {
+  member _.CreateNewVirtualProject(args: Database.InsertVirtualProjectArgs) = asyncEx {
     logger.LogDebug "Creating new virtual project"
-    let! pid = vProjects.InsertProject(args)
+
+    let! pid = projects.CreateVirtual args
     logger.LogDebug("Inserted virtual project with id {Id}", pid)
     return pid
   }
@@ -158,7 +139,9 @@ type NewProjectVM
 
     let! file = file |> Seq.tryHead
     logger.LogDebug("Selected file: {File}", file.Name)
-    let! guid = vfs.ImportFromLocal file.Path.LocalPath token
+
+    let! guid = projects.Import file.Path.LocalPath token
+
     return guid
   }
 
@@ -181,7 +164,7 @@ let private localProjectTab
 
 let private virtualProjectTab
   (
-    handleCreateVirtualProject: NewVirtualProjectArgs -> unit,
+    handleCreateVirtualProject: Database.InsertVirtualProjectArgs -> unit,
     handleImportToVirtual: unit -> unit
   ) =
   NewVirtualProjectForm(handleCreateVirtualProject, handleImportToVirtual)
@@ -233,7 +216,7 @@ let View
         logger.LogWarning("Navigation Failure: {error}", e.StringError())
   }
 
-  let handleCreateVirtualProject(args: NewVirtualProjectArgs) = asyncEx {
+  let handleCreateVirtualProject(args: Database.InsertVirtualProjectArgs) = asyncEx {
     let! createdId = vm.CreateNewVirtualProject args
 
     match! nav.Navigate $"/projects/virtual/{createdId}" with

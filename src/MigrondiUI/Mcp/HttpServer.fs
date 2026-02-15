@@ -88,7 +88,7 @@ module private HttpServerHelpers =
     context.Response.Close()
 
   let getSessionId(context: Net.HttpListenerContext) =
-    match context.Request.Headers.["Mcp-Session-Id"] with
+    match context.Request.Headers["Mcp-Session-Id"] with
     | null -> None
     | id -> Some(string id)
 
@@ -114,7 +114,7 @@ module private HttpServerHelpers =
           | None ->
             createSession serverOptions loggerFactory serviceProvider cts
 
-        sessions.[session.id] <- session
+        sessions[session.id] <- session
 
         use stream = context.Request.InputStream
         use reader = new IO.StreamReader(stream)

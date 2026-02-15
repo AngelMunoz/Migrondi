@@ -11,17 +11,15 @@ open NXUI.Extensions
 
 open Navs.Avalonia
 
-open MigrondiUI.MigrondiExt
+open MigrondiUI.Services
 open SukiUI.Controls
 open SukiUI.Theme
 
 [<NoComparison; NoEquality>]
 type AppEnvironment = {
   lf: ILoggerFactory
-  lProjects: MigrondiUI.Projects.ILocalProjectRepository
-  vProjects: MigrondiUI.Projects.IVirtualProjectRepository
-  vfs: MigrondiUI.VirtualFs.MigrondiUIFs
-  vMigrondiFactory: Migrondi.Core.MigrondiConfig * string * Guid -> IMigrondiUI
+  projects: IProjectCollection
+  migrondiFactory: IMigrationOperationsFactory
   dialogManager: SukiUI.Dialogs.ISukiDialogManager
   toastManager: SukiUI.Toasts.ISukiToastManager
   window: SukiWindow
@@ -29,48 +27,39 @@ type AppEnvironment = {
 
 
 let private landingView appEnvironment =
-  let {
-        lf = lf
-        lProjects = lProjects
-        vProjects = vProjects
-      } =
-    appEnvironment
+  let { lf = lf; projects = projects } = appEnvironment
 
   let logger = lf.CreateLogger<Landing.LandingVM>()
-  Landing.View(Landing.LandingVM(logger, lProjects, vProjects), logger)
+  Landing.View(Landing.LandingVM(logger, projects), logger)
 
 let private newProjectView appEnvironment =
-  let {
-        lf = lf
-        lProjects = lProjects
-        vProjects = vProjects
-        vfs = vfs
-      } =
-    appEnvironment
+  let { lf = lf; projects = projects } = appEnvironment
 
   let logger = lf.CreateLogger<NewProject.NewProjectVM>()
 
-  NewProject.View(
-    (NewProject.NewProjectVM(logger, lProjects, vProjects, vfs)),
-    logger
-  )
+  NewProject.View((NewProject.NewProjectVM(logger, projects)), logger)
 
 let private projectDetailsView appEnvironment =
-  let { lf = lf; lProjects = projects } = appEnvironment
+  let {
+        lf = lf
+        projects = projects
+        migrondiFactory = migrondiFactory
+      } =
+    appEnvironment
+
   let logger = lf.CreateLogger<LocalProjectDetails.LocalProjectDetailsVM>()
-  let mLogger = lf.CreateLogger<Migrondi.Core.IMigrondi>()
-  LocalProjectDetails.View(logger, mLogger, projects)
+  LocalProjectDetails.View(logger, projects, migrondiFactory)
 
 let private vProjectDetailsView appEnvironment =
   let {
         lf = lf
-        vProjects = vProjects
-        vMigrondiFactory = vMigrondiFactory
+        projects = projects
+        migrondiFactory = migrondiFactory
       } =
     appEnvironment
 
   let logger = lf.CreateLogger<VirtualProjectDetails.VirtualProjectDetailsVM>()
-  VirtualProjectDetails.View(logger, vProjects, vMigrondiFactory)
+  VirtualProjectDetails.View(logger, projects, migrondiFactory)
 
 
 

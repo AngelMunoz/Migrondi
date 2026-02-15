@@ -11,7 +11,6 @@ open Microsoft.Extensions.Logging
 open Xunit
 
 open MigrondiUI
-open MigrondiUI.Projects
 open MigrondiUI.VirtualFs
 open Migrondi.Core
 open Migrondi.Core.Serialization
@@ -37,7 +36,10 @@ module private TestHelpers =
         CREATE TABLE IF NOT EXISTS projects (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
-          description TEXT
+          description TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          deleted_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS virtual_projects (
@@ -81,11 +83,12 @@ module private TestHelpers =
     : Guid =
     let baseProjectId = Guid.NewGuid()
     let virtualProjectId = Guid.NewGuid()
+    let now = DateTime.UtcNow.ToString("o")
 
     use cmd = connection.CreateCommand()
 
     cmd.CommandText <-
-      "INSERT INTO projects (id, name, description) VALUES (@id, @name, @description)"
+      "INSERT INTO projects (id, name, description, created_at, updated_at) VALUES (@id, @name, @description, @createdAt, @updatedAt)"
 
     let p1 = cmd.CreateParameter()
     p1.ParameterName <- "@id"
@@ -99,6 +102,14 @@ module private TestHelpers =
     p3.ParameterName <- "@description"
     p3.Value <- DBNull.Value
     cmd.Parameters.Add(p3) |> ignore
+    let p4 = cmd.CreateParameter()
+    p4.ParameterName <- "@createdAt"
+    p4.Value <- now
+    cmd.Parameters.Add(p4) |> ignore
+    let p5 = cmd.CreateParameter()
+    p5.ParameterName <- "@updatedAt"
+    p5.Value <- now
+    cmd.Parameters.Add(p5) |> ignore
     cmd.ExecuteNonQuery() |> ignore
 
     use cmd2 = connection.CreateCommand()
@@ -106,26 +117,26 @@ module private TestHelpers =
     cmd2.CommandText <-
       "INSERT INTO virtual_projects (id, connection, table_name, driver, project_id) VALUES (@id, @connection, @table_name, @driver, @project_id)"
 
-    let p4 = cmd2.CreateParameter()
-    p4.ParameterName <- "@id"
-    p4.Value <- virtualProjectId.ToString()
-    cmd2.Parameters.Add(p4) |> ignore
-    let p5 = cmd2.CreateParameter()
-    p5.ParameterName <- "@connection"
-    p5.Value <- connectionStr
-    cmd2.Parameters.Add(p5) |> ignore
     let p6 = cmd2.CreateParameter()
-    p6.ParameterName <- "@table_name"
-    p6.Value <- "migrations"
+    p6.ParameterName <- "@id"
+    p6.Value <- virtualProjectId.ToString()
     cmd2.Parameters.Add(p6) |> ignore
     let p7 = cmd2.CreateParameter()
-    p7.ParameterName <- "@driver"
-    p7.Value <- "sqlite"
+    p7.ParameterName <- "@connection"
+    p7.Value <- connectionStr
     cmd2.Parameters.Add(p7) |> ignore
     let p8 = cmd2.CreateParameter()
-    p8.ParameterName <- "@project_id"
-    p8.Value <- baseProjectId.ToString()
+    p8.ParameterName <- "@table_name"
+    p8.Value <- "migrations"
     cmd2.Parameters.Add(p8) |> ignore
+    let p9 = cmd2.CreateParameter()
+    p9.ParameterName <- "@driver"
+    p9.Value <- "sqlite"
+    cmd2.Parameters.Add(p9) |> ignore
+    let p10 = cmd2.CreateParameter()
+    p10.ParameterName <- "@project_id"
+    p10.Value <- baseProjectId.ToString()
+    cmd2.Parameters.Add(p10) |> ignore
     cmd2.ExecuteNonQuery() |> ignore
 
     virtualProjectId
@@ -177,17 +188,88 @@ module private TestHelpers =
 
     migrationId
 
+  let getMigrationByName
+    (connection: IDbConnection)
+    (projectId: Guid)
+    (name: string)
+    : VirtualMigration option =
+    use cmd = connection.CreateCommand()
+
+    cmd.CommandText <-
+      "
+      SELECT vm.id, vm.name, vm.timestamp, vm.up_content, vm.down_content, vm.manual_transaction, vm.virtual_project_id
+      FROM virtual_migrations vm
+      WHERE vm.virtual_project_id = @projectId AND vm.name = @name
+      "
+
+    let p1 = cmd.CreateParameter()
+    p1.ParameterName <- "@projectId"
+    p1.Value <- projectId.ToString()
+    cmd.Parameters.Add(p1) |> ignore
+    let p2 = cmd.CreateParameter()
+    p2.ParameterName <- "@name"
+    p2.Value <- name
+    cmd.Parameters.Add(p2) |> ignore
+
+    use reader = cmd.ExecuteReader()
+
+    if reader.Read() then
+      Some {
+        id = reader.GetString(0) |> Guid.Parse
+        name = reader.GetString(1)
+        timestamp = reader.GetInt64(2)
+        upContent = reader.GetString(3)
+        downContent = reader.GetString(4)
+        manualTransaction = reader.GetInt32(5) <> 0
+        projectId = reader.GetString(6) |> Guid.Parse
+      }
+    else
+      None
+
+  let getMigrations
+    (connection: IDbConnection)
+    (projectId: Guid)
+    : VirtualMigration list =
+    use cmd = connection.CreateCommand()
+
+    cmd.CommandText <-
+      "
+      SELECT vm.id, vm.name, vm.timestamp, vm.up_content, vm.down_content, vm.manual_transaction, vm.virtual_project_id
+      FROM virtual_migrations vm
+      WHERE vm.virtual_project_id = @projectId
+      ORDER BY vm.timestamp
+      "
+
+    let p1 = cmd.CreateParameter()
+    p1.ParameterName <- "@projectId"
+    p1.Value <- projectId.ToString()
+    cmd.Parameters.Add(p1) |> ignore
+
+    use reader = cmd.ExecuteReader()
+
+    [
+      while reader.Read() do
+        {
+          id = reader.GetString(0) |> Guid.Parse
+          name = reader.GetString(1)
+          timestamp = reader.GetInt64(2)
+          upContent = reader.GetString(3)
+          downContent = reader.GetString(4)
+          manualTransaction = reader.GetInt32(5) <> 0
+          projectId = reader.GetString(6) |> Guid.Parse
+        }
+    ]
+
 type VirtualFsTests() =
   let masterConnection, connectionFactory =
     TestHelpers.createTestConnectionFactory()
 
   let loggerFactory = TestHelpers.createTestLoggerFactory()
-  let _, vProjects = Projects.GetRepositories connectionFactory
 
   let vfs =
     VirtualFs.getVirtualFs(
       loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>(),
-      vProjects
+      connectionFactory
     )
 
   interface IDisposable with
@@ -290,8 +372,8 @@ type VirtualFsTests() =
 
     do! vfs.WriteContentAsync(uri1, updatedContent, ct)
 
-    let! migration1 = vProjects.GetMigrationByName projectId1 "create_users" ct
-    let! migration2 = vProjects.GetMigrationByName projectId2 "create_users" ct
+    let migration1 = TestHelpers.getMigrationByName conn projectId1 "create_users"
+    let migration2 = TestHelpers.getMigrationByName conn projectId2 "create_users"
 
     Assert.Equal(
       "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);",
@@ -300,6 +382,63 @@ type VirtualFsTests() =
 
     Assert.Equal("CREATE TABLE users (id INTEGER);", migration2.Value.upContent)
   }
+
+  [<Fact>]
+  member _.``WriteContentAsync updates existing migration instead of inserting duplicate``
+    ()
+    =
+    task {
+      let ct = CancellationToken.None
+      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+      use conn = connectionFactory()
+
+      let projectId =
+        TestHelpers.insertVirtualProject conn "UpdateTest" "Data Source=:memory:"
+
+      TestHelpers.insertMigration
+        conn
+        projectId
+        "update_test"
+        timestamp
+        "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+        "DROP TABLE users;"
+      |> ignore
+
+      let migrationUri =
+        Uri(
+          $"migrondi-ui://projects/virtual/{projectId}/{timestamp}_update_test.sql"
+        )
+
+      let updatedContent =
+        MiSerializer.Encode {
+          name = "update_test"
+          timestamp = timestamp
+          upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);"
+          downContent = "DROP TABLE users;"
+          manualTransaction = false
+        }
+
+      do! vfs.WriteContentAsync(migrationUri, updatedContent, ct)
+
+      let migrations = TestHelpers.getMigrations conn projectId
+
+      Assert.True(
+        migrations.Length = 1,
+        $"Expected 1 migration after update, but found {migrations.Length}. This indicates WriteContentAsync inserted a duplicate instead of updating."
+      )
+
+      let updatedMigration =
+        TestHelpers.getMigrationByName conn projectId "update_test"
+
+      match updatedMigration with
+      | Some m ->
+        Assert.Equal(
+          "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+          m.upContent
+        )
+      | None -> Assert.Fail "Migration should exist after update"
+    }
 
   [<Fact>]
   member _.``ReadContentAsync returns not found when migration exists in different project``

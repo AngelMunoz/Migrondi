@@ -1,7 +1,6 @@
 namespace MigrondiUI.Mcp
 
 open System
-open System.Collections.Concurrent
 open System.Threading
 
 open Microsoft.Extensions.DependencyInjection
@@ -10,7 +9,6 @@ open Microsoft.Extensions.Logging
 open ModelContextProtocol.Server
 
 open MigrondiUI
-open Migrondi.Core
 
 open IcedTasks
 
@@ -33,7 +31,7 @@ module private ServerHelpers =
         String.Equals(a, "--http", StringComparison.OrdinalIgnoreCase))
       |> Option.bind(fun i ->
         if i + 1 < argv.Length then
-          match Int32.TryParse(argv.[i + 1]) with
+          match Int32.TryParse(argv[i + 1]) with
           | true, port when port > 0 && port < 65536 -> Some port
           | _ -> None
         else
@@ -61,30 +59,19 @@ module private ServerHelpers =
     |> ValueOption.defaultWith(fun () -> failwith "No migrondi found")
     |> Migrations.Migrate
 
-    let lProjects, vProjects = Projects.GetRepositories connectionFactory
+    let projects =
+      Services.ProjectCollection(
+        loggerFactory.CreateLogger(),
+        connectionFactory
+      )
 
-    let vMigrondiFactory = MigrondiExt.getMigrondiUI(loggerFactory, vProjects)
-
-    let localMigrondiFactory(config: MigrondiConfig, rootDir: string) =
-      let mLogger: ILogger = loggerFactory.CreateLogger<IMigrondi>()
-
-      let migrondi: IMigrondi =
-        Migrondi.Core.Migrondi.MigrondiFactory(config, rootDir, mLogger)
-
-      MigrondiExt.wrapLocalMigrondi(migrondi, config, rootDir)
-
-    let vfs =
-      let logger = loggerFactory.CreateLogger<VirtualFs.MigrondiUIFs>()
-      VirtualFs.getVirtualFs(logger, vProjects)
+    let migrondiFactory =
+      Services.MigrationOperationsFactory(loggerFactory, connectionFactory)
 
     {
       lf = loggerFactory
-      lProjects = lProjects
-      vProjects = vProjects
-      vfs = vfs
-      vMigrondiFactory = vMigrondiFactory
-      localMigrondiFactory = localMigrondiFactory
-      migrondiCache = ConcurrentDictionary<Guid, MigrondiExt.IMigrondiUI>()
+      projects = projects
+      migrondiFactory = migrondiFactory
     }
 
   let createTool
@@ -95,7 +82,9 @@ module private ServerHelpers =
     (destructive: bool)
     (del: Delegate)
     : McpServerTool =
-    let options =
+
+    McpServerTool.Create(
+      del,
       McpServerToolCreateOptions(
         Services = serviceProvider,
         Name = name,
@@ -103,8 +92,7 @@ module private ServerHelpers =
         ReadOnly = readOnly,
         Destructive = destructive
       )
-
-    McpServerTool.Create(del, options)
+    )
 
   let createReadTools
     (env: McpEnvironment)
@@ -112,19 +100,31 @@ module private ServerHelpers =
     : McpServerTool list =
 
     let listProjectsFn ct = McpTools.listProjects env ct
-    let getProjectFn pid ct = McpTools.getProject env pid ct
-    let listMigrationsFn pid ct = McpTools.listMigrations env pid ct
+
+    let getProjectFn (pid: string) ct =
+      match Guid.TryParse pid with
+      | false, _ -> McpTools.getProject env Guid.Empty ct
+      | true, guid -> McpTools.getProject env guid ct
+
+    let listMigrationsFn (pid: string) ct =
+      match Guid.TryParse pid with
+      | false, _ -> McpTools.listMigrations env Guid.Empty ct
+      | true, guid -> McpTools.listMigrations env guid ct
 
     let getMigrationFn (guid: string) name ct =
       match Guid.TryParse guid with
-      | false, _ -> McpTools.getMigration env System.Guid.Empty name ct
+      | false, _ -> McpTools.getMigration env Guid.Empty name ct
       | true, guid -> McpTools.getMigration env guid name ct
 
-    let dryRunMigrationsFn pid amount ct =
-      McpTools.dryRunMigrations env pid amount ct
+    let dryRunMigrationsFn (pid: string) amount ct =
+      match Guid.TryParse pid with
+      | false, _ -> McpTools.dryRunMigrations env Guid.Empty amount ct
+      | true, guid -> McpTools.dryRunMigrations env guid amount ct
 
-    let dryRunRollbackFn pid amount ct =
-      McpTools.dryRunRollback env pid amount ct
+    let dryRunRollbackFn (pid: string) amount ct =
+      match Guid.TryParse pid with
+      | false, _ -> McpTools.dryRunRollback env Guid.Empty amount ct
+      | true, guid -> McpTools.dryRunRollback env guid amount ct
 
     [
       createTool
@@ -177,38 +177,35 @@ module private ServerHelpers =
     : McpServerTool list =
 
     let runMigrationsFn pid amount ct =
-      McpWriteTools.runMigrations env pid amount ct
+      McpTools.runMigrations env pid amount ct
 
-    let runRollbackFn pid amount ct =
-      McpWriteTools.runRollback env pid amount ct
+    let runRollbackFn pid amount ct = McpTools.runRollback env pid amount ct
 
     let createMigrationFn pid name up down ct =
-      McpWriteTools.createMigration env pid name up down ct
+      McpTools.createMigration env pid name up down ct
 
     let updateMigrationFn (projectId: string) name up down ct =
       match Guid.TryParse projectId with
-      | false, _ ->
-        McpWriteTools.updateMigration env System.Guid.Empty name up down ct
-      | true, guid -> McpWriteTools.updateMigration env guid name up down ct
+      | false, _ -> McpTools.updateMigration env Guid.Empty name up down ct
+      | true, guid -> McpTools.updateMigration env guid name up down ct
 
     let deleteMigrationFn (projectId: string) name ct =
       match Guid.TryParse projectId with
-      | false, _ -> McpWriteTools.deleteMigration env System.Guid.Empty name ct
-      | true, guid -> McpWriteTools.deleteMigration env guid name ct
+      | false, _ -> McpTools.deleteMigration env Guid.Empty name ct
+      | true, guid -> McpTools.deleteMigration env guid name ct
 
     let createVirtualProjectFn name conn driver desc tbl ct =
-      McpWriteTools.createVirtualProject env name conn driver desc tbl ct
+      McpTools.createVirtualProject env name conn driver desc tbl ct
 
     let updateVirtualProjectFn pid name conn tbl driver ct =
-      McpWriteTools.updateVirtualProject env pid name conn tbl driver ct
+      McpTools.updateVirtualProject env pid name conn tbl driver ct
 
-    let deleteProjectFn pid ct = McpWriteTools.deleteProject env pid ct
+    let deleteProjectFn pid ct = McpTools.deleteProject env pid ct
 
     let exportVirtualProjectFn pid path ct =
-      McpWriteTools.exportVirtualProject env pid path ct
+      McpTools.exportVirtualProject env pid path ct
 
-    let importFromLocalFn path ct =
-      McpWriteTools.importFromLocal env path ct
+    let importFromLocalFn path ct = McpTools.importFromLocal env path ct
 
     [
       createTool
@@ -291,11 +288,11 @@ module private ServerHelpers =
     let collection = McpServerPrimitiveCollection<McpServerTool>()
 
     for tool in createReadTools env serviceProvider do
-      collection.Add(tool) |> ignore
+      collection.Add(tool)
 
     if not readOnly then
       for tool in createWriteTools env serviceProvider do
-        collection.Add(tool) |> ignore
+        collection.Add(tool)
 
     collection
 
@@ -313,8 +310,6 @@ module private ServerHelpers =
     options
 
 module Server =
-
-  open ModelContextProtocol.Protocol
 
   let tryParseArgs = ServerHelpers.parseArgs
 
