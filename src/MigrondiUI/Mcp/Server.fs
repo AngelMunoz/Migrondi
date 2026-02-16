@@ -17,6 +17,66 @@ type IMcpServer =
 
 module private ServerHelpers =
 
+  module ReadTools =
+    let listProjectsFn env ct = McpTools.listProjects env ct
+
+    let getProjectFn env (pid: string) ct =
+      match Guid.TryParse pid with
+      | false, _ -> McpTools.getProject env Guid.Empty ct
+      | true, guid -> McpTools.getProject env guid ct
+
+    let listMigrationsFn env (pid: string) ct =
+      match Guid.TryParse pid with
+      | false, _ -> McpTools.listMigrations env Guid.Empty ct
+      | true, guid -> McpTools.listMigrations env guid ct
+
+    let getMigrationFn env (guid: string) name ct =
+      match Guid.TryParse guid with
+      | false, _ -> McpTools.getMigration env Guid.Empty name ct
+      | true, guid -> McpTools.getMigration env guid name ct
+
+    let dryRunMigrationsFn env (pid: string) amount ct =
+      match Guid.TryParse pid with
+      | false, _ -> McpTools.dryRunMigrations env Guid.Empty amount ct
+      | true, guid -> McpTools.dryRunMigrations env guid amount ct
+
+    let dryRunRollbackFn env (pid: string) amount ct =
+      match Guid.TryParse pid with
+      | false, _ -> McpTools.dryRunRollback env Guid.Empty amount ct
+      | true, guid -> McpTools.dryRunRollback env guid amount ct
+
+  module WriteTools =
+    let runMigrationsFn env pid amount ct =
+      McpTools.runMigrations env pid amount ct
+
+    let runRollbackFn env pid amount ct = McpTools.runRollback env pid amount ct
+
+    let createMigrationFn env pid name up down ct =
+      McpTools.createMigration env pid name up down ct
+
+    let updateMigrationFn env (projectId: string) name up down ct =
+      match Guid.TryParse projectId with
+      | false, _ -> McpTools.updateMigration env Guid.Empty name up down ct
+      | true, guid -> McpTools.updateMigration env guid name up down ct
+
+    let deleteMigrationFn env (projectId: string) name ct =
+      match Guid.TryParse projectId with
+      | false, _ -> McpTools.deleteMigration env Guid.Empty name ct
+      | true, guid -> McpTools.deleteMigration env guid name ct
+
+    let createVirtualProjectFn env name conn driver desc tbl ct =
+      McpTools.createVirtualProject env name conn driver desc tbl ct
+
+    let updateVirtualProjectFn env pid name conn tbl driver ct =
+      McpTools.updateVirtualProject env pid name conn tbl driver ct
+
+    let deleteProjectFn env pid ct = McpTools.deleteProject env pid ct
+
+    let exportVirtualProjectFn env pid path ct =
+      McpTools.exportVirtualProject env pid path ct
+
+    let importFromLocalFn env path ct = McpTools.importFromLocal env path ct
+
   open ModelContextProtocol.Protocol
 
   let parseArgs(argv: string[]) : McpOptions option =
@@ -98,34 +158,6 @@ module private ServerHelpers =
     (env: McpEnvironment)
     (serviceProvider: IServiceProvider)
     : McpServerTool list =
-
-    let listProjectsFn ct = McpTools.listProjects env ct
-
-    let getProjectFn (pid: string) ct =
-      match Guid.TryParse pid with
-      | false, _ -> McpTools.getProject env Guid.Empty ct
-      | true, guid -> McpTools.getProject env guid ct
-
-    let listMigrationsFn (pid: string) ct =
-      match Guid.TryParse pid with
-      | false, _ -> McpTools.listMigrations env Guid.Empty ct
-      | true, guid -> McpTools.listMigrations env guid ct
-
-    let getMigrationFn (guid: string) name ct =
-      match Guid.TryParse guid with
-      | false, _ -> McpTools.getMigration env Guid.Empty name ct
-      | true, guid -> McpTools.getMigration env guid name ct
-
-    let dryRunMigrationsFn (pid: string) amount ct =
-      match Guid.TryParse pid with
-      | false, _ -> McpTools.dryRunMigrations env Guid.Empty amount ct
-      | true, guid -> McpTools.dryRunMigrations env guid amount ct
-
-    let dryRunRollbackFn (pid: string) amount ct =
-      match Guid.TryParse pid with
-      | false, _ -> McpTools.dryRunRollback env Guid.Empty amount ct
-      | true, guid -> McpTools.dryRunRollback env guid amount ct
-
     [
       createTool
         serviceProvider
@@ -133,80 +165,48 @@ module private ServerHelpers =
         "List Projects"
         true
         false
-        (ListProjectsDelegate listProjectsFn)
+        (ListProjectsDelegate(ReadTools.listProjectsFn env))
       createTool
         serviceProvider
         "get_project"
         "Get Project"
         true
         false
-        (GetProjectDelegate getProjectFn)
+        (GetProjectDelegate(ReadTools.getProjectFn env))
       createTool
         serviceProvider
         "list_migrations"
         "List Migrations"
         true
         false
-        (ListMigrationsDelegate listMigrationsFn)
+        (ListMigrationsDelegate(ReadTools.listMigrationsFn env))
       createTool
         serviceProvider
         "get_migration"
         "Get Migration"
         true
         false
-        (GetMigrationDelegate getMigrationFn)
+        (GetMigrationDelegate(ReadTools.getMigrationFn env))
       createTool
         serviceProvider
         "dry_run_migrations"
         "Preview Migrations"
         true
         false
-        (DryRunMigrationsDelegate dryRunMigrationsFn)
+        (DryRunMigrationsDelegate(ReadTools.dryRunMigrationsFn env))
       createTool
         serviceProvider
         "dry_run_rollback"
         "Preview Rollback"
         true
         false
-        (DryRunMigrationsDelegate dryRunRollbackFn)
+        (DryRunMigrationsDelegate(ReadTools.dryRunRollbackFn env))
     ]
 
   let createWriteTools
     (env: McpEnvironment)
     (serviceProvider: IServiceProvider)
     : McpServerTool list =
-
-    let runMigrationsFn pid amount ct =
-      McpTools.runMigrations env pid amount ct
-
-    let runRollbackFn pid amount ct = McpTools.runRollback env pid amount ct
-
-    let createMigrationFn pid name up down ct =
-      McpTools.createMigration env pid name up down ct
-
-    let updateMigrationFn (projectId: string) name up down ct =
-      match Guid.TryParse projectId with
-      | false, _ -> McpTools.updateMigration env Guid.Empty name up down ct
-      | true, guid -> McpTools.updateMigration env guid name up down ct
-
-    let deleteMigrationFn (projectId: string) name ct =
-      match Guid.TryParse projectId with
-      | false, _ -> McpTools.deleteMigration env Guid.Empty name ct
-      | true, guid -> McpTools.deleteMigration env guid name ct
-
-    let createVirtualProjectFn name conn driver desc tbl ct =
-      McpTools.createVirtualProject env name conn driver desc tbl ct
-
-    let updateVirtualProjectFn pid name conn tbl driver ct =
-      McpTools.updateVirtualProject env pid name conn tbl driver ct
-
-    let deleteProjectFn pid ct = McpTools.deleteProject env pid ct
-
-    let exportVirtualProjectFn pid path ct =
-      McpTools.exportVirtualProject env pid path ct
-
-    let importFromLocalFn path ct = McpTools.importFromLocal env path ct
-
     [
       createTool
         serviceProvider
@@ -214,70 +214,70 @@ module private ServerHelpers =
         "Apply Migrations"
         false
         true
-        (RunMigrationsDelegate runMigrationsFn)
+        (RunMigrationsDelegate(WriteTools.runMigrationsFn env))
       createTool
         serviceProvider
         "run_rollback"
         "Rollback Migrations"
         false
         true
-        (RunMigrationsDelegate runRollbackFn)
+        (RunMigrationsDelegate(WriteTools.runRollbackFn env))
       createTool
         serviceProvider
         "create_migration"
         "Create Migration"
         false
         false
-        (CreateMigrationDelegate createMigrationFn)
+        (CreateMigrationDelegate(WriteTools.createMigrationFn env))
       createTool
         serviceProvider
         "update_migration"
         "Update Migration"
         false
         false
-        (UpdateMigrationDelegate updateMigrationFn)
+        (UpdateMigrationDelegate(WriteTools.updateMigrationFn env))
       createTool
         serviceProvider
         "delete_migration"
         "Delete Migration"
         false
         true
-        (DeleteMigrationDelegate deleteMigrationFn)
+        (DeleteMigrationDelegate(WriteTools.deleteMigrationFn env))
       createTool
         serviceProvider
         "create_virtual_project"
         "Create Virtual Project"
         false
         false
-        (CreateVirtualProjectDelegate createVirtualProjectFn)
+        (CreateVirtualProjectDelegate(WriteTools.createVirtualProjectFn env))
       createTool
         serviceProvider
         "update_virtual_project"
         "Update Virtual Project"
         false
         false
-        (UpdateVirtualProjectDelegate updateVirtualProjectFn)
+        (UpdateVirtualProjectDelegate(WriteTools.updateVirtualProjectFn env))
       createTool
         serviceProvider
         "delete_project"
         "Delete Project"
         false
         true
-        (DeleteProjectDelegate deleteProjectFn)
+        (DeleteProjectDelegate(WriteTools.deleteProjectFn env))
       createTool
         serviceProvider
         "export_virtual_project"
         "Export Virtual Project"
         false
         false
-        (ExportVirtualProjectDelegate exportVirtualProjectFn)
+        (ExportVirtualProjectDelegate(WriteTools.exportVirtualProjectFn env))
       createTool
         serviceProvider
         "import_from_local"
         "Import from Local"
         false
         false
-        (ImportFromLocalDelegate importFromLocalFn)
+        (ImportFromLocalDelegate(WriteTools.importFromLocalFn env))
     ]
 
   let buildToolCollection
