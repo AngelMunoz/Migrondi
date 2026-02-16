@@ -498,7 +498,8 @@ type McpServerTests() =
 
   [<Fact>]
   member _.``create_migration adds migration to virtual project``() = asyncEx {
-    let dbPath = Path.Combine(tempDirectory, $"create-migration-test-{Guid.NewGuid()}.db")
+    let dbPath =
+      Path.Combine(tempDirectory, $"create-migration-test-{Guid.NewGuid()}.db")
 
     let newProject: Database.InsertVirtualProjectArgs = {
       name = "CreateMigrationTest"
@@ -534,9 +535,14 @@ type McpServerTests() =
       let! migrations = ops.Core.MigrationsListAsync ct
       let result = ListMigrationsResult.FromMigrations migrations
 
-      Assert.True(result.migrations.Length >= 1, "At least one migration should exist")
       Assert.True(
-        result.migrations |> Seq.exists(fun m -> m.name.Contains "add_users_table"),
+        result.migrations.Length >= 1,
+        "At least one migration should exist"
+      )
+
+      Assert.True(
+        result.migrations
+        |> Seq.exists(fun m -> m.name.Contains "add_users_table"),
         "The created migration should be in the list"
       )
     | Some(Local _) -> Assert.Fail "Expected Virtual project"
@@ -545,7 +551,8 @@ type McpServerTests() =
 
   [<Fact>]
   member _.``list_migrations for virtual project shows created migrations``() = asyncEx {
-    let dbPath = Path.Combine(tempDirectory, $"list-migrations-test-{Guid.NewGuid()}.db")
+    let dbPath =
+      Path.Combine(tempDirectory, $"list-migrations-test-{Guid.NewGuid()}.db")
 
     let newProject: Database.InsertVirtualProjectArgs = {
       name = "ListMigrationsTest"
@@ -790,6 +797,396 @@ type McpLocalProjectTests() =
       | None -> Assert.Fail "Expected project to be found"
     }
 
+type McpToolsDomainTests() =
+  let masterConnection, connectionFactory =
+    TestHelpers.createTestConnectionFactory()
+
+  let tempDirectory =
+    Path.Combine(Path.GetTempPath(), $"migrondi-domain-tests-{Guid.NewGuid()}")
+
+  let loggerFactory = TestHelpers.createTestLoggerFactory()
+  let env = TestHelpers.buildTestEnv connectionFactory loggerFactory
+
+  do Directory.CreateDirectory tempDirectory |> ignore
+
+  interface IDisposable with
+    member _.Dispose() =
+      loggerFactory.Dispose()
+      masterConnection.Dispose()
+
+      try
+        if Directory.Exists tempDirectory then
+          Directory.Delete(tempDirectory, true)
+      with _ ->
+        ()
+
+  [<Fact>]
+  member _.``listProjects returns empty list initially``() = asyncEx {
+    let! projects = McpTools.listProjects env CancellationToken.None
+
+    Assert.Empty projects
+  }
+
+  [<Fact>]
+  member _.``listProjects returns projects after creation``() = asyncEx {
+    use conn = connectionFactory()
+
+    let projectId =
+      TestHelpers.insertVirtualProject conn "TestProject" "Data Source=:memory:"
+
+    let! projects = McpTools.listProjects env CancellationToken.None
+
+    Assert.Equal(1, projects.Length)
+
+    match projects.[0] with
+    | Virtual p -> Assert.Equal("TestProject", p.name)
+    | Local _ -> Assert.Fail "Expected Virtual project"
+  }
+
+  [<Fact>]
+  member _.``getProject returns Some for existing project``() = asyncEx {
+    use conn = connectionFactory()
+
+    let projectId =
+      TestHelpers.insertVirtualProject
+        conn
+        "ExistingProject"
+        "Data Source=:memory:"
+
+    let! result = McpTools.getProject env projectId CancellationToken.None
+
+    match result with
+    | Some(Virtual p) -> Assert.Equal("ExistingProject", p.name)
+    | Some(Local _) -> Assert.Fail "Expected Virtual project"
+    | None -> Assert.Fail "Expected project to exist"
+  }
+
+  [<Fact>]
+  member _.``getProject returns None for non-existent project``() = asyncEx {
+    let! result =
+      McpTools.getProject env (Guid.NewGuid()) CancellationToken.None
+
+    Assert.True result.IsNone
+  }
+
+  [<Fact>]
+  member _.``listMigrations returns empty list for non-existent project``() = asyncEx {
+    let! migrations =
+      McpTools.listMigrations env (Guid.NewGuid()) CancellationToken.None
+
+    Assert.Empty migrations
+  }
+
+  [<Fact>]
+  member _.``getMigration returns ProjectNotFound for non-existent project``() = task {
+    let! result =
+      McpTools.getMigration
+        env
+        (Guid.NewGuid())
+        "test_migration"
+        CancellationToken.None
+
+    match result with
+    | Error McpTools.GetMigrationError.ProjectNotFound -> ()
+    | _ -> Assert.Fail "Expected ProjectNotFound error"
+  }
+
+  [<Fact>]
+  member _.``getMigration returns LocalProjectsNotSupported for local project``
+    ()
+    =
+    task {
+      let ct = CancellationToken.None
+      let projectDir = Path.Combine(tempDirectory, "LocalProjectGetMigration")
+      Directory.CreateDirectory projectDir |> ignore
+
+      let dbPath = Path.Combine(projectDir, "test.db")
+
+      let configPath =
+        TestHelpers.createMigrondiJson
+          projectDir
+          $"Data Source={dbPath}"
+          "migrations"
+          "migrations"
+          MigrondiDriver.Sqlite
+
+      use conn = connectionFactory()
+
+      let projectId =
+        TestHelpers.insertLocalProject
+          conn
+          "LocalProjectGetMigration"
+          configPath
+          None
+
+      let! result = McpTools.getMigration env projectId "test" ct
+
+      match result with
+      | Error McpTools.GetMigrationError.LocalProjectsNotSupported -> ()
+      | _ -> Assert.Fail "Expected LocalProjectsNotSupported error"
+    }
+
+  [<Fact>]
+  member _.``createVirtualProject creates project successfully``() = asyncEx {
+    let! result =
+      McpTools.createVirtualProject
+        env
+        "NewProject"
+        "Data Source=:memory:"
+        MigrondiDriver.Sqlite
+        (Some "Test description")
+        (Some "custom_migrations")
+        CancellationToken.None
+
+    match result with
+    | Ok projectId -> Assert.NotEqual(Guid.Empty, projectId)
+    | Error _ -> Assert.Fail "Expected project creation to succeed"
+  }
+
+  [<Fact>]
+  member _.``runMigrations returns ProjectNotFound for non-existent project``
+    ()
+    =
+    asyncEx {
+      let! result =
+        McpTools.runMigrations env (Guid.NewGuid()) None CancellationToken.None
+
+      match result with
+      | Error McpTools.RunMigrationsError.ProjectNotFound -> ()
+      | _ -> Assert.Fail "Expected ProjectNotFound error"
+    }
+
+  [<Fact>]
+  member _.``runRollback returns ProjectNotFound for non-existent project``() = asyncEx {
+    let! result =
+      McpTools.runRollback env (Guid.NewGuid()) None CancellationToken.None
+
+    match result with
+    | Error McpTools.RunRollbackError.ProjectNotFound -> ()
+    | _ -> Assert.Fail "Expected ProjectNotFound error"
+  }
+
+  [<Fact>]
+  member _.``updateMigration returns ProjectNotFound for non-existent project``
+    ()
+    =
+    asyncEx {
+      let! result =
+        McpTools.updateMigration
+          env
+          (Guid.NewGuid())
+          "test_migration"
+          "up content"
+          "down content"
+          CancellationToken.None
+
+      match result with
+      | Error McpTools.UpdateMigrationError.ProjectNotFound -> ()
+      | _ -> Assert.Fail "Expected ProjectNotFound error"
+    }
+
+  [<Fact>]
+  member _.``deleteMigration returns ProjectNotFound for non-existent project``
+    ()
+    =
+    asyncEx {
+      let! result =
+        McpTools.deleteMigration
+          env
+          (Guid.NewGuid())
+          "test_migration"
+          CancellationToken.None
+
+      match result with
+      | Error McpTools.DeleteMigrationError.ProjectNotFound -> ()
+      | _ -> Assert.Fail "Expected ProjectNotFound error"
+    }
+
+  [<Fact>]
+  member _.``updateVirtualProject returns ProjectNotFound for non-existent project``
+    ()
+    =
+    asyncEx {
+      let! result =
+        McpTools.updateVirtualProject
+          env
+          (Guid.NewGuid())
+          (Some "NewName")
+          None
+          None
+          None
+          CancellationToken.None
+
+      match result with
+      | Error McpTools.UpdateProjectError.ProjectNotFound -> ()
+      | _ -> Assert.Fail "Expected ProjectNotFound error"
+    }
+
+  [<Fact>]
+  member _.``deleteProject returns ProjectNotFound for non-existent project``
+    ()
+    =
+    asyncEx {
+      let! result =
+        McpTools.deleteProject env (Guid.NewGuid()) CancellationToken.None
+
+      match result with
+      | Error McpTools.DeleteProjectError.ProjectNotFound -> ()
+      | _ -> Assert.Fail "Expected ProjectNotFound error"
+    }
+
+  [<Fact>]
+  member _.``exportVirtualProject returns ProjectNotFound for non-existent project``
+    ()
+    =
+    asyncEx {
+      let! result =
+        McpTools.exportVirtualProject
+          env
+          (Guid.NewGuid())
+          (Path.Combine(tempDirectory, "export"))
+          CancellationToken.None
+
+      match result with
+      | Error McpTools.ExportProjectError.ProjectNotFound -> ()
+      | _ -> Assert.Fail "Expected ProjectNotFound error"
+    }
+
+  [<Fact>]
+  member _.``importFromLocal returns error for invalid config path``() = asyncEx {
+    let! result =
+      McpTools.importFromLocal
+        env
+        "/nonexistent/path/migrondi.json"
+        CancellationToken.None
+
+    match result with
+    | Error(McpTools.ImportProjectError.ImportFailed _) -> ()
+    | _ -> Assert.Fail "Expected ImportFailed error"
+  }
+
+  [<Fact>]
+  member _.``dryRunMigrations returns empty list for non-existent project``() = asyncEx {
+    let! migrations =
+      McpTools.dryRunMigrations env (Guid.NewGuid()) None CancellationToken.None
+
+    Assert.Empty migrations
+  }
+
+  [<Fact>]
+  member _.``dryRunRollback returns empty list for non-existent project``() = asyncEx {
+    let! migrations =
+      McpTools.dryRunRollback env (Guid.NewGuid()) None CancellationToken.None
+
+    Assert.Empty migrations
+  }
+
+  [<Fact>]
+  member _.``getMigration returns MigrationNotFound for non-existent migration``
+    ()
+    =
+    task {
+      use conn = connectionFactory()
+
+      let projectId =
+        TestHelpers.insertVirtualProject
+          conn
+          "ProjectForMissingMigration"
+          "Data Source=:memory:"
+
+      let! result =
+        McpTools.getMigration
+          env
+          projectId
+          "non_existent_migration"
+          CancellationToken.None
+
+      match result with
+      | Error McpTools.GetMigrationError.MigrationNotFound -> ()
+      | _ -> Assert.Fail "Expected MigrationNotFound error"
+    }
+
+  [<Fact>]
+  member _.``getMigration returns migration details for existing migration``() = task {
+    use conn = connectionFactory()
+
+    let projectId =
+      TestHelpers.insertVirtualProject
+        conn
+        "ProjectWithMigration"
+        "Data Source=:memory:"
+
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+    TestHelpers.insertMigration
+      conn
+      projectId
+      "test_migration"
+      timestamp
+      "CREATE TABLE test (id INTEGER);"
+      "DROP TABLE test;"
+    |> ignore
+
+    let! result =
+      McpTools.getMigration
+        env
+        projectId
+        "test_migration"
+        CancellationToken.None
+
+    match result with
+    | Ok m ->
+      Assert.Equal("test_migration", m.name)
+      Assert.Equal(timestamp, m.timestamp)
+      Assert.Equal("CREATE TABLE test (id INTEGER);", m.upContent)
+      Assert.Equal("DROP TABLE test;", m.downContent)
+      Assert.Equal(projectId, m.projectId)
+    | Error _ -> Assert.Fail "Expected migration to be found"
+  }
+
+  [<Fact>]
+  member _.``createMigration returns ProjectNotFound for non-existent project``
+    ()
+    =
+    asyncEx {
+      let! result =
+        McpTools.createMigration
+          env
+          (Guid.NewGuid())
+          "test_migration"
+          (Some "CREATE TABLE test (id INTEGER);")
+          (Some "DROP TABLE test;")
+          CancellationToken.None
+
+      match result with
+      | Error McpTools.CreateMigrationError.ProjectNotFound -> ()
+      | _ -> Assert.Fail "Expected ProjectNotFound error"
+    }
+
+  [<Fact>]
+  member _.``createMigration returns InvalidMigrationName for invalid name``() = asyncEx {
+    use conn = connectionFactory()
+
+    let projectId =
+      TestHelpers.insertVirtualProject
+        conn
+        "ProjectForInvalidMigration"
+        "Data Source=:memory:"
+
+    let! result =
+      McpTools.createMigration
+        env
+        projectId
+        "invalid migration name with spaces"
+        (Some "CREATE TABLE test (id INTEGER);")
+        (Some "DROP TABLE test;")
+        CancellationToken.None
+
+    match result with
+    | Error(McpTools.CreateMigrationError.InvalidMigrationName _) -> ()
+    | _ -> Assert.Fail "Expected InvalidMigrationName error"
+  }
+
 type McpMigrationProjectScopingTests() =
   let masterConnection, connectionFactory =
     TestHelpers.createTestConnectionFactory()
@@ -850,11 +1247,21 @@ type McpMigrationProjectScopingTests() =
     let! result1 = McpTools.getMigration env projectId1 "create_users" ct
     let! result2 = McpTools.getMigration env projectId2 "create_users" ct
 
-    let content1 = result1.StructuredContent.["upContent"].GetValue<string>()
-    let content2 = result2.StructuredContent.["upContent"].GetValue<string>()
+    match result1 with
+    | Ok m1 ->
+      Assert.Contains(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY);",
+        m1.upContent
+      )
+    | Error _ -> Assert.Fail "Expected migration from project 1"
 
-    Assert.Contains("CREATE TABLE users (id INTEGER PRIMARY KEY);", content1)
-    Assert.Contains("CREATE TABLE users (id INTEGER, name TEXT);", content2)
+    match result2 with
+    | Ok m2 ->
+      Assert.Contains(
+        "CREATE TABLE users (id INTEGER, name TEXT);",
+        m2.upContent
+      )
+    | Error _ -> Assert.Fail "Expected migration from project 2"
   }
 
   [<Fact>]
@@ -871,10 +1278,16 @@ type McpMigrationProjectScopingTests() =
       let dbPath2 = Path.Combine(tempDirectory, $"project2-{Guid.NewGuid()}.db")
 
       let projectId1 =
-        TestHelpers.insertVirtualProject conn "Project1" $"Data Source={dbPath1}"
+        TestHelpers.insertVirtualProject
+          conn
+          "Project1"
+          $"Data Source={dbPath1}"
 
       let projectId2 =
-        TestHelpers.insertVirtualProject conn "Project2" $"Data Source={dbPath2}"
+        TestHelpers.insertVirtualProject
+          conn
+          "Project2"
+          $"Data Source={dbPath2}"
 
       TestHelpers.insertMigration
         conn
@@ -887,8 +1300,9 @@ type McpMigrationProjectScopingTests() =
 
       let! result = McpTools.getMigration env projectId2 "create_users" ct
 
-      let errorMsg = result.StructuredContent.["error"].GetValue<string>()
-      Assert.Contains("not found", errorMsg.ToLower())
+      match result with
+      | Error McpTools.GetMigrationError.MigrationNotFound -> ()
+      | _ -> Assert.Fail "Expected MigrationNotFound error"
     }
 
   [<Fact>]
@@ -926,7 +1340,7 @@ type McpMigrationProjectScopingTests() =
     |> ignore
 
     let! result =
-      McpWriteTools.updateMigration
+      McpTools.updateMigration
         env
         projectId1
         "create_users"
@@ -934,11 +1348,9 @@ type McpMigrationProjectScopingTests() =
         "DROP TABLE users;"
         ct
 
-    let success = result.StructuredContent.["success"].GetValue<bool>()
-    Assert.True(success, "Migration update should succeed")
-
-    let message = result.StructuredContent.["message"].GetValue<string>()
-    Assert.Contains("success", message.ToLower())
+    match result with
+    | Ok _ -> ()
+    | Error _ -> Assert.Fail "Migration update should succeed"
 
     let updated1 = TestHelpers.getMigrationByName conn projectId1 "create_users"
     let updated2 = TestHelpers.getMigrationByName conn projectId2 "create_users"
@@ -985,13 +1397,11 @@ type McpMigrationProjectScopingTests() =
       "DROP TABLE users;"
     |> ignore
 
-    let! result = McpWriteTools.deleteMigration env projectId1 "create_users" ct
+    let! result = McpTools.deleteMigration env projectId1 "create_users" ct
 
-    let success = result.StructuredContent.["success"].GetValue<bool>()
-    Assert.True(success, "Migration deletion should succeed")
-
-    let message = result.StructuredContent.["message"].GetValue<string>()
-    Assert.Contains("success", message.ToLower())
+    match result with
+    | Ok _ -> ()
+    | Error _ -> Assert.Fail "Migration deletion should succeed"
 
     let deleted1 = TestHelpers.getMigrationByName conn projectId1 "create_users"
 
