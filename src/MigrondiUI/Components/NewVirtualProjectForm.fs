@@ -6,16 +6,16 @@ open NXUI.Extensions
 open FSharp.Data.Adaptive
 open MigrondiUI.Components.Fields
 open Migrondi.Core
+open MigrondiUI.Database
 open Avalonia.Controls.Templates
 open Avalonia.Layout
 open Avalonia.Media
 open Avalonia.Styling
 open Navs.Avalonia
-open MigrondiUI.Projects
 
 type NewVirtualProjectForm
   (
-    onCreateVirtualProject: NewVirtualProjectArgs -> unit,
+    onCreateVirtualProject: InsertVirtualProjectArgs -> unit,
     onImportLocalProject: unit -> unit
   ) as this =
   inherit UserControl()
@@ -73,11 +73,17 @@ type NewVirtualProjectForm
           |> AVal.toBinding
         )
         .OnClickHandler(fun _ _ ->
+          let desc = description.getValue()
+
           onCreateVirtualProject {
             name = name.getValue()
-            description = description.getValue()
+            description =
+              if System.String.IsNullOrWhiteSpace desc then
+                None
+              else
+                Some desc
             connection = connection.getValue()
-            driver = driver.getValue()
+            driver = (driver.getValue()).AsString
             tableName = MigrondiConfig.Default.tableName
           })
 

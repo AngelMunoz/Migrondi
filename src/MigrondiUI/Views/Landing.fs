@@ -5,6 +5,7 @@ open System
 open Microsoft.Extensions.Logging
 
 open IcedTasks
+open IcedTasks.Polyfill.Async.PolyfillBuilders
 
 open Avalonia.Controls
 open Avalonia.Controls.Templates
@@ -17,7 +18,7 @@ open FsToolkit.ErrorHandling
 open Navs
 open Navs.Avalonia
 open MigrondiUI
-open MigrondiUI.Projects
+open MigrondiUI.Services
 open SukiUI.Controls
 
 type LandingViewState =
@@ -26,11 +27,7 @@ type LandingViewState =
   | Empty
 
 type LandingVM
-  (
-    logger: ILogger<LandingVM>,
-    projects: ILocalProjectRepository,
-    vProjects: IVirtualProjectRepository
-  ) =
+  (logger: ILogger<LandingVM>, projects: Services.IProjectCollection) =
 
   let _projects: Project list cval = cval []
 
@@ -41,14 +38,8 @@ type LandingVM
   member _.Projects: Project list aval = _projects
 
   member _.LoadProjects() = asyncEx {
-    let! projects = projects.GetProjects()
-    let! vProjects = vProjects.GetProjects()
-
-    _projects.setValue [
-      yield! projects |> List.map(fun p -> Local p)
-      yield! vProjects |> List.map(fun p -> Virtual p)
-    ]
-
+    let! result = projects.List()
+    result |> _projects.setValue
     return ()
   }
 

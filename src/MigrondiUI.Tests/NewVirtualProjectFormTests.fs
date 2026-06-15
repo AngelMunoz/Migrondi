@@ -4,16 +4,16 @@ open Xunit
 open Avalonia.Headless.XUnit
 open MigrondiUI.Components.NewVirtualProjectForm
 open Migrondi.Core
+open MigrondiUI.Database
 open Avalonia.Controls
-open MigrondiUI.Projects
 open Avalonia.Interactivity
 
 [<AvaloniaFact>]
 let ``NewVirtualProjectForm - should call onCreateVirtualProject with correct arguments``
   ()
   =
-  let mutable createdProject: NewVirtualProjectArgs option = None
-  let onCreate(args: NewVirtualProjectArgs) = createdProject <- Some args
+  let mutable createdProject: InsertVirtualProjectArgs option = None
+  let onCreate(args: InsertVirtualProjectArgs) = createdProject <- Some args
   let onImport() = ()
 
   let view = NewVirtualProjectForm(onCreate, onImport)
@@ -57,9 +57,9 @@ let ``NewVirtualProjectForm - should call onCreateVirtualProject with correct ar
 
   let expected = {
     name = "Test Project"
-    description = "Test Description"
+    description = Some "Test Description"
     connection = "test connection"
-    driver = MigrondiDriver.Postgresql
+    driver = MigrondiDriver.Postgresql.AsString
     tableName = MigrondiConfig.Default.tableName
   }
 

@@ -8,30 +8,28 @@ open Microsoft.Extensions.Logging
 
 open Avalonia.Controls
 open Avalonia.Controls.Templates
+
 open NXUI.Extensions
 
 open FsToolkit.ErrorHandling
 open FSharp.Data.Adaptive
 
+open IcedTasks
+open IcedTasks.Polyfill.Async.PolyfillBuilders
 
 open Navs
 open Navs.Avalonia
 open Migrondi.Core
 open MigrondiUI
-open MigrondiUI.Projects
+open MigrondiUI.Services
 open MigrondiUI.Components
 open MigrondiUI.Components.MigrationRunnerToolbar
-
-open MigrondiUI.MigrondiExt
-
-open IcedTasks
-open IcedTasks.Polyfill.Async.PolyfillBuilders
 
 type VirtualProjectDetailsVM
   (
     logger: ILogger<VirtualProjectDetailsVM>,
-    migrondi: IMigrondiUI,
-    vprojects: IVirtualProjectRepository,
+    projects: Services.IProjectCollection,
+    migrondiFactory: Services.IMigrationOperationsFactory,
     project: VirtualProject
   ) =
   let _migrations = cval [||]
@@ -39,6 +37,8 @@ type VirtualProjectDetailsVM
   let currentShow = cval ProjectDetails.CurrentShow.Migrations
 
   let _project = cval project
+
+  let ops = migrondiFactory.Create(Virtual project)
 
   let handleError(work: Async<unit>) = asyncEx {
     let! result = work |> Async.Catch
@@ -55,7 +55,7 @@ type VirtualProjectDetailsVM
     logger.LogDebug "VirtualProjectDetailsVM created"
     logger.LogDebug "Initializing migrondi"
     logger.LogDebug("Project connection: {project}", project.connection)
-    migrondi.Initialize()
+    ops.Core.Initialize()
 
   member _.Project: VirtualProject aval = _project
 
@@ -67,8 +67,8 @@ type VirtualProjectDetailsVM
 
   member _.ListMigrations() = asyncEx {
     logger.LogDebug "Listing migrations"
-    let! token = Async.CancellationToken
-    let! migrations = migrondi.MigrationsListAsync token
+    let! ct = Async.CancellationToken
+    let! migrations = ops.Core.MigrationsListAsync ct
 
     logger.LogDebug("Migrations listed: {migrations}", migrations.Count)
 
@@ -85,8 +85,8 @@ type VirtualProjectDetailsVM
     asyncEx {
       logger.LogDebug("Creating new migration with name: {name}", name)
 
-      let! token = Async.CancellationToken
-      do! migrondi.RunNewAsync(name, cancellationToken = token) :> Task
+      let! ct = Async.CancellationToken
+      do! ops.Core.RunNewAsync(name, cancellationToken = ct) :> Task
       return! this.ListMigrations()
     }
     |> handleError
@@ -94,38 +94,40 @@ type VirtualProjectDetailsVM
   member _.SaveMigration(migration: Migration) = asyncEx {
     logger.LogDebug("Saving migration: {migration}", migration.name)
 
-    let! virtualMigration =
-      vprojects.GetMigrationByName _project.Value.projectId migration.name
+    let! result = ops.UpdateMigration migration
 
-    match virtualMigration with
-    | None -> return false
-    | Some virtualMigration ->
-      logger.LogDebug("Migration found: {migration}", virtualMigration.id)
-
-      try
-        do!
-          vprojects.UpdateMigration {
-            virtualMigration with
-                upContent = migration.upContent
-                downContent = migration.downContent
-          }
-
-        return true
-      with ex ->
-        logger.LogError("Unable to save the migration due: {error}", ex)
-        return false
+    match result with
+    | Ok _ ->
+      logger.LogDebug("Migration saved: {migration}", migration.name)
+      return true
+    | Error(Services.MigrationCrudError.AlreadyApplied n) ->
+      logger.LogWarning("Migration {name} has already been applied", n)
+      return false
+    | Error(Services.MigrationCrudError.NotFound n) ->
+      logger.LogWarning("Migration {name} not found", n)
+      return false
+    | Error(Services.MigrationCrudError.DatabaseError msg) ->
+      logger.LogError("Unable to save the migration: {error}", msg)
+      return false
   }
 
   member _.DeleteMigration(migration: Migration) = asyncEx {
     logger.LogDebug("Deleting migration: {migration}", migration.name)
 
-    try
-      do!
-        vprojects.RemoveMigrationByName _project.Value.projectId migration.name
+    let! result = ops.DeleteMigration migration.name
 
+    match result with
+    | Ok _ ->
+      logger.LogDebug("Migration deleted: {migration}", migration.name)
       return true
-    with ex ->
-      logger.LogError("Unable to delete the migration due: {error}", ex)
+    | Error(Services.MigrationCrudError.AlreadyApplied n) ->
+      logger.LogWarning("Migration {name} has already been applied", n)
+      return false
+    | Error(Services.MigrationCrudError.NotFound n) ->
+      logger.LogWarning("Migration {name} not found", n)
+      return false
+    | Error(Services.MigrationCrudError.DatabaseError msg) ->
+      logger.LogError("Unable to delete the migration: {error}", msg)
       return false
   }
 
@@ -137,19 +139,19 @@ type VirtualProjectDetailsVM
       match kind with
       | ProjectDetails.RunMigrationKind.Up ->
         logger.LogDebug("Running migrations up")
-        do! migrondi.RunUpAsync(steps, cancellationToken = token) :> Task
+        do! ops.Core.RunUpAsync(steps, cancellationToken = token) :> Task
         do! this.ListMigrations()
         logger.LogDebug("Migrations up completed")
         return ()
       | ProjectDetails.RunMigrationKind.Down ->
         logger.LogDebug("Running migrations down")
-        do! migrondi.RunDownAsync(steps, cancellationToken = token) :> Task
+        do! ops.Core.RunDownAsync(steps, cancellationToken = token) :> Task
         do! this.ListMigrations()
         logger.LogDebug("Migrations down completed")
         return ()
       | ProjectDetails.RunMigrationKind.DryUp ->
         logger.LogDebug("Running migrations dry up")
-        let! run = migrondi.DryRunUpAsync(steps, cancellationToken = token)
+        let! run = ops.Core.DryRunUpAsync(steps, cancellationToken = token)
 
         logger.LogDebug(
           "Dry run up completed and found {count} migrations",
@@ -166,7 +168,7 @@ type VirtualProjectDetailsVM
         return ()
       | ProjectDetails.RunMigrationKind.DryDown ->
         logger.LogDebug("Running migrations dry down")
-        let! run = migrondi.DryRunDownAsync(steps, cancellationToken = token)
+        let! run = ops.Core.DryRunDownAsync(steps, cancellationToken = token)
 
         logger.LogDebug(
           "Dry run down completed and found {count} migrations",
@@ -188,7 +190,7 @@ type VirtualProjectDetailsVM
     logger.LogDebug("Updating project: {project}", project.name)
 
     try
-      do! vprojects.UpdateProject project
+      do! projects.UpdateVirtual project
       _project.setValue project
       return ()
     with ex ->
@@ -206,7 +208,7 @@ let virtualProjectView
     project
     |> AVal.map(fun p ->
       let description = defaultArg p.description "No description provided."
-      // truncate the description if it is longer than "No description provided."
+
       let description =
         if description.Length > 24 then
           $"{description.Substring(0, 24)}..."
@@ -363,29 +365,19 @@ let buildDetailsView
   (
     projectId: Guid,
     logger: ILogger<VirtualProjectDetailsVM>,
-    projects: IVirtualProjectRepository,
-    vMigrondiFactory: MigrondiConfig * string * Guid -> IMigrondiUI,
+    projects: Services.IProjectCollection,
+    migrondiFactory: Services.IMigrationOperationsFactory,
     onNavigateBack: unit -> unit
   ) =
-  asyncOption {
-    let! cancellationToken = Async.CancellationToken
-    logger.LogDebug("Project ID from route parameters: {projectId}", projectId)
+  asyncEx {
+    let! project = projects.Get projectId
 
-    let! project = projects.GetProjectById projectId cancellationToken
-    logger.LogDebug("Project from repository: {project}", project)
-
-    let migrondi =
-      let projectRoot = $"migrondi-ui://projects/virtual/"
-
-      logger.LogDebug(
-        "Using project root directory: {projectRoot}",
-        projectRoot
-      )
-
-      vMigrondiFactory(project.ToMigrondiConfig(), projectRoot, project.id)
-
-    let vm = VirtualProjectDetailsVM(logger, migrondi, projects, project)
-    return VProjectDetailsView(logger, vm, onNavigateBack) :> Control
+    match project with
+    | Some(Virtual p) ->
+      let vm = VirtualProjectDetailsVM(logger, projects, migrondiFactory, p)
+      return Some(VProjectDetailsView(logger, vm, onNavigateBack) :> Control)
+    | Some(Local _) -> return failwith "Expected virtual project but got local"
+    | None -> return None
   }
 
 let buildProjectNotFound(id: Guid) : Control =
@@ -401,8 +393,8 @@ let buildLoading(id: Guid) : Control =
 let View
   (
     logger: ILogger<VirtualProjectDetailsVM>,
-    projects: IVirtualProjectRepository,
-    vMigrondiFactory: MigrondiConfig * string * Guid -> IMigrondiUI
+    projects: Services.IProjectCollection,
+    migrondiFactory: Services.IMigrationOperationsFactory
   )
   (context: RouteContext)
   (nav: INavigable<Control>)
@@ -433,7 +425,7 @@ let View
           projectId,
           logger,
           projects,
-          vMigrondiFactory,
+          migrondiFactory,
           onNavigateBack
         )
       with

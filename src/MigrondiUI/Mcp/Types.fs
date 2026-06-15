@@ -103,66 +103,14 @@ type ImportFromLocalDelegate =
 [<NoComparison; NoEquality>]
 type McpEnvironment = {
   lf: ILoggerFactory
-  lProjects: ILocalProjectRepository
-  vProjects: IVirtualProjectRepository
-  vfs: VirtualFs.MigrondiUIFs
-  vMigrondiFactory: MigrondiConfig * string * Guid -> MigrondiExt.IMigrondiUI
-  localMigrondiFactory: MigrondiConfig * string -> MigrondiExt.IMigrondiUI
-  migrondiCache: ConcurrentDictionary<Guid, MigrondiExt.IMigrondiUI>
+  projects: Services.IProjectCollection
+  migrondiFactory: Services.IMigrationOperationsFactory
 }
-
-module MigrondiCache =
-  let getOrAdd
-    (cache: ConcurrentDictionary<Guid, MigrondiExt.IMigrondiUI>)
-    (projectId: Guid)
-    (factory: unit -> MigrondiExt.IMigrondiUI)
-    =
-    cache.GetOrAdd(projectId, fun _ -> factory())
-
-  let invalidate
-    (cache: ConcurrentDictionary<Guid, MigrondiExt.IMigrondiUI>)
-    (projectId: Guid)
-    =
-    cache.TryRemove(projectId) |> ignore
-
-  let clear(cache: ConcurrentDictionary<Guid, MigrondiExt.IMigrondiUI>) =
-    cache.Clear()
 
 module McpRuntime =
 
   let findProject
-    (lProjects: ILocalProjectRepository)
-    (vProjects: IVirtualProjectRepository)
+    (projects: Services.IProjectCollection)
     (projectId: Guid)
     : CancellableTask<Project option> =
-    cancellableTask {
-      let! local = lProjects.GetProjectById projectId
-
-      match local with
-      | Some p -> return Some(Project.Local p)
-      | None ->
-        let! vproj = vProjects.GetProjectById projectId
-        return vproj |> Option.map Project.Virtual
-    }
-
-  let getMigrondi
-    (env: McpEnvironment)
-    (project: Project)
-    : MigrondiExt.IMigrondiUI option =
-    match project with
-    | Project.Local p ->
-      match p.config with
-      | None -> None
-      | Some config ->
-        let rootDir = IO.Path.GetDirectoryName p.migrondiConfigPath |> nonNull
-
-        MigrondiCache.getOrAdd env.migrondiCache p.id (fun () ->
-          env.localMigrondiFactory(config, rootDir))
-        |> Some
-    | Project.Virtual p ->
-      let config = p.ToMigrondiConfig()
-      let rootDir = "migrondi-ui://projects/virtual/"
-
-      MigrondiCache.getOrAdd env.migrondiCache p.id (fun () ->
-        env.vMigrondiFactory(config, rootDir, p.id))
-      |> Some
+    projects.Get(projectId)

@@ -19,6 +19,7 @@ open AvaloniaEdit.Highlighting
 
 open NXUI.Extensions
 
+open IcedTasks
 open FsToolkit.ErrorHandling
 
 open Navs
@@ -47,6 +48,13 @@ type AsyncOptionBuilder with
     |> Async.map (function
       | null -> None
       | value -> Some value)
+
+  member _.Source(value: CancellableTask<'T option>) : Async<'T option> = asyncEx {
+    let! ct = Async.CancellationToken
+
+    let! value = value ct
+    return value
+  }
 
 type Styles with
   member inline this.Load(source: string) =
