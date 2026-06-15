@@ -9,13 +9,25 @@
 - MigrondiUI: Local project import and visualization
 - MigrondiUI: Migration execution from GUI
 - MigrondiUI: MCP (Model Context Protocol) server mode for AI assistant integration
+- MigrondiUI: MCP tools now return typed domain results (`Result<'T, 'E>`) instead of raw `CallToolResult`
 - MigrationName module with validation for migration names
 - ResultExtensions for C# interop with F# Result type
+- `global.json` pinning SDK to 10.0.301
 
 ### Changed
 
 - MigrondiUI references Migrondi.Core by project reference rather than NuGet
 - Updated Microsoft.Extensions.Logging.Console from 9.0.6 to 10.0.3
+- Target frameworks: Library (Migrondi.Core, Migrondi.Tests) targets net8.0 + net10.0 LTS; apps (Migrondi CLI, MigrondiUI) also target net9.0 until November 2026
+- Upgraded ModelContextProtocol from 0.8.0-preview.1 to 1.4.0
+- Aligned Serilog.Extensions.Logging to 10.0.0 and Serilog.Sinks.Console to 6.1.1 in MigrondiUI
+- Simplified CI workflow to a single build+test job
+- Removed dead `MigrondiExt.fs` — superseded by `MigrationOperationsFactory` in Services.fs
+
+### Fixed
+
+- MCP `StructuredContent` type compatibility with ModelContextProtocol 1.4.0 (`JsonNode` → `Nullable<JsonElement>`)
+- CI workflow attempting to build Migrondi.Core for net9.0 (target no longer exists)
 
 ## [1.2.0] - 2026-02-11
 
