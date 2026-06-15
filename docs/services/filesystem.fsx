@@ -10,7 +10,7 @@ The `IMiMigrationSource` interface is the primary extension point for implementi
 *)
 
 #r "../../src/Migrondi.Core/bin/Debug/net8.0/Migrondi.Core.dll"
-#r "nuget: Microsoft.Extensions.Logging.Console, 9.0.0"
+#r "nuget: Microsoft.Extensions.Logging.Console, 10.0.3"
 
 open System
 open System.Threading

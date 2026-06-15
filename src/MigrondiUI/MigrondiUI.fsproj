@@ -60,8 +60,8 @@
 
     <PackageReference Include="CLIWrap" Version="3.9.0" />
     <PackageReference Include="Serilog" Version="4.3.0" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.2" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
 
     <PackageReference Include="Donald" Version="10.1.0" />
     <PackageReference Include="FSharp.UMX" Version="1.1.0" />
