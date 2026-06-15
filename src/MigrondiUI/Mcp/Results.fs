@@ -2,6 +2,7 @@ namespace MigrondiUI.Mcp
 
 open System
 open System.Collections.Generic
+open System.Text.Json
 open System.Text.Json.Nodes
 
 open ModelContextProtocol.Protocol
@@ -519,4 +520,6 @@ module internal McpResultMapper =
       | :? JsonObject as obj -> obj.ContainsKey("error")
       | _ -> false
 
-    CallToolResult(StructuredContent = node, IsError = isError)
+    let element = node.Deserialize<JsonElement>()
+
+    CallToolResult(StructuredContent = Nullable(element), IsError = isError)
