@@ -520,6 +520,10 @@ module internal McpResultMapper =
       | :? JsonObject as obj -> obj.ContainsKey("error")
       | _ -> false
 
-    let element = node.Deserialize<JsonElement>()
+    let element : Nullable<JsonElement> =
+      if isNull node then
+        Unchecked.defaultof<_>
+      else
+        Nullable(node.Deserialize<JsonElement>())
 
-    CallToolResult(StructuredContent = Nullable(element), IsError = isError)
+    CallToolResult(StructuredContent = element, IsError = isError)
