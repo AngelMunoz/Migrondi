@@ -15,7 +15,6 @@
     <Compile Include="VirtualFs.fs" />
     <Compile Include="Services.fs" />
     <Compile Include="Projects.fs" />
-    <Compile Include="MigrondiExt.fs" />
     <Compile Include="OsOperations.fs" />
     <Compile Include="Components/Toolbar.fs" />
     <Compile Include="Components/Fields.fs" />
