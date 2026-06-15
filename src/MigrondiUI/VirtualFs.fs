@@ -206,7 +206,7 @@ let getVirtualFs
                 |> Db.setCancellationToken ct
                 |> Db.setParams [
                   "projectId", sqlString p.projectId
-                  "now", sqlString DateTime.UtcNow
+                  "now", sqlString (DateTime.UtcNow.ToString("o"))
                 ]
                 |> Db.Async.exec
 

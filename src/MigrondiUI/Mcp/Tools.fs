@@ -76,10 +76,7 @@ module McpTools =
         let ops = env.migrondiFactory.Create project
         let! ct = CancellableTask.getCancellationToken()
 
-        let! migrations =
-          match amount with
-          | Some a -> ops.Core.DryRunUpAsync(a, cancellationToken = ct)
-          | None -> ops.Core.DryRunUpAsync(cancellationToken = ct)
+        let! migrations = ops.Core.DryRunUpAsync(?amount = amount, cancellationToken = ct)
 
         return migrations |> Seq.toList
     }
@@ -96,10 +93,7 @@ module McpTools =
         let ops = env.migrondiFactory.Create project
         let! ct = CancellableTask.getCancellationToken()
 
-        let! migrations =
-          match amount with
-          | Some a -> ops.Core.DryRunDownAsync(a, cancellationToken = ct)
-          | None -> ops.Core.DryRunDownAsync(cancellationToken = ct)
+        let! migrations = ops.Core.DryRunDownAsync(?amount = amount, cancellationToken = ct)
 
         return migrations |> Seq.toList
     }
@@ -122,10 +116,7 @@ module McpTools =
         try
           let! ct = CancellableTask.getCancellationToken()
 
-          let! migrations =
-            match amount with
-            | Some a -> ops.Core.RunUpAsync(amount = a, cancellationToken = ct)
-            | None -> ops.Core.RunUpAsync(cancellationToken = ct)
+          let! migrations = ops.Core.RunUpAsync(?amount = amount, cancellationToken = ct)
 
           return Ok(migrations |> Seq.toList)
         with ex ->
@@ -145,10 +136,7 @@ module McpTools =
       try
         let! ct = CancellableTask.getCancellationToken()
 
-        let! migrations =
-          match amount with
-          | Some a -> ops.Core.RunDownAsync(amount = a, cancellationToken = ct)
-          | None -> ops.Core.RunDownAsync(cancellationToken = ct)
+        let! migrations = ops.Core.RunDownAsync(?amount = amount, cancellationToken = ct)
 
         return Ok(migrations |> Seq.toList)
       with ex ->
