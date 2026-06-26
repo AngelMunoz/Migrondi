@@ -83,7 +83,6 @@ Also parsed (JSON, via Thoth): keys `connection`, `migrations` (the migrations d
 ### Build
 
 ```bash
-# Full build with FsMake
 dotnet build
 
 # Direct dotnet build
