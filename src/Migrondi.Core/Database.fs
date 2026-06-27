@@ -567,21 +567,16 @@ module MigrationsAsyncImpl =
         return None
     }
 
-  let readMigrationRecords (reader: DbDataReader) (token: CancellationToken) = cancellableTask {
+  let readMigrationRecords(reader: DbDataReader) = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
     let records = ResizeArray<MigrationRecord>()
-    let mutable more = true
 
-    while more do
-      let! hasRow = reader.ReadAsync(token)
-
-      if hasRow then
-        records.Add {
-          id = reader.GetInt32(0)
-          name = reader.GetString(1)
-          timestamp = reader.GetInt64(2)
-        }
-      else
-        more <- false
+    while! reader.ReadAsync token do
+      records.Add {
+        id = reader.GetInt32 0
+        name = reader.GetString 1
+        timestamp = reader.GetInt64 2
+      }
 
     return List.ofSeq records
   }
@@ -593,9 +588,9 @@ module MigrationsAsyncImpl =
     command.CommandText <-
       $"SELECT id, name, timestamp FROM %s{tableName} ORDER BY timestamp DESC"
 
-    use! reader = command.ExecuteReaderAsync(token) // Use token
+    use! reader = command.ExecuteReaderAsync token
 
-    return! readMigrationRecords reader token
+    return! readMigrationRecords reader
   }
 
   let runQueryAsync
@@ -749,9 +744,9 @@ module MigrationsAsyncImpl =
 
       command.CommandText <- Queries.getAllResultsQuery tableName
 
-      use! reader = command.ExecuteReaderAsync(token)
+      use! reader = command.ExecuteReaderAsync token
 
-      return! readMigrationRecords reader token
+      return! readMigrationRecords reader
     }
 
   let rollbackMigrationsAsync
@@ -784,9 +779,9 @@ module MigrationsAsyncImpl =
           param.Value <- name
           command.Parameters.Add(param) |> ignore)
 
-        use! reader = command.ExecuteReaderAsync(token)
+        use! reader = command.ExecuteReaderAsync token
 
-        let! records = readMigrationRecords reader token
+        let! records = readMigrationRecords reader
         rolledBackRecords <- records
 
       for migration in migrationsToRollback do
