@@ -107,7 +107,7 @@ jobs:
           name: v${{ steps.extract.outputs.version }}
           body_path: RELEASE_NOTES.md
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(steps.extract.outputs.version, '-rc') || contains(steps.extract.outputs.version, '-beta') || contains(steps.extract.outputs.version, '-alpha') }}
           files: |
             nupkgs/*.nupkg
             dist/cli/*.zip

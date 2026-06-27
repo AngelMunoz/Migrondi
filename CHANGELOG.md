@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [1.3.0-beta-001] - 2026-06-26
+
 ### Added
 
 - MigrondiUI: Desktop GUI application for managing multiple Migrondi projects
