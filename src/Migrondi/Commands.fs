@@ -13,13 +13,21 @@ open Migrondi.Handlers
 module internal ArgumentMapper =
 
 
-  let Init (appEnv: AppEnv) (dir: DirectoryInfo option) =
+  let Init
+    (appEnv: AppEnv)
+    (dir: DirectoryInfo option, force: bool option, merge: bool option)
+    =
     let path =
       match dir with
       | Some directory -> directory
       | None -> Directory.GetCurrentDirectory() |> DirectoryInfo
 
-    path, appEnv.FileSystem, appEnv.Logger
+    path,
+    appEnv.FileSystem,
+    appEnv.ConfigurationSerializer,
+    appEnv.Logger,
+    force,
+    merge
 
   let Up (appEnv: AppEnv) (amount: int option, isDry: bool option) =
     match isDry with
@@ -40,11 +48,7 @@ module internal ArgumentMapper =
     name, manualTransaction, appEnv.Logger, appEnv.Migrondi
 
   let inline List (appEnv: AppEnv) (kind: MigrationType option) =
-    appEnv.JsonOutput,
-    appEnv.Logger,
-    appEnv.MigrationSerializer,
-    kind,
-    appEnv.Migrondi
+    appEnv.JsonOutput, appEnv.Logger, kind, appEnv.Migrondi
 
   let inline Status (appEnv: AppEnv) (name: string) =
     name, appEnv.Logger, appEnv.Migrondi
@@ -73,7 +77,7 @@ module internal Commands =
 
     addAlias "setup"
 
-    inputs Init.path
+    inputs(Init.path, Init.force, Init.merge)
     setAction(ArgumentMapper.Init appEnv >> Init.handler)
   }
 

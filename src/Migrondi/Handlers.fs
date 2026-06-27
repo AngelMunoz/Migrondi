@@ -2,6 +2,7 @@ namespace Migrondi.Handlers
 
 open System
 open System.IO
+open System.Text.Json
 
 open System.Security
 open Microsoft.Extensions.Logging
@@ -10,19 +11,202 @@ open Spectre.Console
 open Migrondi.Core
 open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
+open FsToolkit.ErrorHandling
 
 [<RequireQualifiedAccess>]
 module internal Init =
-  let handler(path: DirectoryInfo, fs: IMiFileSystem, logger: ILogger) =
+
+  type private LoadingFileError =
+    | FileNotFound
+    | FoundButUnparsable
+
+  let private recoverConfig(values: Map<string, string>) : MigrondiConfig =
+    let defaults = MigrondiConfig.Default
+
+    let driver =
+      values
+      |> Map.tryFind "driver"
+      |> Option.bind(fun value ->
+        try
+          MigrondiDriver.FromString value |> Some
+        with _ ->
+          None)
+      |> Option.defaultValue defaults.driver
+
+    {
+      connection =
+        values
+        |> Map.tryFind "connection"
+        |> Option.defaultValue defaults.connection
+      migrations =
+        values
+        |> Map.tryFind "migrations"
+        |> Option.defaultValue defaults.migrations
+      tableName =
+        values
+        |> Map.tryFind "tableName"
+        |> Option.defaultValue defaults.tableName
+      driver = driver
+    }
+
+  let private (|HardStop|MergeUnforced|ForceClean|ForceMerge|CleanSetup|)
+    (isEmpty, force, merge)
+    =
+    match isEmpty, force, merge with
+    | _, false, true -> MergeUnforced
+    | false, true, true -> ForceMerge
+    | true, _, false -> CleanSetup
+    | false, true, false -> ForceClean
+    | true, _, _ -> ForceClean
+    | false, false, _ -> HardStop
+
+  let private isDirectoryEmpty(path: DirectoryInfo) =
+    try
+      let noDirs =
+        Directory.EnumerateDirectories(
+          path.FullName,
+          "*",
+          SearchOption.AllDirectories
+        )
+        |> Seq.isEmpty
+
+      let noFiles =
+        Directory.EnumerateFiles(
+          path.FullName,
+          "*",
+          SearchOption.AllDirectories
+        )
+        |> Seq.isEmpty
+
+      noDirs && noFiles
+    with :? DirectoryNotFoundException ->
+      path.Create()
+      true
+
+  let private loadConfig
+    (path: DirectoryInfo)
+    (configPath: string)
+    (serializer: IMiConfigurationSerializer)
+    (logger: ILogger)
+    : Result<MigrondiConfig, LoadingFileError> =
+    let textContent =
+      try
+        File.ReadAllText configPath |> Ok
+      with
+      | :? DirectoryNotFoundException ->
+        path.Create()
+        Error FileNotFound
+      | :? FileNotFoundException -> Error FileNotFound
+
+    try
+      textContent
+      |> Result.map serializer.Decode
+      |> Result.tee(fun _ ->
+        logger.LogInformation("Found migrondi.json at {Path}", path.FullName))
+    with :? DeserializationFailed ->
+      try
+        textContent
+        |> Result.tee(fun _ ->
+          logger.LogWarning(
+            "Found an invalid migrondi.json file at {Path}",
+            path.FullName
+          ))
+        |> Result.map(
+          JsonSerializer.Deserialize<Map<string, string>> >> recoverConfig
+        )
+      with :? JsonException ->
+        logger.LogWarning "migrondi.json file is not valid json"
+        Error FoundButUnparsable
+
+  let private migrationsDirectory
+    (path: DirectoryInfo)
+    (config: MigrondiConfig)
+    =
+    if
+      Path.IsPathRooted config.migrations
+      || Path.IsPathFullyQualified config.migrations
+    then
+      DirectoryInfo config.migrations
+    else
+      path.CreateSubdirectory config.migrations
+
+  let private hasExistingMigrations
+    (path: DirectoryInfo)
+    (config: MigrondiConfig)
+    =
+    let dir = migrationsDirectory path config
+
+    let files =
+      try
+        dir.EnumerateFiles(
+          "*.sql",
+          EnumerationOptions(
+            MatchCasing = MatchCasing.CaseInsensitive,
+            RecurseSubdirectories = false
+          )
+        )
+      with :? DirectoryNotFoundException ->
+        dir.Create()
+        Seq.empty
+
+    files |> Seq.isEmpty |> not
+
+  let private runForceMerge
+    (path: DirectoryInfo)
+    (fs: IMiFileSystem)
+    (configPath: string)
+    (serializer: IMiConfigurationSerializer)
+    (logger: ILogger)
+    =
+    let config =
+      loadConfig path configPath serializer logger
+      |> Result.defaultValue MigrondiConfig.Default
+
+    logger.LogInformation(
+      "Initializing a migrondi project at {PathName}",
+      path.FullName
+    )
+
+    fs.WriteConfiguration(config, configPath)
+
+    if hasExistingMigrations path config then
+      logger.LogWarning(
+        "Sql Files already existing in {MigrationsDir}, leaving untouched.",
+        config.migrations
+      )
+
+    logger.LogInformation "Migrondi project merged and ready to work."
+    0
+
+  let private runCleanSetup
+    (path: DirectoryInfo)
+    (fs: IMiFileSystem)
+    (configPath: string)
+    (logger: ILogger)
+    =
     logger.LogInformation(
       "Initializing a new migrondi project at: {PathName}.",
       path.FullName
     )
 
-    let configPath = Path.Combine(path.FullName, "./migrondi.json")
     let config = MigrondiConfig.Default
+    let migrationsDirPath = Path.Combine(path.FullName, config.migrations)
+
+    try
+      Directory.Delete(migrationsDirPath, true)
+    with
+    | :? IOException
+    | :? UnauthorizedAccessException ->
+      logger.LogWarning(
+        "Unable to delete the migrations directory at {MigrationsDir}",
+        migrationsDirPath
+      )
+
+    path.Create()
+
     fs.WriteConfiguration(config, configPath)
-    let subpath = path.CreateSubdirectory(config.migrations)
+
+    let subpath = path.CreateSubdirectory config.migrations
 
     logger.LogInformation(
       "migrondi.json and {MigrationsDirectory} directory created successfully.",
@@ -30,6 +214,34 @@ module internal Init =
     )
 
     0
+
+  let handler
+    (
+      path: DirectoryInfo,
+      fs: IMiFileSystem,
+      serializer: IMiConfigurationSerializer,
+      logger: ILogger,
+      force: bool option,
+      merge: bool option
+    ) =
+    let force = defaultArg force false
+    let merge = defaultArg merge false
+    let configPath = Path.Combine(path.FullName, "./migrondi.json")
+
+    match (isDirectoryEmpty path, force, merge) with
+    | ForceMerge -> runForceMerge path fs configPath serializer logger
+    | CleanSetup
+    | ForceClean -> runCleanSetup path fs configPath logger
+    | MergeUnforced ->
+      logger.LogError "--merge can only be used together with --force."
+      1
+    | HardStop ->
+      logger.LogError(
+        "The Directory {ConfigPath} is not empty. Use --force to overwrite it, or --force --merge to adopt its current values.",
+        path.FullName
+      )
+
+      1
 
 
 [<RequireQualifiedAccess>]
@@ -154,7 +366,6 @@ module internal Migrations =
     (
       useJson: bool,
       logger: ILogger,
-      serializer: IMiMigrationSerializer,
       kind: MigrationType option,
       migrondi: IMigrondi
     ) =
@@ -215,23 +426,41 @@ module internal Migrations =
       AnsiConsole.Write table
 
     let printJson(migrations: Migration seq, status: string) =
-      let encoded = migrations |> Seq.map(fun m -> serializer.EncodeJson m)
+      let data =
+        migrations
+        |> Seq.map(fun m -> {|
+          name = m.name
+          timestamp = m.timestamp
+          upContent = m.upContent
+          downContent = m.downContent
+          manualTransaction = m.manualTransaction
+        |})
 
       logger.LogInformation(
-        "Listing {Status} migrations: {Migrations}",
+        "Listing {Status} migrations: {@Migrations}",
         status,
-        encoded
+        data
       )
 
     let printJsonBoth(migrations: MigrationStatus seq) =
-      let encoded =
+      let data =
         migrations
         |> Seq.map(fun status ->
-          match status with
-          | Applied m -> ("Applied", serializer.EncodeJson m)
-          | Pending m -> ("Pending", serializer.EncodeJson m))
+          let tag, m =
+            match status with
+            | Applied m -> "Applied", m
+            | Pending m -> "Pending", m
 
-      logger.LogInformation("Listing migrations: {Migrations}", encoded)
+          {|
+            status = tag
+            name = m.name
+            timestamp = m.timestamp
+            upContent = m.upContent
+            downContent = m.downContent
+            manualTransaction = m.manualTransaction
+          |})
+
+      logger.LogInformation("Listing migrations: {@Migrations}", data)
 
     let allMigrations = migrondi.MigrationsList()
 
@@ -275,22 +504,35 @@ module internal Migrations =
     0
 
   let migrationStatus(name: string, logger: ILogger, migrondi: IMigrondi) =
-    let formatTimestamp timestamp =
-      let date =
-        DateTimeOffset.FromUnixTimeMilliseconds(timestamp).ToLocalTime()
+    let fileName =
+      if name.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) then
+        name
+      else
+        $"{name}.sql"
 
-      date.ToString()
+    try
+      match migrondi.ScriptStatus fileName with
+      | Applied migration ->
+        logger.LogInformation(
+          "Migration {MigrationName} (timestamp {Timestamp}) is {Status}.",
+          migration.name,
+          migration.timestamp,
+          "Applied"
+        )
+      | Pending migration ->
+        logger.LogInformation(
+          "Migration {MigrationName} (timestamp {Timestamp}) is {Status}.",
+          migration.name,
+          migration.timestamp,
+          "Pending"
+        )
 
-    match migrondi.ScriptStatus(name) with
-    | Applied migration ->
-      logger.LogInformation(
-        "Migration {migration.name} was created on '{Timestamp}' and is currently applied.",
-        formatTimestamp(migration.timestamp)
+      0
+    with :? SourceNotFound ->
+      logger.LogWarning(
+        "No migration found with name {MigrationName} ({Status}).",
+        name,
+        "NotFound"
       )
-    | Pending migration ->
-      logger.LogInformation(
-        "Migration {migration.name} was created on '{Timestamp}' and is not currently applied.",
-        formatTimestamp(migration.timestamp)
-      )
 
-    0
+      0

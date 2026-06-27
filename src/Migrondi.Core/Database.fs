@@ -413,22 +413,39 @@ module MigrationsImpl =
 
       executeMigration(migration, content, true)
 
-    // Replace RepoDB QueryAll with ADO.NET
-    use command = connection.CreateCommand()
+    let appliedRecords =
+      let migrationNames = migrations |> List.map(_.name)
 
-    command.CommandText <-
-      $"SELECT id, name, timestamp FROM {tableName} ORDER BY timestamp DESC"
+      if List.isEmpty migrationNames then
+        []
+      else
+        use command = connection.CreateCommand()
 
-    use reader = command.ExecuteReader()
+        let namePlaceholders =
+          String.Join(",", migrationNames |> List.mapi(fun i _ -> $"@name{i}"))
 
-    [ // Using list comprehension
-      while reader.Read() do
-        {
-          id = reader.GetInt32(0)
-          name = reader.GetString(1)
-          timestamp = reader.GetInt64(2)
-        }
-    ]
+        command.CommandText <-
+          Queries.getResultsByNamesQuery tableName namePlaceholders
+
+        migrationNames
+        |> List.iteri(fun i name ->
+          let param = command.CreateParameter()
+          param.ParameterName <- $"@name{i}"
+          param.Value <- name
+          command.Parameters.Add(param) |> ignore)
+
+        use reader = command.ExecuteReader()
+
+        [
+          while reader.Read() do
+            {
+              id = reader.GetInt32(0)
+              name = reader.GetString(1)
+              timestamp = reader.GetInt64(2)
+            }
+        ]
+
+    appliedRecords
 
   let rollbackMigrations
     (connection: DbConnection) // Changed to DbConnection
@@ -739,14 +756,29 @@ module MigrationsAsyncImpl =
 
         do! executeMigration(migration, content, true)
 
-      // Replace RepoDB QueryAllAsync with ADO.NET
-      use command = connection.CreateCommand()
+      let migrationNames = migrations |> List.map(_.name)
 
-      command.CommandText <- Queries.getAllResultsQuery tableName
+      if List.isEmpty migrationNames then
+        return []
+      else
+        use command = connection.CreateCommand()
 
-      use! reader = command.ExecuteReaderAsync token
+        let namePlaceholders =
+          String.Join(",", migrationNames |> List.mapi(fun i _ -> $"@name{i}"))
 
-      return! readMigrationRecords reader
+        command.CommandText <-
+          Queries.getResultsByNamesQuery tableName namePlaceholders
+
+        migrationNames
+        |> List.iteri(fun i name ->
+          let param = command.CreateParameter()
+          param.ParameterName <- $"@name{i}"
+          param.Value <- name
+          command.Parameters.Add(param) |> ignore)
+
+        use! reader = command.ExecuteReaderAsync token
+
+        return! readMigrationRecords reader
     }
 
   let rollbackMigrationsAsync

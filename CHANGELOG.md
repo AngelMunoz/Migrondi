@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- **MigrondiUI:** Logs a preview notice at startup — MigrondiUI is preview software (regardless of whether a release is marked stable, beta, or rc), expect breaking changes before it stabilizes at 2.0.
+
+### Changed
+
+- **Migrondi:** **Breaking (behavioral):** `init` no longer silently overwrites an existing `migrondi.json` — it now stops with an error so an existing project isn't clobbered. `--force` overwrites with the default configuration; `--force --merge` adopts the values already in the file instead (recovering known fields even from a partial or otherwise-invalid JSON), and `--merge` requires `--force`.
+
+### Fixed
+
+- **Migrondi.Core:** Apply/rollback reported the wrong numbers — the summary counted every pending/applied migration rather than the ones actually being processed, and applying nothing still returned the full migration history (so re-running `up` logged every already-applied migration as newly applied, and the MCP apply result over-counted). Counts and results now reflect only the migrations processed in that run.
+- **Migrondi:** `status` logged nothing for a valid migration and crashed when the name lacked a `.sql` suffix. It now reports `Applied` or `Pending` for a plain migration name (and a clean `NotFound` for an unknown one) in both human and JSON output.
+- **Migrondi:** JSON output for `list` (`[mi-json]`) embedded each migration as an escaped JSON string, forcing a second decode pass; migrations are now emitted as native JSON objects.
+
 ## [1.3.0-beta-001] - 2026-06-26
 
 ### Added

@@ -191,7 +191,11 @@ module internal MigrondiserviceImpl =
           pendingMigrations
       | None -> pendingMigrations
 
-    logger.LogInformation $"Running '%i{pendingMigrations.Length}' migrations."
+    logger.LogInformation(
+      "Applying {MigrationCount} migration(s).",
+      migrationsToRun.Length
+    )
+
     db.ApplyMigrations migrationsToRun
 
   let runDown
@@ -229,8 +233,8 @@ module internal MigrondiserviceImpl =
       | None -> pendingMigrations
 
     logger.LogInformation(
-      "Reverting '{MigrationAmount}' migrations.",
-      pendingMigrations.Length
+      "Rolling back {MigrationCount} migration(s).",
+      migrationsToRun.Length
     )
 
     db.RollbackMigrations migrationsToRun
@@ -349,8 +353,10 @@ module internal MigrondiserviceImpl =
             pendingMigrations
         | None -> pendingMigrations
 
-      logger.LogInformation
-        $"Running '%i{pendingMigrations.Length}' migrations."
+      logger.LogInformation(
+        "Applying {MigrationCount} migration(s).",
+        migrationsToRun.Length
+      )
 
       return! db.ApplyMigrationsAsync(migrationsToRun, token)
     }
@@ -394,8 +400,8 @@ module internal MigrondiserviceImpl =
         | None -> pendingMigrations
 
       logger.LogInformation(
-        "Reverting '{MigrationAmount}' migrations.",
-        pendingMigrations.Length
+        "Rolling back {MigrationCount} migration(s).",
+        migrationsToRun.Length
       )
 
       return! db.RollbackMigrationsAsync migrationsToRun

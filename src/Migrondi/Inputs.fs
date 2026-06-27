@@ -16,6 +16,15 @@ module Init =
     Input.argumentMaybe<DirectoryInfo> "path"
     |> Input.desc "path to initialize a migrondi configuration file"
 
+  let force =
+    Input.optionMaybe<bool> "--force"
+    |> Input.desc "Overwrite an existing migrondi.json"
+
+  let merge =
+    Input.optionMaybe<bool> "--merge"
+    |> Input.desc
+      "With --force, adopt values from an existing migrondi.json instead of overwriting with defaults"
+
 [<RequireQualifiedAccess>]
 module SharedArguments =
 

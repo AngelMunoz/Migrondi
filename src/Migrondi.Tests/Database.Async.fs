@@ -322,6 +322,33 @@ type DatabaseAsyncTests() =
     :> Task
 
   [<TestMethod>]
+  member _.``ApplyMigrationsAsync returns only the migrations applied in the same call``
+    ()
+    =
+    task {
+      let! operation = asyncResult {
+        let sampleMigrations = DatabaseData.createTestMigrations 3
+
+        let! firstBatch = databaseEnv.ApplyMigrationsAsync(sampleMigrations)
+
+        do!
+          firstBatch
+          |> Result.requireNotEmpty "The first batch should apply migrations"
+
+        let! emptyBatch = databaseEnv.ApplyMigrationsAsync([])
+
+        return (firstBatch, emptyBatch)
+      }
+
+      match operation with
+      | Ok(firstBatch, emptyBatch) ->
+        Assert.AreEqual<int>(4, firstBatch.Count)
+        Assert.AreEqual<int>(0, emptyBatch.Count)
+      | Error err -> Assert.Fail($"Failed: %s{err}")
+    }
+    :> Task
+
+  [<TestMethod>]
   member _.``RollBackMigrations Should rollback migrations and return the migrations left in the database``
     ()
     =
