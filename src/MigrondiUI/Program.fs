@@ -95,6 +95,16 @@ type App() as this =
 
 [<EntryPoint; STAThread>]
 let main argv =
+  let logger = loggerFactory.CreateLogger "MigrondiUI"
+
+  logger.LogInformation
+    "Migrondi UI is currently in preview if you can see this notice, regardless of the reported version (stable or marked as beta/rc)."
+
+  logger.LogInformation
+    "things are subject to change, and will likely break in the up coming releases."
+
+  logger.LogInformation "We expect to stabilize Migrondi UI by 2.0."
+
   match Server.tryParseArgs argv with
   | Some mcpOptions ->
     Server.runMcpServer Database.ConnectionFactory mcpOptions loggerFactory

@@ -381,6 +381,32 @@ type DatabaseTests() =
       Assert.Fail($"Failed to find the last applied migration: %s{err}")
 
   [<TestMethod>]
+  member _.``ApplyMigrations returns only the migrations applied in the same call``
+    ()
+    =
+    let operation = result {
+      do databaseEnv.SetupDatabase()
+
+      let sampleMigrations = DatabaseData.createTestMigrations 3
+
+      let firstBatch = databaseEnv.ApplyMigrations(sampleMigrations)
+
+      do!
+        firstBatch
+        |> Result.requireNotEmpty "The first batch should apply migrations"
+
+      let emptyBatch = databaseEnv.ApplyMigrations([])
+
+      return (firstBatch, emptyBatch)
+    }
+
+    match operation with
+    | Ok(firstBatch, emptyBatch) ->
+      Assert.AreEqual<int>(4, firstBatch.Count)
+      Assert.AreEqual<int>(0, emptyBatch.Count)
+    | Error err -> Assert.Fail($"Failed: %s{err}")
+
+  [<TestMethod>]
   member _.``RollBackMigrations Should roll back migrations and return the migrations that were reverted from the database``
     ()
     =
