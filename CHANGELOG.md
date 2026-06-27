@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-06-27
+
+We've found some general isues that warrant the release of 1.3.0, the UI version will be in preview for the forseable future even if marked as a stable release, a notice was added to the startup fo the UI version
+
 ### Added
 
 - **MigrondiUI:** Logs a preview notice at startup — MigrondiUI is preview software (regardless of whether a release is marked stable, beta, or rc), expect breaking changes before it stabilizes at 2.0.
