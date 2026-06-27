@@ -62,7 +62,10 @@ module internal Commands =
       appEnv.Logger.LogError("Database was not setup", ex)
       reraise()
 
-    appEnv
+  let withSetup (appEnv: AppEnv) (action: 'args -> 'out) =
+    fun args ->
+      setup appEnv
+      action args
 
   let Init appEnv = command "init" {
     description
@@ -89,7 +92,8 @@ module internal Commands =
     addAlias "apply"
 
     inputs(SharedArguments.amount, SharedArguments.isDry)
-    setAction((setup >> ArgumentMapper.Up) appEnv)
+
+    setAction(withSetup appEnv (ArgumentMapper.Up appEnv))
   }
 
   let Down appEnv = command "down" {
@@ -97,7 +101,8 @@ module internal Commands =
     addAlias "rollback"
 
     inputs(SharedArguments.amount, SharedArguments.isDry)
-    setAction((setup >> ArgumentMapper.Down) appEnv)
+
+    setAction(withSetup appEnv (ArgumentMapper.Down appEnv))
   }
 
   let List appEnv = command "list" {
@@ -109,7 +114,7 @@ module internal Commands =
     inputs ListArgs.MigrationKind
 
     setAction(
-      (setup >> ArgumentMapper.List) appEnv >> Migrations.listMigrations
+      withSetup appEnv (ArgumentMapper.List appEnv >> Migrations.listMigrations)
     )
   }
 
@@ -122,6 +127,8 @@ module internal Commands =
     inputs(SharedArguments.name(Some "Name of the migration file"))
 
     setAction(
-      (setup >> ArgumentMapper.Status) appEnv >> Migrations.migrationStatus
+      withSetup
+        appEnv
+        (ArgumentMapper.Status appEnv >> Migrations.migrationStatus)
     )
   }
