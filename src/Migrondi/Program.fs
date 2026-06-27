@@ -41,13 +41,9 @@ let main argv =
   let cwd = $"{Environment.CurrentDirectory}{Path.DirectorySeparatorChar}"
   let appEnv = AppEnv.BuildDefault(cwd, logger, useJson, argv)
 
-  rootCommand argv {
+  let cmd = ManualInvocation.rootCommand {
     description
       "A dead simple SQL migrations runner, apply or rollback migrations at your ease"
-
-    configure(fun pipeline ->
-      // enable passing configuration flags before the actual commands
-      pipeline.RootCommand.TreatUnmatchedTokensAsErrors <- false)
 
     noAction
 
@@ -61,3 +57,7 @@ let main argv =
     ]
 
   }
+
+  cmd.TreatUnmatchedTokensAsErrors <- false
+
+  cmd.Parse(argv).Invoke()

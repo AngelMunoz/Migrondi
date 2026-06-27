@@ -167,13 +167,12 @@ module Queries =
   timestamp BIGINT NOT NULL
 );"""
     | MigrondiDriver.Mssql ->
-      $"""IF OBJECT_ID(N'dbo.{tableName}', N'U') IS NULL
-CREATE TABLE dbo.%s{tableName}(
-  id INT PRIMARY KEY,
+      $"""IF OBJECT_ID(N'%s{tableName}', N'U') IS NULL
+CREATE TABLE %s{tableName}(
+  id INT IDENTITY(1,1) PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
   timestamp BIGINT NOT NULL
-);
-GO"""
+);"""
 
   let getFirstResultQuery(tableName, driver) =
     match driver with
@@ -541,24 +540,45 @@ module MigrationsAsyncImpl =
       return None
   }
 
-  let findLastAppliedAsync (connection: DbConnection) tableName = cancellableTask { // Changed signature
-    let! token = CancellableTask.getCancellationToken() // Get token from context
-    use command = connection.CreateCommand()
+  let findLastAppliedAsync
+    (connection: DbConnection)
+    (driver: MigrondiDriver)
+    (tableName: string)
+    =
+    cancellableTask {
+      let! token = CancellableTask.getCancellationToken()
 
-    command.CommandText <-
-      $"SELECT id, name, timestamp FROM %s{tableName} ORDER BY timestamp DESC LIMIT 1"
+      use command = connection.CreateCommand()
 
-    use! reader = command.ExecuteReaderAsync(token) // Use token
+      command.CommandText <- Queries.getFirstResultQuery(tableName, driver)
 
-    if reader.Read() then
-      return
-        Some {
-          id = reader.GetInt32(0)
-          name = reader.GetString(1)
-          timestamp = reader.GetInt64(2)
-        }
-    else
-      return None
+      use! reader = command.ExecuteReaderAsync(token) // Use token
+
+      let! hasRow = reader.ReadAsync(token)
+
+      if hasRow then
+        return
+          Some {
+            id = reader.GetInt32(0)
+            name = reader.GetString(1)
+            timestamp = reader.GetInt64(2)
+          }
+      else
+        return None
+    }
+
+  let readMigrationRecords(reader: DbDataReader) = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+    let records = ResizeArray<MigrationRecord>()
+
+    while! reader.ReadAsync token do
+      records.Add {
+        id = reader.GetInt32 0
+        name = reader.GetString 1
+        timestamp = reader.GetInt64 2
+      }
+
+    return List.ofSeq records
   }
 
   let listMigrationsAsync (connection: DbConnection) (tableName: string) = cancellableTask { // Changed signature
@@ -568,16 +588,9 @@ module MigrationsAsyncImpl =
     command.CommandText <-
       $"SELECT id, name, timestamp FROM %s{tableName} ORDER BY timestamp DESC"
 
-    use! reader = command.ExecuteReaderAsync(token) // Use token
+    use! reader = command.ExecuteReaderAsync token
 
-    return [ // Using list comprehension
-      while reader.Read() do
-        {
-          id = reader.GetInt32(0)
-          name = reader.GetString(1)
-          timestamp = reader.GetInt64(2)
-        }
-    ]
+    return! readMigrationRecords reader
   }
 
   let runQueryAsync
@@ -731,16 +744,9 @@ module MigrationsAsyncImpl =
 
       command.CommandText <- Queries.getAllResultsQuery tableName
 
-      use! reader = command.ExecuteReaderAsync(token)
+      use! reader = command.ExecuteReaderAsync token
 
-      return [ // Using list comprehension
-        while reader.Read() do
-          {
-            id = reader.GetInt32(0)
-            name = reader.GetString(1)
-            timestamp = reader.GetInt64(2)
-          }
-      ]
+      return! readMigrationRecords reader
     }
 
   let rollbackMigrationsAsync
@@ -773,16 +779,10 @@ module MigrationsAsyncImpl =
           param.Value <- name
           command.Parameters.Add(param) |> ignore)
 
-        use! reader = command.ExecuteReaderAsync(token)
+        use! reader = command.ExecuteReaderAsync token
 
-        rolledBackRecords <- [
-          while reader.Read() do
-            {
-              id = reader.GetInt32(0)
-              name = reader.GetString(1)
-              timestamp = reader.GetInt64(2)
-            }
-        ]
+        let! records = readMigrationRecords reader
+        rolledBackRecords <- records
 
       for migration in migrationsToRollback do
         let content = migration.downContent
@@ -879,6 +879,7 @@ type internal MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
       return!
         MigrationsAsyncImpl.findLastAppliedAsync
           connection
+          config.driver
           config.tableName
           token
     }

@@ -49,12 +49,7 @@ module internal Configuration =
     let mutable tNO = None
     let mutable dO = None
 
-
-    rootCommand values {
-      description "Migrondi Configuration Parser"
-
-      configure(fun cfg ->
-        cfg.RootCommand.TreatUnmatchedTokensAsErrors <- false)
+    let cmd = ManualInvocation.rootCommand {
 
       inputs(connectionOption, migrationsOption, tableNameOption, driverOption)
 
@@ -70,7 +65,10 @@ module internal Configuration =
         tNO <- binder t
         dO <- binder d)
     }
-    |> ignore
+
+    cmd.TreatUnmatchedTokensAsErrors <- false
+
+    cmd.Parse(values).Invoke() |> ignore
 
     {|
       connection = cO
