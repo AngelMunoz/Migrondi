@@ -567,6 +567,25 @@ module MigrationsAsyncImpl =
         return None
     }
 
+  let readMigrationRecords (reader: DbDataReader) (token: CancellationToken) = cancellableTask {
+    let records = ResizeArray<MigrationRecord>()
+    let mutable more = true
+
+    while more do
+      let! hasRow = reader.ReadAsync(token)
+
+      if hasRow then
+        records.Add {
+          id = reader.GetInt32(0)
+          name = reader.GetString(1)
+          timestamp = reader.GetInt64(2)
+        }
+      else
+        more <- false
+
+    return List.ofSeq records
+  }
+
   let listMigrationsAsync (connection: DbConnection) (tableName: string) = cancellableTask { // Changed signature
     let! token = CancellableTask.getCancellationToken() // Get token from context
     use command = connection.CreateCommand()
@@ -576,14 +595,7 @@ module MigrationsAsyncImpl =
 
     use! reader = command.ExecuteReaderAsync(token) // Use token
 
-    return [ // Using list comprehension
-      while reader.Read() do
-        {
-          id = reader.GetInt32(0)
-          name = reader.GetString(1)
-          timestamp = reader.GetInt64(2)
-        }
-    ]
+    return! readMigrationRecords reader token
   }
 
   let runQueryAsync
@@ -739,14 +751,7 @@ module MigrationsAsyncImpl =
 
       use! reader = command.ExecuteReaderAsync(token)
 
-      return [ // Using list comprehension
-        while reader.Read() do
-          {
-            id = reader.GetInt32(0)
-            name = reader.GetString(1)
-            timestamp = reader.GetInt64(2)
-          }
-      ]
+      return! readMigrationRecords reader token
     }
 
   let rollbackMigrationsAsync
@@ -781,14 +786,8 @@ module MigrationsAsyncImpl =
 
         use! reader = command.ExecuteReaderAsync(token)
 
-        rolledBackRecords <- [
-          while reader.Read() do
-            {
-              id = reader.GetInt32(0)
-              name = reader.GetString(1)
-              timestamp = reader.GetInt64(2)
-            }
-        ]
+        let! records = readMigrationRecords reader token
+        rolledBackRecords <- records
 
       for migration in migrationsToRollback do
         let content = migration.downContent
