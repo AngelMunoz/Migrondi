@@ -554,7 +554,9 @@ module MigrationsAsyncImpl =
 
       use! reader = command.ExecuteReaderAsync(token) // Use token
 
-      if reader.Read() then
+      let! hasRow = reader.ReadAsync(token)
+
+      if hasRow then
         return
           Some {
             id = reader.GetInt32(0)
