@@ -96,8 +96,8 @@ jobs:
       - name: Zip Binaries
         if: steps.check_tag.outputs.exists == 'false'
         run: |
-          cd dist/cli && for d in */; do zip -r "${d%/}.zip" "$d"; done
-          cd ../ui && for d in */; do zip -r "${d%/}.zip" "$d"; done
+          cd dist/cli && for d in */; do (cd "$d" && zip -r "../migrondi-${d%/}.zip" .); done
+          cd ../ui && for d in */; do (cd "$d" && zip -r "../migrondiui-${d%/}.zip" .); done
 
       - name: Create Release
         if: steps.check_tag.outputs.exists == 'false'

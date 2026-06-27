@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Script to download and install Migrondi CLI for Linux and macOS
+# Script to download and install Migrondi CLI and/or UI for Linux and macOS
 
 REPO_OWNER="AngelMunoz"
 REPO_NAME="Migrondi"
 DEFAULT_INSTALL_DIR_BASE="$HOME/.local/share"
-TOOL_NAME="Migrondi"
-EXTRACTION_SUBDIR="migrondi" # Subdirectory inside install_dir where actual executable lives
 
 # --- Helper Functions ---
 log_info() {
@@ -26,7 +24,26 @@ check_command() {
     fi
 }
 
+# Per-component metadata. The slug doubles as the asset prefix, the extraction
+# subdirectory, and the proxy/shim name.
+component_slug() {
+    case "$1" in
+        cli) echo "migrondi" ;;
+        ui)  echo "migrondiui" ;;
+        *)   return 1 ;;
+    esac
+}
+
+component_exe() {
+    case "$1" in
+        cli) echo "Migrondi" ;;
+        ui)  echo "MigrondiUI" ;;
+        *)   return 1 ;;
+    esac
+}
+
 # --- Argument Parsing ---
+COMPONENT="cli"
 INSTALL_VERSION=""
 USE_LATEST=false
 CUSTOM_DOWNLOAD_PATH=""
@@ -36,16 +53,25 @@ usage() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  -v, --version VERSION   Specify a version to install (e.g., v0.1.0)."
-    echo "  -l, --latest            Install the latest version (default if no version specified)."
-    echo "  -p, --path PATH         Specify a custom download/installation path."
-    echo "      --no-profile        Do not add Migrondi to the shell profile (PATH)."
-    echo "  -h, --help              Show this help message."
+    echo "  -c, --component <cli|ui|both>  Which app to install (default: cli)."
+    echo "  -v, --version VERSION          Specify a version to install (e.g., v0.1.0)."
+    echo "  -l, --latest                   Install the latest version (default if no version specified)."
+    echo "  -p, --path PATH                Specify a custom download/installation path."
+    echo "      --no-profile               Do not add Migrondi to the shell profile (PATH)."
+    echo "  -h, --help                     Show this help message."
     exit 0
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -c|--component)
+            COMPONENT=$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')
+            case "$COMPONENT" in
+                cli|ui|both) ;;
+                *) log_error "Invalid component '$2'. Must be 'cli', 'ui', or 'both'."; exit 1 ;;
+            esac
+            shift 2
+            ;;
         -v|--version)
             INSTALL_VERSION="$2"
             shift 2
@@ -114,7 +140,7 @@ log_info "Detected platform: $selected_platform"
 if [ -n "$CUSTOM_DOWNLOAD_PATH" ]; then
     effective_install_dir="$CUSTOM_DOWNLOAD_PATH"
 else
-    effective_install_dir="${DEFAULT_INSTALL_DIR_BASE}/${TOOL_NAME}"
+    effective_install_dir="${DEFAULT_INSTALL_DIR_BASE}/Migrondi"
 fi
 
 # Ensure the target directory exists, create if not
@@ -161,97 +187,87 @@ else
     log_info "Using latest release tag: $release_tag"
 fi
 
-# --- Download Asset ---
-target_asset_filename="${selected_platform}.zip"
-download_url="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${release_tag}/${target_asset_filename}"
-zip_file_path="${effective_install_dir}/${target_asset_filename}"
-extraction_dir_path="${effective_install_dir}/${EXTRACTION_SUBDIR}" # e.g. /path/to/Migrondi/migrondi
+# --- Install Selected Component(s) ---
+# Downloads, extracts, and creates the proxy/shim for a single component.
+install_component() {
+    local comp="$1"
+    local slug exe asset download_url zip_file_path extraction_dir_path proxy_path
+    slug="$(component_slug "$comp")"
+    exe="$(component_exe "$comp")"
+    asset="${slug}-${selected_platform}.zip"
+    download_url="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${release_tag}/${asset}"
+    zip_file_path="${effective_install_dir}/${asset}"
+    extraction_dir_path="${effective_install_dir}/.${slug}"
+    proxy_path="${effective_install_dir}/${slug}"
 
-log_info "Downloading $target_asset_filename to $zip_file_path from $download_url..."
+    log_info "Downloading $asset to $zip_file_path from $download_url..."
 
-if curl -sSL -f -o "$zip_file_path" "$download_url"; then
-    log_info "Successfully downloaded to $zip_file_path"
-else
-    log_error "Failed to download the asset from $download_url"
-    log_info "Attempting to list available assets for release $release_tag..."
-    release_assets_url="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/tags/${release_tag}"
-    assets_response=$(curl -sL "$release_assets_url")
-    if [ $? -eq 0 ]; then
-        log_info "Available assets for release $release_tag:"
-        if $HAS_JQ; then
-            echo "$assets_response" | jq -r '.assets[].name' | sed 's/^/- /'
-        else
-            echo "$assets_response" | grep -o '"name": *"[^"]*"' | sed -E 's/"name": *"([^"]*)"/\1/' | sed 's/^/- /'
-        fi
+    if curl -sSL -f -o "$zip_file_path" "$download_url"; then
+        log_info "Successfully downloaded to $zip_file_path"
     else
-        log_info "Could not retrieve asset list for tag $release_tag."
+        log_error "Failed to download the asset from $download_url"
+        log_info "Attempting to list available assets for release $release_tag..."
+        local release_assets_url assets_response
+        release_assets_url="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/tags/${release_tag}"
+        if assets_response=$(curl -sL "$release_assets_url"); then
+            log_info "Available assets for release $release_tag:"
+            if $HAS_JQ; then
+                echo "$assets_response" | jq -r '.assets[].name' | sed 's/^/- /'
+            else
+                echo "$assets_response" | grep -o '"name": *"[^"]*"' | sed -E 's/"name": *"([^"]*)"/\1/' | sed 's/^/- /'
+            fi
+        else
+            log_info "Could not retrieve asset list for tag $release_tag."
+        fi
+        return 1
     fi
-    exit 1
-fi
 
-# --- Extract Asset ---
-if [ ! -d "$extraction_dir_path" ]; then
-    mkdir -p "$extraction_dir_path"
-fi
+    if [ ! -d "$extraction_dir_path" ]; then
+        mkdir -p "$extraction_dir_path"
+    fi
 
-log_info "Extracting $zip_file_path to $extraction_dir_path..."
-if unzip -qo "$zip_file_path" -d "$extraction_dir_path"; then # -q for quiet, -o for overwrite
-    log_info "Successfully extracted to $extraction_dir_path"
-else
-    log_error "Failed to extract $zip_file_path."
-    # Attempt to clean up partial extraction or zip file
+    log_info "Extracting $zip_file_path to $extraction_dir_path..."
+    if unzip -qo "$zip_file_path" -d "$extraction_dir_path"; then
+        log_info "Successfully extracted to $extraction_dir_path"
+    else
+        log_error "Failed to extract $zip_file_path."
+        rm -f "$zip_file_path"
+        return 1
+    fi
+
     rm -f "$zip_file_path"
-    # Consider removing extraction_dir_path if it was created by this script and is empty
-    exit 1
-fi
+    log_info "Removed $zip_file_path"
 
-rm "$zip_file_path"
-log_info "Removed $zip_file_path"
+    # Make the binary executable (zip extraction doesn't always preserve the bit)
+    exe_path="${extraction_dir_path}/${exe}"
+    chmod +x "$exe_path" 2>/dev/null || true
 
-# --- Create Proxy/Shim Script ---
-# The actual executable is assumed to be named 'Migrondi' inside the EXTRACTION_SUBDIR
-executable_name_in_zip="${TOOL_NAME}" # Assumed name, e.g., "Migrondi"
-proxy_script_file_path="${effective_install_dir}/${TOOL_NAME,,}" # e.g. /path/to/Migrondi/migrondi (lowercase)
+    # Lowercase command symlink (e.g. `migrondi`) -> uppercase binary (e.g. `.migrondi/Migrondi`).
+    # The dot-prefixed extraction dir avoids colliding with the symlink name.
+    if [ -d "$proxy_path" ]; then
+        log_error "'$proxy_path' exists as a directory (leftover from an older install). Please remove it and re-run."
+        return 1
+    fi
+    rm -f "$proxy_path"
+    ln -s ".${slug}/${exe}" "$proxy_path"
+    log_info "Installed '$(basename "$proxy_path")' command: $proxy_path -> .${slug}/${exe}"
+}
 
-log_info "Creating Migrondi proxy script at $proxy_script_file_path"
+case "$COMPONENT" in
+    cli)  components=("cli") ;;
+    ui)   components=("ui") ;;
+    both) components=("cli" "ui") ;;
+esac
 
-cat << EOF > "$proxy_script_file_path"
-#!/bin/sh
-# This script executes Migrondi from its installation subdirectory.
-# PROXY_SCRIPT_DIR is the directory where this proxy script itself resides.
-PROXY_SCRIPT_DIR="\$(cd "\$(dirname "\$0")" >/dev/null 2>&1 && pwd)"
-EXECUTABLE_PATH="\$PROXY_SCRIPT_DIR/${EXTRACTION_SUBDIR}/${executable_name_in_zip}"
-
-# Check if the executable exists and is executable
-if [ ! -f "\$EXECUTABLE_PATH" ]; then
-    echo "Error: Migrondi executable not found at \$EXECUTABLE_PATH" >&2
-    exit 1
-fi
-if [ ! -x "\$EXECUTABLE_PATH" ]; then
-    echo "Error: Migrondi executable at \$EXECUTABLE_PATH is not executable. Attempting to chmod +x." >&2
-    chmod +x "\$EXECUTABLE_PATH"
-    if [ ! -x "\$EXECUTABLE_PATH" ]; then
-        echo "Error: Failed to make Migrondi executable. Please check permissions." >&2
+for comp in "${components[@]}"; do
+    if ! install_component "$comp"; then
         exit 1
     fi
-fi
-
-"\$EXECUTABLE_PATH" "\$@"
-EOF
-
-if chmod +x "$proxy_script_file_path"; then
-    log_info "Successfully created and made executable proxy script: $proxy_script_file_path"
-else
-    log_error "Failed to make proxy script $proxy_script_file_path executable."
-    # Attempt to clean up
-    rm -f "$proxy_script_file_path"
-    # Potentially remove extraction_dir_path as well if appropriate
-    exit 1
-fi
+done
 
 # --- Add to Profile ---
 if [ "$ADD_TO_PROFILE" = true ]; then
-    path_to_add="$effective_install_dir" # This is the directory containing the proxy script
+    path_to_add="$effective_install_dir" # This is the directory containing the proxy script(s)
 
     current_shell_basename=$(basename "$SHELL")
     profile_file=""
@@ -288,9 +304,7 @@ if [ "$ADD_TO_PROFILE" = true ]; then
             else
                 comment="# Added by migrondi_install.sh to include Migrondi CLI"
                 migrondi_home_command="export MIGRONDI_HOME=\"${path_to_add}\""
-                path_add_command="export PATH=\"${path_to_add}:\$PATH\"" # Original PATH modification
-                # If you want to use the MIGRONDI_HOME in PATH:
-                # path_add_command="export PATH=\"$MIGRONDI_HOME:\$PATH\""
+                path_add_command="export PATH=\"${path_to_add}:\$PATH\""
 
                 # Add a newline before the comment if the file is not empty and doesn't end with a newline
                 if [ -s "$profile_file" ] && [ "$(tail -c1 "$profile_file"; echo x)" != $'\nx' ]; then
@@ -311,7 +325,11 @@ else
     log_info "You can manually add '$effective_install_dir' to your PATH if needed."
 fi
 
-log_info "Migrondi installation completed successfully!"
-log_info "You can now use the '${TOOL_NAME,,}' command."
+log_info "Migrondi ($COMPONENT) installation completed successfully!"
+case "$COMPONENT" in
+    cli)  log_info "You can now use the 'migrondi' command." ;;
+    ui)   log_info "You can now run the 'migrondiui' app." ;;
+    both) log_info "You can now use the 'migrondi' command and run the 'migrondiui' app." ;;
+esac
 
 exit 0

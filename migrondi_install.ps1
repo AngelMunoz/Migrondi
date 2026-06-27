@@ -1,8 +1,10 @@
 param (
     [string]$Version,
     [switch]$Latest,
-    [string]$DownloadPath, # New parameter for download location
-    [switch]$NoProfile # If present, Migrondi will NOT be added to PATH in $PROFILE
+    [string]$DownloadPath, # Download/installation location
+    [switch]$NoProfile, # If present, Migrondi will NOT be added to PATH in $PROFILE
+    [ValidateSet("cli", "ui", "both")]
+    [string]$Component = "cli" # Which app to install: cli, ui, or both
 )
 
 $RepoOwner = "AngelMunoz"
@@ -79,138 +81,192 @@ if ($PSBoundParameters.ContainsKey('Version') -and -not [string]::IsNullOrEmpty(
     }
 }
 
-# $selectedPlatform is like "win-x64", "linux-arm64", etc.
-# Asset names in the release are like "win-x64.zip", "linux-arm64.zip"
-$targetAssetFilename = "$selectedPlatform.zip"
-# $outputFileName = $targetAssetFilename # Local file will be named like "win-x64.zip" # This line is effectively replaced by $ZipFilePath
+# --- Install a single component (download, extract, proxy shim) ---
+function Install-MigrondiComponent {
+    param(
+        [string]$CompName,      # "cli" or "ui"
+        [string]$Slug,          # asset prefix / extraction subdir / proxy base name
+        [string]$ExeName,       # "Migrondi.exe" or "MigrondiUI.exe"
+        [string]$Platform,
+        [string]$DownloadDir,
+        [string]$Tag
+    )
 
-$downloadUrl = "https://github.com/$RepoOwner/$RepoName/releases/download/$releaseTag/$targetAssetFilename"
+    # Asset names are like "migrondi-win-x64.zip", "migrondiui-win-x64.zip"
+    $targetAssetFilename = "$Slug-$Platform.zip"
+    $downloadUrl = "https://github.com/$RepoOwner/$RepoName/releases/download/$Tag/$targetAssetFilename"
 
-$ZipFilePath = Join-Path -Path $EffectiveDownloadDir -ChildPath $targetAssetFilename
-$ExtractionDirName = "migrondi" # Name of the subdirectory for extracted content
-$ExtractionDirPath = Join-Path -Path $EffectiveDownloadDir -ChildPath $ExtractionDirName
+    $ZipFilePath = Join-Path -Path $DownloadDir -ChildPath $targetAssetFilename
+    # Dot-prefixed extraction dir (e.g. ".migrondi") avoids colliding with the lowercase shim name.
+    $ExtractionDirPath = Join-Path -Path $DownloadDir -ChildPath ".$Slug"
+    $ProxyScriptFilePath = Join-Path -Path $DownloadDir -ChildPath "$Slug.ps1"
 
-Write-Host "Downloading $targetAssetFilename to $ZipFilePath from $downloadUrl..."
+    Write-Host "Downloading $targetAssetFilename to $ZipFilePath from $downloadUrl..."
 
-try {
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $ZipFilePath -ErrorAction Stop
-    Write-Host "Successfully downloaded to $ZipFilePath"
+    try {
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $ZipFilePath -ErrorAction Stop
+        Write-Host "Successfully downloaded to $ZipFilePath"
 
-    # $extractPath = Join-Path -Path $PSScriptRoot -ChildPath "migrondi" # Old logic
-    if (-not (Test-Path $ExtractionDirPath)) {
-        New-Item -ItemType Directory -Path $ExtractionDirPath | Out-Null
-    }
+        if (-not (Test-Path $ExtractionDirPath)) {
+            New-Item -ItemType Directory -Path $ExtractionDirPath | Out-Null
+        }
 
-    Write-Host "Extracting $ZipFilePath to $ExtractionDirPath..."
-    Expand-Archive -Path $ZipFilePath -DestinationPath $ExtractionDirPath -Force -ErrorAction Stop
-    Write-Host "Successfully extracted to $ExtractionDirPath"
+        Write-Host "Extracting $ZipFilePath to $ExtractionDirPath..."
+        Expand-Archive -Path $ZipFilePath -DestinationPath $ExtractionDirPath -Force -ErrorAction Stop
+        Write-Host "Successfully extracted to $ExtractionDirPath"
 
-    Remove-Item -Path $ZipFilePath
-    Write-Host "Removed $ZipFilePath"
+        Remove-Item -Path $ZipFilePath
+        Write-Host "Removed $ZipFilePath"
 
-    # Create proxy script
-    $ProxyScriptFilePath = Join-Path -Path $EffectiveDownloadDir -ChildPath "migrondi.ps1"
-    $ProxyScriptContent = @"
+        # Create proxy script
+        $ProxyScriptContent = @"
 param(
     [Parameter(ValueFromRemainingArguments = `$true)]
     [object[]]`$Arguments
 )
-# This script assumes Migrondi.exe is in a subdirectory named '$ExtractionDirName' relative to this script's location.
-`$ExePath = Join-Path `$PSScriptRoot "$ExtractionDirName" "Migrondi.exe"
+# This script assumes $ExeName is in a subdirectory named '.$Slug' relative to this script's location.
+`$ExePath = Join-Path `$PSScriptRoot ".$Slug" "$ExeName"
 & `$ExePath `$Arguments
 "@
-    Set-Content -Path $ProxyScriptFilePath -Value $ProxyScriptContent
-    Write-Host "Created Migrondi proxy script at $ProxyScriptFilePath"
-
-    # Add to profile by default, unless -NoProfile is specified
-    if (-not $NoProfile) { # If $NoProfile is $false (i.e., -NoProfile switch not used), then add to profile
-        Write-Host "Adding Migrondi to PATH in PowerShell profile: $PROFILE..."
-
-        $MigrondiProxyDirActualResolved = $EffectiveDownloadDir # This is the actual resolved path where migrondi.ps1 is
-
-        $PathStringForProfileFile = "" # This will hold either the literal '$env:...' or the resolved custom path
-        $PathExistenceCheckRegex = "" # Regex to check if it's already there
-
-        # Resolve the conceptual default directory for comparison
-        $ConceptualDefaultInstallDirResolved = ""
-        try {
-            $ConceptualDefaultInstallDirResolved = Resolve-Path (Join-Path -Path $env:LOCALAPPDATA -ChildPath "Migrondi") -ErrorAction Stop
-        } catch {
-            # This case should be rare, means $env:LOCALAPPDATA might be problematic or non-existent.
-            # Fallback to using the $EffectiveDownloadDir as a literal path if resolution fails.
-            Write-Warning "Could not resolve default install directory based on \$env:LOCALAPPDATA. Using absolute path for profile update."
-            $ConceptualDefaultInstallDirResolved = "" # Ensure it doesn't match if resolution failed
-        }
-
-        if (($ConceptualDefaultInstallDirResolved -ne "") -and ($MigrondiProxyDirActualResolved -eq $ConceptualDefaultInstallDirResolved)) {
-            # Default directory case: use literal $env:LOCALAPPDATA in the profile string
-            $PathStringForProfileFile = Join-Path -Path '$env:LOCALAPPDATA' -ChildPath "Migrondi" # Literal string for profile
-            $EscapedPathForRegex = [regex]::Escape($PathStringForProfileFile) # Escape the literal string for regex
-            $PathExistenceCheckRegex = ('\$env:PATH\s*[+\-]?=\s*.*' + $EscapedPathForRegex)
-        } else {
-            # Custom directory case (or if default path resolution failed): use the resolved $EffectiveDownloadDir
-            $PathStringForProfileFile = $MigrondiProxyDirActualResolved
-            $EscapedPathForRegex = [regex]::Escape($MigrondiProxyDirActualResolved)
-            $PathExistenceCheckRegex = ('\$env:PATH\s*[+\-]?=\s*.*' + $EscapedPathForRegex)
-        }
-
-        Write-Host "Attempting to add '$PathStringForProfileFile' to PATH in PowerShell profile ($PROFILE)..."
-
-        # Ensure the profile file exists, create if not
-        if (-not (Test-Path $PROFILE)) {
-            try {
-                Write-Host "Profile file ($PROFILE) does not exist. Creating it..."
-                New-Item -Path $PROFILE -ItemType File -Force -ErrorAction Stop | Out-Null
-                Write-Host "Successfully created profile file: $PROFILE"
-            } catch {
-                Write-Error "Failed to create profile file ($PROFILE): $_. Please create it manually and add '$PathStringForProfileFile' to your PATH."
-            }
-        }
-
-        if (Test-Path $PROFILE) {
-            try {
-                $ProfileContent = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
-
-                # Check if the directory is already in a line that modifies $env:PATH
-                if ($ProfileContent -match $PathExistenceCheckRegex) {
-                    Write-Host "'$PathStringForProfileFile' appears to be already configured in the PATH in $PROFILE."
-                } else {
-                    $PathSeparator = [System.IO.Path]::PathSeparator
-                    $Comment = "# Added by migrondi_install.ps1 to include Migrondi CLI"
-                    $MigrondiHomeEnvVarCommand = "`$env:MIGRONDI_HOME = '$PathStringForProfileFile'"
-                    $PathAddCommand = "`$env:PATH += '$PathSeparator`$env:MIGRONDI_HOME'" # Use MIGRONDI_HOME var
-
-                    $FinalCommandToAdd = ""
-                    # Add MIGRONDI_HOME first, then modify PATH
-                    $BaseContentToAdd = "`n$Comment`n$MigrondiHomeEnvVarCommand`n$PathAddCommand"
-
-                    if (-not [string]::IsNullOrEmpty($ProfileContent) -and $ProfileContent[-1] -ne "`n" -and $ProfileContent[-1] -ne "`r") {
-                        $FinalCommandToAdd = "`n" + $BaseContentToAdd # Extra newline if profile not empty and no trailing newline
-                    } else {
-                        $FinalCommandToAdd = $BaseContentToAdd
-                    }
-
-                    Add-Content -Path $PROFILE -Value $FinalCommandToAdd -ErrorAction Stop
-                    Write-Host "Successfully added '$PathStringForProfileFile' to PATH in $PROFILE."
-                    Write-Host "Please restart your PowerShell session or run '. $PROFILE' to apply the changes."
-                }
-            } catch {
-                Write-Error "Failed to update $($PROFILE): $_"
-            }
-        }
-    }
-
-} catch {
-    Write-Error "Failed to download the asset: $_"
-    # Attempt to list available assets for the release tag if download fails
-    $releaseAssetsUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/tags/$releaseTag"
-    try {
-        Write-Host "Fetching available assets for tag $releaseTag..."
-        $releaseInfo = Invoke-RestMethod -Uri $releaseAssetsUrl
-        Write-Host "Available assets for release $($releaseTag):" # Corrected variable interpolation
-        $releaseInfo.assets | ForEach-Object { Write-Host "- $($_.name)" }
+        Set-Content -Path $ProxyScriptFilePath -Value $ProxyScriptContent
+        Write-Host "Created $CompName proxy script at $ProxyScriptFilePath"
     } catch {
-        Write-Warning "Could not retrieve asset list for tag $releaseTag."
+        Write-Error "Failed to install $CompName asset: $_"
+        # Attempt to list available assets for the release tag if download fails
+        $releaseAssetsUrl = "https://api.github.com/repos/$RepoOwner/$RepoName/releases/tags/$Tag"
+        try {
+            Write-Host "Fetching available assets for tag $Tag..."
+            $releaseInfo = Invoke-RestMethod -Uri $releaseAssetsUrl
+            Write-Host "Available assets for release $Tag:"
+            $releaseInfo.assets | ForEach-Object { Write-Host "- $($_.name)" }
+        } catch {
+            Write-Warning "Could not retrieve asset list for tag $Tag."
+        }
+        return $false
     }
-    exit 1
+    return $true
+}
+
+# --- Resolve which component(s) to install ---
+$Component = $Component.ToLower()
+switch ($Component) {
+    "cli" {
+        $componentsToInstall = @(
+            @{ CompName = "cli"; Slug = "migrondi"; ExeName = "Migrondi.exe" }
+        )
+    }
+    "ui" {
+        $componentsToInstall = @(
+            @{ CompName = "ui"; Slug = "migrondiui"; ExeName = "MigrondiUI.exe" }
+        )
+    }
+    "both" {
+        $componentsToInstall = @(
+            @{ CompName = "cli"; Slug = "migrondi"; ExeName = "Migrondi.exe" },
+            @{ CompName = "ui"; Slug = "migrondiui"; ExeName = "MigrondiUI.exe" }
+        )
+    }
+    default {
+        Write-Error "Invalid Component '$Component'. Must be 'cli', 'ui', or 'both'."
+        exit 1
+    }
+}
+
+foreach ($comp in $componentsToInstall) {
+    $ok = Install-MigrondiComponent `
+        -CompName $comp.CompName `
+        -Slug $comp.Slug `
+        -ExeName $comp.ExeName `
+        -Platform $selectedPlatform `
+        -DownloadDir $EffectiveDownloadDir `
+        -Tag $releaseTag
+    if (-not $ok) { exit 1 }
+}
+
+# Add to profile by default, unless -NoProfile is specified
+if (-not $NoProfile) {
+    Write-Host "Adding Migrondi to PATH in PowerShell profile: $PROFILE..."
+
+    $MigrondiProxyDirActualResolved = $EffectiveDownloadDir # This is the actual resolved path where the proxy scripts are
+
+    $PathStringForProfileFile = "" # This will hold either the literal '$env:...' or the resolved custom path
+    $PathExistenceCheckRegex = "" # Regex to check if it's already there
+
+    # Resolve the conceptual default directory for comparison
+    $ConceptualDefaultInstallDirResolved = ""
+    try {
+        $ConceptualDefaultInstallDirResolved = Resolve-Path (Join-Path -Path $env:LOCALAPPDATA -ChildPath "Migrondi") -ErrorAction Stop
+    } catch {
+        # This case should be rare, means $env:LOCALAPPDATA might be problematic or non-existent.
+        # Fallback to using the $EffectiveDownloadDir as a literal path if resolution fails.
+        Write-Warning "Could not resolve default install directory based on \$env:LOCALAPPDATA. Using absolute path for profile update."
+        $ConceptualDefaultInstallDirResolved = "" # Ensure it doesn't match if resolution failed
+    }
+
+    if (($ConceptualDefaultInstallDirResolved -ne "") -and ($MigrondiProxyDirActualResolved -eq $ConceptualDefaultInstallDirResolved)) {
+        # Default directory case: use literal $env:LOCALAPPDATA in the profile string
+        $PathStringForProfileFile = Join-Path -Path '$env:LOCALAPPDATA' -ChildPath "Migrondi" # Literal string for profile
+        $EscapedPathForRegex = [regex]::Escape($PathStringForProfileFile) # Escape the literal string for regex
+        $PathExistenceCheckRegex = ('\$env:PATH\s*[+\-]?=\s*.*' + $EscapedPathForRegex)
+    } else {
+        # Custom directory case (or if default path resolution failed): use the resolved $EffectiveDownloadDir
+        $PathStringForProfileFile = $MigrondiProxyDirActualResolved
+        $EscapedPathForRegex = [regex]::Escape($MigrondiProxyDirActualResolved)
+        $PathExistenceCheckRegex = ('\$env:PATH\s*[+\-]?=\s*.*' + $EscapedPathForRegex)
+    }
+
+    Write-Host "Attempting to add '$PathStringForProfileFile' to PATH in PowerShell profile ($PROFILE)..."
+
+    # Ensure the profile file exists, create if not
+    if (-not (Test-Path $PROFILE)) {
+        try {
+            Write-Host "Profile file ($PROFILE) does not exist. Creating it..."
+            New-Item -Path $PROFILE -ItemType File -Force -ErrorAction Stop | Out-Null
+            Write-Host "Successfully created profile file: $PROFILE"
+        } catch {
+            Write-Error "Failed to create profile file ($PROFILE): $_. Please create it manually and add '$PathStringForProfileFile' to your PATH."
+        }
+    }
+
+    if (Test-Path $PROFILE) {
+        try {
+            $ProfileContent = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
+
+            # Check if the directory is already in a line that modifies $env:PATH
+            if ($ProfileContent -match $PathExistenceCheckRegex) {
+                Write-Host "'$PathStringForProfileFile' appears to be already configured in the PATH in $PROFILE."
+            } else {
+                $PathSeparator = [System.IO.Path]::PathSeparator
+                $Comment = "# Added by migrondi_install.ps1 to include Migrondi CLI"
+                $MigrondiHomeEnvVarCommand = "`$env:MIGRONDI_HOME = '$PathStringForProfileFile'"
+                $PathAddCommand = "`$env:PATH += '$PathSeparator`$env:MIGRONDI_HOME'" # Use MIGRONDI_HOME var
+
+                $FinalCommandToAdd = ""
+                # Add MIGRONDI_HOME first, then modify PATH
+                $BaseContentToAdd = "`n$Comment`n$MigrondiHomeEnvVarCommand`n$PathAddCommand"
+
+                if (-not [string]::IsNullOrEmpty($ProfileContent) -and $ProfileContent[-1] -ne "`n" -and $ProfileContent[-1] -ne "`r") {
+                    $FinalCommandToAdd = "`n" + $BaseContentToAdd # Extra newline if profile not empty and no trailing newline
+                } else {
+                    $FinalCommandToAdd = $BaseContentToAdd
+                }
+
+                Add-Content -Path $PROFILE -Value $FinalCommandToAdd -ErrorAction Stop
+                Write-Host "Successfully added '$PathStringForProfileFile' to PATH in $PROFILE."
+                Write-Host "Please restart your PowerShell session or run '. $PROFILE' to apply the changes."
+            }
+        } catch {
+            Write-Error "Failed to update $($PROFILE): $_"
+        }
+    }
+} else {
+    Write-Host "Skipping profile update as -NoProfile was specified."
+    Write-Host "You can manually add '$EffectiveDownloadDir' to your PATH if needed."
+}
+
+Write-Host "Migrondi ($Component) installation completed successfully!"
+switch ($Component) {
+    "cli"  { Write-Host "You can now use the 'migrondi' command (restart PowerShell or run '. `$PROFILE')." }
+    "ui"   { Write-Host "You can now run the 'migrondiui' app (restart PowerShell or run '. `$PROFILE)." }
+    "both" { Write-Host "You can now use the 'migrondi' command and run the 'migrondiui' app (restart PowerShell or run '. `$PROFILE)." }
 }
