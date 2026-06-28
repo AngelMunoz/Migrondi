@@ -39,37 +39,35 @@
     <Content Include="migrations/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="11.3.1" />
-    <PackageReference Include="Avalonia.Controls.ItemsRepeater" Version="11.1.5" />
-    <PackageReference Include="Avalonia.Desktop" Version="11.3.0" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.1" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.0" />
-    <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.3.1" />
-    <PackageReference Include="ModelContextProtocol" Version="1.4.0" />
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Controls.ItemsRepeater" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="AvaloniaUI.DiagnosticsSupport" />
+    <PackageReference Include="ModelContextProtocol" />
 
-    <PackageReference Include="NXUI" Version="11.3.0" />
-    <PackageReference Include="NXUI.Desktop" Version="11.3.0" />
-    <PackageReference Include="NXUI.FSharp" Version="11.3.0" />
+    <PackageReference Include="NXUI" />
+    <PackageReference Include="NXUI.Desktop" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" />
+    <PackageReference Include="AvaloniaEdit.TextMate" />
+    <PackageReference Include="SukiUI" />
+    <PackageReference Include="TextMateSharp.Grammars" />
 
-    <PackageReference Include="Avalonia.AvaloniaEdit" Version="11.3.0" />
-    <PackageReference Include="AvaloniaEdit.TextMate" Version="11.3.0" />
-    <PackageReference Include="SukiUI" Version="6.0.2" />
-    <PackageReference Include="TextMateSharp.Grammars" Version="1.0.69" />
+    <PackageReference Include="CLIWrap" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.Extensions.Logging" />
+    <PackageReference Include="Serilog.Sinks.Console" />
 
-    <PackageReference Include="CLIWrap" Version="3.9.0" />
-    <PackageReference Include="Serilog" Version="4.3.0" />
-    <PackageReference Include="Serilog.Extensions.Logging" Version="10.0.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="Donald" />
+    <PackageReference Include="FSharp.UMX" />
 
-    <PackageReference Include="Donald" Version="10.1.0" />
-    <PackageReference Include="FSharp.UMX" Version="1.1.0" />
+    <PackageReference Include="IcedTasks" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
 
-    <PackageReference Include="IcedTasks" Version="0.11.9" />
-    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.1.0" />
+    <PackageReference Include="JDeck" />
+    <PackageReference Include="Navs.Avalonia" />
 
-    <PackageReference Include="JDeck" Version="1.1.0" />
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
-    <PackageReference Include="Navs.Avalonia" Version="1.0.0-rc-008" />
-
   </ItemGroup>
 </Project>

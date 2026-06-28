@@ -12,6 +12,3 @@ type TestAppBuilder() =
 
 [<assembly: AvaloniaTestApplication(typeof<TestAppBuilder>)>]
 do ()
-
-[<EntryPoint>]
-let main _ = 0

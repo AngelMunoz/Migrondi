@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Project:** Migrated all projects to central package management via `src/Directory.Packages.props`, removing per-project package versions and consolidating dependency versions in one place.
+- **Project:** Switched to the Microsoft Testing Platform (`global.json`) and bumped test-related packages to their latest stable versions.
+- **MigrondiUI:** Upgraded from Avalonia 11 to Avalonia 12 and updated UI code to match the new API surface (`Watermark` → `PlaceholderText`, `IBinding` → `BindingBase`, nullable `TextBox.Text` handling, and `JsonElement` deserialization).
+- **MigrondiUI:** Updated Avalonia-related dependencies (AvaloniaEdit, TextMate, SukiUI, NXUI) to their Avalonia 12-compatible versions.
+- **Migrondi.Tests:** Migrated to `MSTest.Sdk/4.2.3`.
+- **MigrondiUI.Tests:** Migrated to the Microsoft Testing Platform with the xUnit v3 runner, targeting `net10.0` only.
+
+### Fixed
+
+- **Project:** Addressed the high-severity `SQLitePCLRaw.lib.e_sqlite3` vulnerability (GHSA-2m69-gcr7-jv3q) by overriding `SQLitePCLRaw.bundle_e_sqlite3` to `3.0.3` in central package management.
+
 ## [1.3.0] - 2026-06-27
 
 ### Added

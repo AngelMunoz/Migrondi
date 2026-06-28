@@ -32,7 +32,7 @@
         <None Include="$(MSBuildThisFileDirectory)\README.md" Pack="true" PackagePath="\"/>
     </ItemGroup>
     <ItemGroup>
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
-        <PackageReference Include="Ionide.KeepAChangelog.Tasks" Version="0.3.1" PrivateAssets="all" />
+        <PackageReference Include="Microsoft.SourceLink.GitHub" PrivateAssets="All" />
+        <PackageReference Include="Ionide.KeepAChangelog.Tasks" PrivateAssets="all" />
     </ItemGroup>
 </Project>

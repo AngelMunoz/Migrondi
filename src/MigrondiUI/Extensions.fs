@@ -87,7 +87,7 @@ type SelectingItemsControl with
       ))
 
 type ItemsRepeater with
-  member inline this.ItemsSource(source: IBinding) =
+  member inline this.ItemsSource(source: BindingBase) =
     let descriptor =
       ItemsRepeater.ItemsSourceProperty
         .Bind()
@@ -253,7 +253,7 @@ module SukiUIExtensions =
 
       this
 
-    member inline this.MenuItems(menuItems: IBinding) =
+    member inline this.MenuItems(menuItems: BindingBase) =
       let descriptor =
         SukiWindow.MenuItemsProperty.Bind().WithMode(BindingMode.OneWay)
 
