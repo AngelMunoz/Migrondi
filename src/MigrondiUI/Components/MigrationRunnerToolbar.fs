@@ -70,7 +70,7 @@ let numericUpDown(steps: _ cval) =
   NumericUpDown()
     .Minimum(0)
     .Value(steps |> AVal.toBinding)
-    .Watermark("Amount to run")
+    .PlaceholderText("Amount to run")
     .OnValueChangedHandler(fun _ value ->
       match value.NewValue |> ValueOption.ofNullable with
       | ValueNone -> steps.setValue 1M

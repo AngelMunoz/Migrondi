@@ -372,8 +372,11 @@ type VirtualFsTests() =
 
     do! vfs.WriteContentAsync(uri1, updatedContent, ct)
 
-    let migration1 = TestHelpers.getMigrationByName conn projectId1 "create_users"
-    let migration2 = TestHelpers.getMigrationByName conn projectId2 "create_users"
+    let migration1 =
+      TestHelpers.getMigrationByName conn projectId1 "create_users"
+
+    let migration2 =
+      TestHelpers.getMigrationByName conn projectId2 "create_users"
 
     Assert.Equal(
       "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);",
@@ -394,7 +397,10 @@ type VirtualFsTests() =
       use conn = connectionFactory()
 
       let projectId =
-        TestHelpers.insertVirtualProject conn "UpdateTest" "Data Source=:memory:"
+        TestHelpers.insertVirtualProject
+          conn
+          "UpdateTest"
+          "Data Source=:memory:"
 
       TestHelpers.insertMigration
         conn

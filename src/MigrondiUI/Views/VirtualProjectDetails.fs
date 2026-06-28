@@ -245,7 +245,7 @@ let toolbar
   let nameTextBox =
     TextBox()
       .Name("New Migration Name:")
-      .Watermark("Enter migration name")
+      .PlaceholderText("Enter migration name")
       .Width(200)
       .AcceptsReturn(false)
       .OnTextChangedHandler(fun txtBox _ ->
@@ -259,7 +259,11 @@ let toolbar
       .Content("Create Migration")
       .IsEnabled(isEnabled |> AVal.toBinding)
       .OnClickHandler(fun _ _ ->
-        let text = (nameTextBox.Text |> nonNull).Trim().Replace(' ', '-')
+        let text =
+          match nameTextBox.Text with
+          | null -> ""
+          | value -> value.Trim().Replace(' ', '-')
+
         onNewMigration text
         nameTextBox.Text <- "")
 

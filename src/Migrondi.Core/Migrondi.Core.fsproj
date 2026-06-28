@@ -31,16 +31,15 @@
     <Compile Include="Migrondi.fs" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="FSharp.UMX" Version="1.1.0" />
-    <PackageReference Include="FsToolkit.ErrorHandling" Version="5.1.0" />
-    <PackageReference Include="IcedTasks" Version="0.11.9" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.3" />
-    <PackageReference Include="Thoth.Json.Net" Version="12.0.0" />
-    <!-- RepoDB Packages to handle SQL Servers -->
-    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.3" />
-    <PackageReference Include="Npgsql" Version="10.0.1" />
-    <PackageReference Include="MySql.Data" Version="9.6.0" />
+    <PackageReference Include="FSharp.UMX" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="IcedTasks" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+    <PackageReference Include="Thoth.Json.Net" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="MySql.Data" />
   </ItemGroup>
 </Project>

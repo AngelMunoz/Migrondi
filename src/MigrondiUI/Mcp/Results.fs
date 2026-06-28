@@ -1,5 +1,7 @@
 namespace MigrondiUI.Mcp
 
+#nowarn 3265
+
 open System
 open System.Collections.Generic
 open System.Text.Json
@@ -520,10 +522,9 @@ module internal McpResultMapper =
       | :? JsonObject as obj -> obj.ContainsKey("error")
       | _ -> false
 
-    let element : Nullable<JsonElement> =
-      if isNull node then
-        Unchecked.defaultof<_>
-      else
-        Nullable(node.Deserialize<JsonElement>())
+    let element =
+      node.Deserialize<Nullable<JsonElement>>(
+        JsonSerializerOptions(RespectNullableAnnotations = true)
+      )
 
     CallToolResult(StructuredContent = element, IsError = isError)
