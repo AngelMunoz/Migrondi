@@ -52,7 +52,7 @@ type Toolbar =
     let args = ToolbarArgs.toToolbarArgs(props)
 
     let toolbar =
-      ItemsRepeater()
+      ItemsControl()
         .ItemTemplate(FuncDataTemplate<Control>(fun props _ -> props))
 
     match args.orientation with
@@ -63,10 +63,10 @@ type Toolbar =
 
   [<Extension>]
   static member Children
-    (toolbar: ItemsRepeater, [<ParamArray>] children: Control array)
+    (toolbar: ItemsControl, [<ParamArray>] children: Control array)
     =
     toolbar.ItemsSource(children)
 
   [<Extension>]
-  static member Children(toolbar: ItemsRepeater, children: Control array aval) =
+  static member Children(toolbar: ItemsControl, children: Control array aval) =
     toolbar.ItemsSource(children |> AVal.toBinding)

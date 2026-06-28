@@ -86,10 +86,10 @@ type SelectingItemsControl with
         this
       ))
 
-type ItemsRepeater with
+type ItemsControl with
   member inline this.ItemsSource(source: BindingBase) =
     let descriptor =
-      ItemsRepeater.ItemsSourceProperty
+      ItemsControl.ItemsSourceProperty
         .Bind()
         .WithMode(BindingMode.OneWay)
         .WithPriority(BindingPriority.LocalValue)
@@ -105,20 +105,26 @@ type ItemsRepeater with
     this.ItemTemplate <- template
     this
 
-  member inline this.Layout(layout: AttachedLayout) =
-    this.Layout <- layout
+  member inline this.ItemsPanel(panel: ITemplate<Panel>) =
+    this.ItemsPanel <- panel
     this
 
   member inline this.HorizontalStack(?spacing: float) =
-    let layout = StackLayout(Orientation = Orientation.Horizontal)
-    spacing |> Option.iter(fun s -> layout.Spacing <- s)
-    this.Layout <- layout
+    let spacing = spacing |> Option.defaultValue 0.
+
+    this.ItemsPanel <-
+      FuncTemplate<Panel>(fun _ ->
+        StackPanel(Orientation = Orientation.Horizontal, Spacing = spacing))
+
     this
 
   member inline this.VerticalStack(?spacing: float) =
-    let layout = StackLayout(Orientation = Orientation.Vertical)
-    spacing |> Option.iter(fun s -> layout.Spacing <- s)
-    this.Layout <- layout
+    let spacing = spacing |> Option.defaultValue 0.
+
+    this.ItemsPanel <-
+      FuncTemplate<Panel>(fun _ ->
+        StackPanel(Orientation = Orientation.Vertical, Spacing = spacing))
+
     this
 
 type Grid with

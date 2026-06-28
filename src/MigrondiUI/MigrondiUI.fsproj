@@ -40,7 +40,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" />
-    <PackageReference Include="Avalonia.Controls.ItemsRepeater" />
+    <PackageReference Include="Avalonia.AvaloniaEdit" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
@@ -49,7 +49,6 @@
 
     <PackageReference Include="NXUI" />
     <PackageReference Include="NXUI.Desktop" />
-    <PackageReference Include="Avalonia.AvaloniaEdit" />
     <PackageReference Include="AvaloniaEdit.TextMate" />
     <PackageReference Include="SukiUI" />
     <PackageReference Include="TextMateSharp.Grammars" />
