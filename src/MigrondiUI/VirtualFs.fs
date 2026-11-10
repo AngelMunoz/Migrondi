@@ -87,7 +87,8 @@ let getVirtualFs
       manualTransaction = manualTransaction
     }
 
-  { new MigrondiUIFs with
+  {
+    new MigrondiUIFs with
       member _.ReadContent(uri: Uri) =
         failwith
           "Synchronous read is not supported. Use ReadContentAsync instead."
@@ -168,185 +169,185 @@ let getVirtualFs
 
       member _.WriteContentAsync
         (uri, content, [<Optional>] ?cancellationToken)
-        =
-        task {
-          let ct = defaultArg cancellationToken CancellationToken.None
+        = task {
+        let ct = defaultArg cancellationToken CancellationToken.None
 
-          logger.LogDebug("Writing content to {uri}", uri)
+        logger.LogDebug("Writing content to {uri}", uri)
 
-          match parseVirtualProjectUri uri with
-          | Some(ProjectConfig projectId) ->
-            use conn = createConnection()
-            do! conn.TryOpenConnectionAsync(ct)
+        match parseVirtualProjectUri uri with
+        | Some(ProjectConfig projectId) ->
+          use conn = createConnection()
+          do! conn.TryOpenConnectionAsync(ct)
 
-            let! project =
-              conn
-              |> Db.newCommand
-                "
+          let! project =
+            conn
+            |> Db.newCommand
+              "
               SELECT vp.id, p.name, p.description, vp.connection, vp.table_name, vp.driver, vp.project_id
               FROM virtual_projects vp
               INNER JOIN projects p ON vp.project_id = p.id
               WHERE vp.id = @id AND p.deleted_at IS NULL
               "
-              |> Db.setCancellationToken ct
-              |> Db.setParams [ "id", sqlString projectId ]
-              |> Db.Async.querySingle mapVirtualProject
+            |> Db.setCancellationToken ct
+            |> Db.setParams [ "id", sqlString projectId ]
+            |> Db.Async.querySingle mapVirtualProject
 
-            match project with
-            | None -> return failwith $"Project {projectId} not found"
-            | Some p ->
-              let config = MiSerializer.DecodeConfig content
+          match project with
+          | None -> return failwith $"Project {projectId} not found"
+          | Some p ->
+            let config = MiSerializer.DecodeConfig content
 
-              do!
-                conn
-                |> Db.newCommand
-                  "
+            do!
+              conn
+              |> Db.newCommand
+                "
                 UPDATE projects SET updated_at = @now WHERE id = @projectId
                 "
-                |> Db.setCancellationToken ct
-                |> Db.setParams [
-                  "projectId", sqlString p.projectId
-                  "now", sqlString(DateTime.UtcNow.ToString("o"))
-                ]
-                |> Db.Async.exec
+              |> Db.setCancellationToken ct
+              |> Db.setParams [
+                "projectId", sqlString p.projectId
+                "now", sqlString(DateTime.UtcNow.ToString("o"))
+              ]
+              |> Db.Async.exec
 
-              do!
-                conn
-                |> Db.newCommand
-                  "
+            do!
+              conn
+              |> Db.newCommand
+                "
                 UPDATE virtual_projects
                 SET connection = @connection, table_name = @tableName, driver = @driver
                 WHERE id = @id
                 "
-                |> Db.setCancellationToken ct
-                |> Db.setParams [
-                  "id", sqlString projectId
-                  "connection", sqlString config.connection
-                  "tableName", sqlString config.tableName
-                  "driver", sqlString config.driver.AsString
-                ]
-                |> Db.Async.exec
+              |> Db.setCancellationToken ct
+              |> Db.setParams [
+                "id", sqlString projectId
+                "connection", sqlString config.connection
+                "tableName", sqlString config.tableName
+                "driver", sqlString config.driver.AsString
+              ]
+              |> Db.Async.exec
 
-          | Some(Migration(projectId, migrationFileName)) ->
-            let migrationName =
-              match Migration.ExtractFromFilename migrationFileName with
-              | Ok(name, _) -> name
-              | Error _ -> migrationFileName.Replace(".sql", "")
+        | Some(Migration(projectId, migrationFileName)) ->
+          let migrationName =
+            match Migration.ExtractFromFilename migrationFileName with
+            | Ok(name, _) -> name
+            | Error _ -> migrationFileName.Replace(".sql", "")
 
-            let migration = MiSerializer.Decode(content, migrationName)
+          let migration = MiSerializer.Decode(content, migrationName)
 
-            use conn = createConnection()
-            do! conn.TryOpenConnectionAsync(ct)
+          use conn = createConnection()
+          do! conn.TryOpenConnectionAsync(ct)
 
-            let! existingId =
-              conn
-              |> Db.newCommand
-                "
+          let! existingId =
+            conn
+            |> Db.newCommand
+              "
               SELECT vm.id
               FROM virtual_migrations vm
               INNER JOIN virtual_projects vp ON vm.virtual_project_id = vp.id
               WHERE vp.id = @projectId AND vm.name = @name
               "
-              |> Db.setCancellationToken ct
-              |> Db.setParams [
-                "projectId", sqlString projectId
-                "name", sqlString migrationName
-              ]
-              |> Db.Async.querySingle(fun r -> r.ReadGuid "id")
+            |> Db.setCancellationToken ct
+            |> Db.setParams [
+              "projectId", sqlString projectId
+              "name", sqlString migrationName
+            ]
+            |> Db.Async.querySingle(fun r -> r.ReadGuid "id")
 
-            match existingId with
-            | Some existingId ->
-              do!
-                conn
-                |> Db.newCommand
-                  "
+          match existingId with
+          | Some existingId ->
+            do!
+              conn
+              |> Db.newCommand
+                "
                 UPDATE virtual_migrations
                 SET timestamp = @timestamp, up_content = @upContent, down_content = @downContent, manual_transaction = @manualTransaction
                 WHERE id = @id
                 "
-                |> Db.setCancellationToken ct
-                |> Db.setParams [
-                  "id", sqlString existingId
-                  "timestamp", sqlInt64 migration.timestamp
-                  "upContent", sqlString migration.upContent
-                  "downContent", sqlString migration.downContent
-                  "manualTransaction", sqlBoolean migration.manualTransaction
-                ]
-                |> Db.Async.exec
+              |> Db.setCancellationToken ct
+              |> Db.setParams [
+                "id", sqlString existingId
+                "timestamp", sqlInt64 migration.timestamp
+                "upContent", sqlString migration.upContent
+                "downContent", sqlString migration.downContent
+                "manualTransaction", sqlBoolean migration.manualTransaction
+              ]
+              |> Db.Async.exec
 
-            | None ->
-              do!
-                conn
-                |> Db.newCommand
-                  "
+          | None ->
+            do!
+              conn
+              |> Db.newCommand
+                "
                 INSERT INTO virtual_migrations (id, name, timestamp, up_content, down_content, manual_transaction, virtual_project_id)
                 SELECT @id, @name, @timestamp, @upContent, @downContent, @manualTransaction, vp.id
                 FROM virtual_projects vp
                 WHERE vp.id = @projectId
                 "
-                |> Db.setCancellationToken ct
-                |> Db.setParams [
-                  "id", sqlString(Guid.NewGuid())
-                  "name", sqlString migration.name
-                  "timestamp", sqlInt64 migration.timestamp
-                  "upContent", sqlString migration.upContent
-                  "downContent", sqlString migration.downContent
-                  "manualTransaction", sqlBoolean migration.manualTransaction
-                  "projectId", sqlString projectId
-                ]
-                |> Db.Async.exec
+              |> Db.setCancellationToken ct
+              |> Db.setParams [
+                "id", sqlString(Guid.NewGuid())
+                "name", sqlString migration.name
+                "timestamp", sqlInt64 migration.timestamp
+                "upContent", sqlString migration.upContent
+                "downContent", sqlString migration.downContent
+                "manualTransaction", sqlBoolean migration.manualTransaction
+                "projectId", sqlString projectId
+              ]
+              |> Db.Async.exec
 
-          | Some(MigrationList _) ->
-            return failwith "Cannot write content to migration list URI"
+        | Some(MigrationList _) ->
+          return failwith "Cannot write content to migration list URI"
 
-          | None -> return failwith $"Unsupported URI: {uri}"
-        }
+        | None -> return failwith $"Unsupported URI: {uri}"
+      }
 
       member _.ListFiles(locationUri) =
         failwith
           "Synchronous listing is not supported. Use ListFilesAsync instead."
 
-      member _.ListFilesAsync(locationUri, [<Optional>] ?cancellationToken) = task {
-        let ct = defaultArg cancellationToken CancellationToken.None
+      member _.ListFilesAsync(locationUri, [<Optional>] ?cancellationToken) =
+        task {
+          let ct = defaultArg cancellationToken CancellationToken.None
 
-        logger.LogDebug("Listing files in {uri}", locationUri)
+          logger.LogDebug("Listing files in {uri}", locationUri)
 
-        match parseVirtualProjectUri locationUri with
-        | Some(MigrationList projectId) ->
-          use conn = createConnection()
-          do! conn.TryOpenConnectionAsync(ct)
+          match parseVirtualProjectUri locationUri with
+          | Some(MigrationList projectId) ->
+            use conn = createConnection()
+            do! conn.TryOpenConnectionAsync(ct)
 
-          let! migrations =
-            conn
-            |> Db.newCommand
-              "
+            let! migrations =
+              conn
+              |> Db.newCommand
+                "
               SELECT vm.timestamp, vm.name
               FROM virtual_migrations vm
               INNER JOIN virtual_projects vp ON vm.virtual_project_id = vp.id
               WHERE vp.id = @projectId
               ORDER BY vm.timestamp
               "
-            |> Db.setCancellationToken ct
-            |> Db.setParams [ "projectId", sqlString projectId ]
-            |> Db.Async.query(fun r ->
-              let timestamp = r.ReadInt64 "timestamp"
-              let name = r.ReadString "name"
-              timestamp, name)
+              |> Db.setCancellationToken ct
+              |> Db.setParams [ "projectId", sqlString projectId ]
+              |> Db.Async.query(fun r ->
+                let timestamp = r.ReadInt64 "timestamp"
+                let name = r.ReadString "name"
+                timestamp, name)
 
-          let basePath = locationUri.ToString().TrimEnd('/') + "/"
+            let basePath = locationUri.ToString().TrimEnd('/') + "/"
 
-          return
-            migrations
-            |> List.map(fun (timestamp, name) ->
-              Uri($"{basePath}{timestamp}_{name}.sql"))
-            :> Uri seq
+            return
+              migrations
+              |> List.map(fun (timestamp, name) ->
+                Uri($"{basePath}{timestamp}_{name}.sql"))
+              :> Uri seq
 
-        | Some(ProjectConfig _) ->
-          return failwith "Cannot list files from config URI"
+          | Some(ProjectConfig _) ->
+            return failwith "Cannot list files from config URI"
 
-        | Some(Migration _) ->
-          return failwith "Cannot list files from single migration URI"
+          | Some(Migration _) ->
+            return failwith "Cannot list files from single migration URI"
 
-        | None -> return failwith $"Unsupported URI: {locationUri}"
-      }
+          | None -> return failwith $"Unsupported URI: {locationUri}"
+        }
   }

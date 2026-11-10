@@ -77,7 +77,8 @@ let GetLocalProjectRepository createDbConnection =
   let updateLocalProjectConfigPath =
     UpdateLocalProjectConfigPath createDbConnection
 
-  { new ILocalProjectRepository with
+  {
+    new ILocalProjectRepository with
 
       member _.GetProjectById projectId = findLocalProjectById projectId
 
@@ -122,7 +123,8 @@ let GetVirtualProjectRepository createDbConnection =
   let removeVirtualMigrationByName =
     RemoveVirtualMigrationByName createDbConnection
 
-  { new IVirtualProjectRepository with
+  {
+    new IVirtualProjectRepository with
       member _.GetProjects() = findVirtualProjects()
 
       member _.GetProjectById projectId = findVirtualProjectById projectId

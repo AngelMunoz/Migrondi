@@ -110,40 +110,42 @@ type NewProjectVM(logger: ILogger<NewProjectVM>, projects: IProjectCollection) =
     return pid
   }
 
-  member _.CreateNewVirtualProject(args: Database.InsertVirtualProjectArgs) = asyncEx {
-    logger.LogDebug "Creating new virtual project"
+  member _.CreateNewVirtualProject(args: Database.InsertVirtualProjectArgs) =
+    asyncEx {
+      logger.LogDebug "Creating new virtual project"
 
-    let! pid = projects.CreateVirtual args
-    logger.LogDebug("Inserted virtual project with id {Id}", pid)
-    return pid
-  }
+      let! pid = projects.CreateVirtual args
+      logger.LogDebug("Inserted virtual project with id {Id}", pid)
+      return pid
+    }
 
-  member _.ImportToVirtualProject(view: Control) : Async<Guid option> = asyncOption {
-    logger.LogDebug "Importing local project to virtual project"
-    let! token = Async.CancellationToken
-    let! topLevel = TopLevel.GetTopLevel(view)
+  member _.ImportToVirtualProject(view: Control) : Async<Guid option> =
+    asyncOption {
+      logger.LogDebug "Importing local project to virtual project"
+      let! token = Async.CancellationToken
+      let! topLevel = TopLevel.GetTopLevel(view)
 
-    let! file =
-      topLevel.StorageProvider.OpenFilePickerAsync(
-        FilePickerOpenOptions(
-          Title = "Select Project File",
-          AllowMultiple = false,
-          FileTypeFilter = [|
-            FilePickerFileType(
-              "Migrondi Config",
-              Patterns = [ "migrondi.json" ]
-            )
-          |]
+      let! file =
+        topLevel.StorageProvider.OpenFilePickerAsync(
+          FilePickerOpenOptions(
+            Title = "Select Project File",
+            AllowMultiple = false,
+            FileTypeFilter = [|
+              FilePickerFileType(
+                "Migrondi Config",
+                Patterns = [ "migrondi.json" ]
+              )
+            |]
+          )
         )
-      )
 
-    let! file = file |> Seq.tryHead
-    logger.LogDebug("Selected file: {File}", file.Name)
+      let! file = file |> Seq.tryHead
+      logger.LogDebug("Selected file: {File}", file.Name)
 
-    let! guid = projects.Import file.Path.LocalPath token
+      let! guid = projects.Import file.Path.LocalPath token
 
-    return guid
-  }
+      return guid
+    }
 
 let private localProjectTab
   (
@@ -216,14 +218,15 @@ let View
         logger.LogWarning("Navigation Failure: {error}", e.StringError())
   }
 
-  let handleCreateVirtualProject(args: Database.InsertVirtualProjectArgs) = asyncEx {
-    let! createdId = vm.CreateNewVirtualProject args
+  let handleCreateVirtualProject(args: Database.InsertVirtualProjectArgs) =
+    asyncEx {
+      let! createdId = vm.CreateNewVirtualProject args
 
-    match! nav.Navigate $"/projects/virtual/{createdId}" with
-    | Ok _ -> ()
-    | Error(e) ->
-      logger.LogWarning("Navigation Failure: {error}", e.StringError())
-  }
+      match! nav.Navigate $"/projects/virtual/{createdId}" with
+      | Ok _ -> ()
+      | Error(e) ->
+        logger.LogWarning("Navigation Failure: {error}", e.StringError())
+    }
 
   let tabControl =
     TabControl()

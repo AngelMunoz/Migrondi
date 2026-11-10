@@ -148,73 +148,72 @@ module private Migration =
   let DecodeTextV0
     (content: string)
     (name: string option)
-    : Result<Migration, string> =
-    result {
-      // Migrations Format V0 are already encoded like this:
-      //-- ---------- MIGRONDI:UP:1586550686936 --------------
-      //-- Write your Up migrations here
-      //
-      //-- ---------- MIGRONDI:DOWN:1586550686936 --------------
-      //-- Write how to revert the migration here
-      let! name =
-        name |> Result.requireSome "Migration name is required for format v0"
+    : Result<Migration, string> = result {
+    // Migrations Format V0 are already encoded like this:
+    //-- ---------- MIGRONDI:UP:1586550686936 --------------
+    //-- Write your Up migrations here
+    //
+    //-- ---------- MIGRONDI:DOWN:1586550686936 --------------
+    //-- Write how to revert the migration here
+    let! name =
+      name |> Result.requireSome "Migration name is required for format v0"
 
-      let matcher =
-        Regex(
-          "-- ---------- MIGRONDI:(?<Identifier>UP|DOWN):(?<Timestamp>[0-9]+) ----------",
-          RegexOptions.Multiline
-        )
+    let matcher =
+      Regex(
+        "-- ---------- MIGRONDI:(?<Identifier>UP|DOWN):(?<Timestamp>[0-9]+) ----------",
+        RegexOptions.Multiline
+      )
 
-      let collection = matcher.Matches(content)
+    let collection = matcher.Matches(content)
 
-      do!
-        collection.Count = 2
-        |> Result.requireTrue "Invalid Migrations Format"
-        |> Result.ignore
+    do!
+      collection.Count = 2
+      |> Result.requireTrue "Invalid Migrations Format"
+      |> Result.ignore
 
-      let upIndex =
-        collection
-        |> Seq.find(fun value -> value.Groups["Identifier"].Value = "UP")
-        |> _.Index
+    let upIndex =
+      collection
+      |> Seq.find(fun value -> value.Groups["Identifier"].Value = "UP")
+      |> _.Index
 
-      let downIndex =
-        collection
-        |> Seq.find(fun value -> value.Groups["Identifier"].Value = "DOWN")
-        |> _.Index
+    let downIndex =
+      collection
+      |> Seq.find(fun value -> value.Groups["Identifier"].Value = "DOWN")
+      |> _.Index
 
-      // we've found the up delimiter, skip it and go straight for the content
-      let slicedUp = content[upIndex .. downIndex - 1]
-      let fromUp = slicedUp.IndexOf('\n') + 1
-      // we've found the down delimiter, skip it and go straight for the content
-      let slicedDown = content[downIndex..]
-      let fromDown = content.Substring(downIndex).IndexOf('\n') + 1
+    // we've found the up delimiter, skip it and go straight for the content
+    let slicedUp = content[upIndex .. downIndex - 1]
+    let fromUp = slicedUp.IndexOf('\n') + 1
+    // we've found the down delimiter, skip it and go straight for the content
+    let slicedDown = content[downIndex..]
+    let fromDown = content.Substring(downIndex).IndexOf('\n') + 1
 
-      let! timestamp =
-        try
-          collection[0].Groups["Timestamp"].Value |> int64 |> Ok
-        with ex ->
-          Error $"Invalid timestamp: {ex.Message}"
+    let! timestamp =
+      try
+        collection[0].Groups["Timestamp"].Value |> int64 |> Ok
+      with ex ->
+        Error $"Invalid timestamp: {ex.Message}"
 
-      let! upContent =
-        try
-          slicedUp[fromUp..] |> Ok
-        with ex ->
-          Error $"Invalid up content: {ex.Message}"
+    let! upContent =
+      try
+        slicedUp[fromUp..] |> Ok
+      with ex ->
+        Error $"Invalid up content: {ex.Message}"
 
-      let! downContent =
-        try
-          slicedDown[fromDown..] |> Ok
-        with ex ->
-          Error $"Invalid down content: {ex.Message}"
+    let! downContent =
+      try
+        slicedDown[fromDown..] |> Ok
+      with ex ->
+        Error $"Invalid down content: {ex.Message}"
 
-      return {
-        name = name
-        upContent = upContent.Trim()
-        downContent = downContent.Trim()
-        timestamp = timestamp
-        manualTransaction = false
-      }
+    return {
+      name = name
+      upContent = upContent.Trim()
+      downContent = downContent.Trim()
+      timestamp = timestamp
+      manualTransaction = false
     }
+  }
 
   let DecodeTextV1(content: string) : Result<Migration, string> = result {
     // GOAL: Migrations Format V1 are encoded like this:

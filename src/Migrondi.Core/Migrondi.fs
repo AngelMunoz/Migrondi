@@ -321,45 +321,44 @@ module internal MigrondiserviceImpl =
     (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
+    = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
 
-      let! migrations = fs.ListMigrationsAsync(config.migrations, token)
+    let! migrations = fs.ListMigrationsAsync(config.migrations, token)
 
-      and! appliedMigrations = db.ListMigrationsAsync(token)
+    and! appliedMigrations = db.ListMigrationsAsync(token)
 
-      logger.LogDebug(
-        "Applied migrations: {Migrations}",
-        (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
-      )
+    logger.LogDebug(
+      "Applied migrations: {Migrations}",
+      (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
+    )
 
-      let pendingMigrations = obtainPendingUp migrations appliedMigrations
+    let pendingMigrations = obtainPendingUp migrations appliedMigrations
 
-      logger.LogDebug(
-        "Pending migrations: {Migrations}",
-        (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
-      )
+    logger.LogDebug(
+      "Pending migrations: {Migrations}",
+      (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
+    )
 
-      let migrationsToRun =
-        match amount with
-        | Some amount ->
-          if amount >= 0 && amount < pendingMigrations.Length then
-            pendingMigrations |> Array.take amount
-          else
-            logger.LogWarning
-              "The amount specified is out of bounds in relation with the pending migrations. Running all pending migrations."
+    let migrationsToRun =
+      match amount with
+      | Some amount ->
+        if amount >= 0 && amount < pendingMigrations.Length then
+          pendingMigrations |> Array.take amount
+        else
+          logger.LogWarning
+            "The amount specified is out of bounds in relation with the pending migrations. Running all pending migrations."
 
-            pendingMigrations
-        | None -> pendingMigrations
+          pendingMigrations
+      | None -> pendingMigrations
 
-      logger.LogInformation(
-        "Applying {MigrationCount} migration(s).",
-        migrationsToRun.Length
-      )
+    logger.LogInformation(
+      "Applying {MigrationCount} migration(s).",
+      migrationsToRun.Length
+    )
 
-      return! db.ApplyMigrationsAsync(migrationsToRun, token)
-    }
+    return! db.ApplyMigrationsAsync(migrationsToRun, token)
+  }
 
   let runDownAsync
     (db: IMiDatabaseHandler)
@@ -367,45 +366,44 @@ module internal MigrondiserviceImpl =
     (logger: ILogger)
     (config: MigrondiConfig)
     (amount: int option)
-    =
-    cancellableTask {
+    = cancellableTask {
 
-      let! token = CancellableTask.getCancellationToken()
+    let! token = CancellableTask.getCancellationToken()
 
-      let! appliedMigrations = db.ListMigrationsAsync(token)
-      and! migrations = fs.ListMigrationsAsync(config.migrations, token)
+    let! appliedMigrations = db.ListMigrationsAsync(token)
+    and! migrations = fs.ListMigrationsAsync(config.migrations, token)
 
-      logger.LogDebug(
-        "Applied migrations: {Migrations}",
-        (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
-      )
+    logger.LogDebug(
+      "Applied migrations: {Migrations}",
+      (appliedMigrations |> Seq.map(_.name) |> String.concat ", ")
+    )
 
-      let pendingMigrations = obtainPendingDown migrations appliedMigrations
+    let pendingMigrations = obtainPendingDown migrations appliedMigrations
 
-      logger.LogDebug(
-        "Rolling back migrations: {Migrations}",
-        (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
-      )
+    logger.LogDebug(
+      "Rolling back migrations: {Migrations}",
+      (pendingMigrations |> Seq.map(_.name) |> String.concat ", ")
+    )
 
-      let migrationsToRun =
-        match amount with
-        | Some amount ->
-          if amount >= 0 && amount < pendingMigrations.Length then
-            pendingMigrations |> Array.take amount
-          else
-            logger.LogWarning
-              "The amount specified is out of bounds in relation with the pending migrations. Rolling back all pending migrations."
+    let migrationsToRun =
+      match amount with
+      | Some amount ->
+        if amount >= 0 && amount < pendingMigrations.Length then
+          pendingMigrations |> Array.take amount
+        else
+          logger.LogWarning
+            "The amount specified is out of bounds in relation with the pending migrations. Rolling back all pending migrations."
 
-            pendingMigrations
-        | None -> pendingMigrations
+          pendingMigrations
+      | None -> pendingMigrations
 
-      logger.LogInformation(
-        "Rolling back {MigrationCount} migration(s).",
-        migrationsToRun.Length
-      )
+    logger.LogInformation(
+      "Rolling back {MigrationCount} migration(s).",
+      migrationsToRun.Length
+    )
 
-      return! db.RollbackMigrationsAsync migrationsToRun
-    }
+    return! db.RollbackMigrationsAsync migrationsToRun
+  }
 
 
   let dryRunUpAsync
@@ -413,94 +411,89 @@ module internal MigrondiserviceImpl =
     (fs: IMiFileSystem)
     (config: MigrondiConfig)
     (amount: int option)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
-      let! migrations = fs.ListMigrationsAsync(config.migrations, token)
-      and! appliedMigrations = db.ListMigrationsAsync(token)
+    = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+    let! migrations = fs.ListMigrationsAsync(config.migrations, token)
+    and! appliedMigrations = db.ListMigrationsAsync(token)
 
-      let pending = obtainPendingUp migrations appliedMigrations |> List.ofArray
+    let pending = obtainPendingUp migrations appliedMigrations |> List.ofArray
 
-      return
-        match amount with
-        | Some amount ->
-          let migrations =
-            if amount >= 0 && amount < pending.Length then
-              pending |> List.take amount
-            else
-              pending
+    return
+      match amount with
+      | Some amount ->
+        let migrations =
+          if amount >= 0 && amount < pending.Length then
+            pending |> List.take amount
+          else
+            pending
 
-          migrations :> IReadOnlyList<Migration>
-        | None -> pending
-    }
+        migrations :> IReadOnlyList<Migration>
+      | None -> pending
+  }
 
   let dryRunDownAsync
     (db: IMiDatabaseHandler)
     (fs: IMiFileSystem)
     (config: MigrondiConfig)
     (amount: int option)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
+    = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
 
-      let! appliedMigrations = db.ListMigrationsAsync(token)
-      and! migrations = fs.ListMigrationsAsync(config.migrations, token)
+    let! appliedMigrations = db.ListMigrationsAsync(token)
+    and! migrations = fs.ListMigrationsAsync(config.migrations, token)
 
-      let pending =
-        obtainPendingDown migrations appliedMigrations |> List.ofArray
+    let pending = obtainPendingDown migrations appliedMigrations |> List.ofArray
 
-      return
-        match amount with
-        | Some amount ->
-          let migrations =
-            if amount >= 0 && amount < pending.Length then
-              pending |> List.take amount
-            else
-              pending
+    return
+      match amount with
+      | Some amount ->
+        let migrations =
+          if amount >= 0 && amount < pending.Length then
+            pending |> List.take amount
+          else
+            pending
 
-          migrations :> IReadOnlyList<Migration>
-        | None -> pending
-    }
+        migrations :> IReadOnlyList<Migration>
+      | None -> pending
+  }
 
   let migrationsListAsync
     (db: IMiDatabaseHandler)
     (fs: IMiFileSystem)
     (config: MigrondiConfig)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
-      let! migrations = fs.ListMigrationsAsync(config.migrations, token)
-      and! appliedMigrations = db.ListMigrationsAsync(token)
+    = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+    let! migrations = fs.ListMigrationsAsync(config.migrations, token)
+    and! appliedMigrations = db.ListMigrationsAsync(token)
 
-      let categorizeMigrations =
-        fun migration ->
-          match
-            appliedMigrations
-            |> Seq.tryFind(fun applied ->
-              applied.name = migration.name
-              && applied.timestamp = migration.timestamp)
-          with
-          | Some _ -> Applied migration
-          | None -> Pending migration
+    let categorizeMigrations =
+      fun migration ->
+        match
+          appliedMigrations
+          |> Seq.tryFind(fun applied ->
+            applied.name = migration.name
+            && applied.timestamp = migration.timestamp)
+        with
+        | Some _ -> Applied migration
+        | None -> Pending migration
 
-      return
-        migrations |> List.ofSeq |> List.map categorizeMigrations
-        :> IReadOnlyList<MigrationStatus>
-    }
+    return
+      migrations |> List.ofSeq |> List.map categorizeMigrations
+      :> IReadOnlyList<MigrationStatus>
+  }
 
   let scriptStatusAsync
     (db: IMiDatabaseHandler)
     (fs: IMiFileSystem)
     (migrationPath: string)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
-      let! migration = fs.ReadMigrationAsync(migrationPath, token)
+    = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+    let! migration = fs.ReadMigrationAsync(migrationPath, token)
 
-      match! db.FindMigrationAsync(migration.name, token) with
-      | Some _ -> return Applied migration
-      | None -> return Pending migration
-    }
+    match! db.FindMigrationAsync(migration.name, token) with
+    | Some _ -> return Applied migration
+    | None -> return Pending migration
+  }
 
   let defaultLoggerFactory =
     lazy

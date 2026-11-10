@@ -39,22 +39,23 @@ type AsyncOptionBuilder with
 
   member _.Source(value: Async<'T | null>) : Async<'T option> =
     value
-    |> Async.map (function
+    |> Async.map(function
       | null -> None
       | value -> Some value)
 
   member _.Source(value: Async<string | null>) : Async<string option> =
     value
-    |> Async.map (function
+    |> Async.map(function
       | null -> None
       | value -> Some value)
 
-  member _.Source(value: CancellableTask<'T option>) : Async<'T option> = asyncEx {
-    let! ct = Async.CancellationToken
+  member _.Source(value: CancellableTask<'T option>) : Async<'T option> =
+    asyncEx {
+      let! ct = Async.CancellationToken
 
-    let! value = value ct
-    return value
-  }
+      let! value = value ct
+      return value
+    }
 
 type Styles with
   member inline this.Load(source: string) =

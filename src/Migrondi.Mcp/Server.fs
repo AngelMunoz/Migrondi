@@ -22,12 +22,12 @@ module ServerBuilder =
       let result: McpResults.ListProjectsResult = {
         local =
           projects
-          |> List.choose (function
+          |> List.choose(function
             | Local p -> Some(McpResults.LocalProjectSummary.FromLocalProject p)
             | Virtual _ -> None)
         virtualProjects =
           projects
-          |> List.choose (function
+          |> List.choose(function
             | Virtual p ->
               Some(McpResults.VirtualProjectSummary.FromVirtualProject p)
             | Local _ -> None)
@@ -536,128 +536,126 @@ module ServerBuilder =
   let createReadTools
     (env: McpEnvironment)
     (serviceProvider: IServiceProvider)
-    : McpServerTool list =
-    [
-      createTool
-        serviceProvider
-        "list_projects"
-        "List Projects"
-        true
-        false
-        (ListProjectsDelegate(ReadTools.listProjectsFn env))
-      createTool
-        serviceProvider
-        "get_project"
-        "Get Project"
-        true
-        false
-        (GetProjectDelegate(ReadTools.getProjectFn env))
-      createTool
-        serviceProvider
-        "list_migrations"
-        "List Migrations"
-        true
-        false
-        (ListMigrationsDelegate(ReadTools.listMigrationsFn env))
-      createTool
-        serviceProvider
-        "get_migration"
-        "Get Migration"
-        true
-        false
-        (GetMigrationDelegate(ReadTools.getMigrationFn env))
-      createTool
-        serviceProvider
-        "dry_run_migrations"
-        "Preview Migrations"
-        true
-        false
-        (DryRunMigrationsDelegate(ReadTools.dryRunMigrationsFn env))
-      createTool
-        serviceProvider
-        "dry_run_rollback"
-        "Preview Rollback"
-        true
-        false
-        (DryRunMigrationsDelegate(ReadTools.dryRunRollbackFn env))
-    ]
+    : McpServerTool list = [
+    createTool
+      serviceProvider
+      "list_projects"
+      "List Projects"
+      true
+      false
+      (ListProjectsDelegate(ReadTools.listProjectsFn env))
+    createTool
+      serviceProvider
+      "get_project"
+      "Get Project"
+      true
+      false
+      (GetProjectDelegate(ReadTools.getProjectFn env))
+    createTool
+      serviceProvider
+      "list_migrations"
+      "List Migrations"
+      true
+      false
+      (ListMigrationsDelegate(ReadTools.listMigrationsFn env))
+    createTool
+      serviceProvider
+      "get_migration"
+      "Get Migration"
+      true
+      false
+      (GetMigrationDelegate(ReadTools.getMigrationFn env))
+    createTool
+      serviceProvider
+      "dry_run_migrations"
+      "Preview Migrations"
+      true
+      false
+      (DryRunMigrationsDelegate(ReadTools.dryRunMigrationsFn env))
+    createTool
+      serviceProvider
+      "dry_run_rollback"
+      "Preview Rollback"
+      true
+      false
+      (DryRunMigrationsDelegate(ReadTools.dryRunRollbackFn env))
+  ]
 
   let createWriteTools
     (env: McpEnvironment)
     (serviceProvider: IServiceProvider)
-    : McpServerTool list =
-    [
-      createTool
-        serviceProvider
-        "run_migrations"
-        "Apply Migrations"
-        false
-        true
-        (RunMigrationsDelegate(WriteTools.runMigrationsFn env))
-      createTool
-        serviceProvider
-        "run_rollback"
-        "Rollback Migrations"
-        false
-        true
-        (RunMigrationsDelegate(WriteTools.runRollbackFn env))
-      createTool
-        serviceProvider
-        "create_migration"
-        "Create Migration"
-        false
-        false
-        (CreateMigrationDelegate(WriteTools.createMigrationFn env))
-      createTool
-        serviceProvider
-        "update_migration"
-        "Update Migration"
-        false
-        false
-        (UpdateMigrationDelegate(WriteTools.updateMigrationFn env))
-      createTool
-        serviceProvider
-        "delete_migration"
-        "Delete Migration"
-        false
-        true
-        (DeleteMigrationDelegate(WriteTools.deleteMigrationFn env))
-      createTool
-        serviceProvider
-        "create_virtual_project"
-        "Create Virtual Project"
-        false
-        false
-        (CreateVirtualProjectDelegate(WriteTools.createVirtualProjectFn env))
-      createTool
-        serviceProvider
-        "update_virtual_project"
-        "Update Virtual Project"
-        false
-        false
-        (UpdateVirtualProjectDelegate(WriteTools.updateVirtualProjectFn env))
-      createTool
-        serviceProvider
-        "delete_project"
-        "Delete Project"
-        false
-        true
-        (DeleteProjectDelegate(WriteTools.deleteProjectFn env))
-      createTool
-        serviceProvider
-        "export_virtual_project"
-        "Export Virtual Project"
-        false
-        false
-        (ExportVirtualProjectDelegate(WriteTools.exportVirtualProjectFn env))
-      createTool
-        serviceProvider
-        "import_from_local"
-        "Import from Local"
-        false
-        false
-        (ImportFromLocalDelegate(WriteTools.importFromLocalFn env))
-    ]
+    : McpServerTool list = [
+    createTool
+      serviceProvider
+      "run_migrations"
+      "Apply Migrations"
+      false
+      true
+      (RunMigrationsDelegate(WriteTools.runMigrationsFn env))
+    createTool
+      serviceProvider
+      "run_rollback"
+      "Rollback Migrations"
+      false
+      true
+      (RunMigrationsDelegate(WriteTools.runRollbackFn env))
+    createTool
+      serviceProvider
+      "create_migration"
+      "Create Migration"
+      false
+      false
+      (CreateMigrationDelegate(WriteTools.createMigrationFn env))
+    createTool
+      serviceProvider
+      "update_migration"
+      "Update Migration"
+      false
+      false
+      (UpdateMigrationDelegate(WriteTools.updateMigrationFn env))
+    createTool
+      serviceProvider
+      "delete_migration"
+      "Delete Migration"
+      false
+      true
+      (DeleteMigrationDelegate(WriteTools.deleteMigrationFn env))
+    createTool
+      serviceProvider
+      "create_virtual_project"
+      "Create Virtual Project"
+      false
+      false
+      (CreateVirtualProjectDelegate(WriteTools.createVirtualProjectFn env))
+    createTool
+      serviceProvider
+      "update_virtual_project"
+      "Update Virtual Project"
+      false
+      false
+      (UpdateVirtualProjectDelegate(WriteTools.updateVirtualProjectFn env))
+    createTool
+      serviceProvider
+      "delete_project"
+      "Delete Project"
+      false
+      true
+      (DeleteProjectDelegate(WriteTools.deleteProjectFn env))
+    createTool
+      serviceProvider
+      "export_virtual_project"
+      "Export Virtual Project"
+      false
+      false
+      (ExportVirtualProjectDelegate(WriteTools.exportVirtualProjectFn env))
+    createTool
+      serviceProvider
+      "import_from_local"
+      "Import from Local"
+      false
+      false
+      (ImportFromLocalDelegate(WriteTools.importFromLocalFn env))
+  ]
 
   let buildToolCollection
     (env: McpEnvironment)
@@ -692,36 +690,34 @@ module ServerBuilder =
     (env: McpEnvironment)
     (options: McpOptions)
     (loggerFactory: ILoggerFactory)
-    : Async<unit> =
-    asyncEx {
-      let services = ServiceCollection()
-      services.AddSingleton<ILoggerFactory>(loggerFactory) |> ignore
-      services.AddSingleton<McpEnvironment>(env) |> ignore
+    : Async<unit> = asyncEx {
+    let services = ServiceCollection()
+    services.AddSingleton<ILoggerFactory>(loggerFactory) |> ignore
+    services.AddSingleton<McpEnvironment>(env) |> ignore
 
-      let serviceProvider = services.BuildServiceProvider()
+    let serviceProvider = services.BuildServiceProvider()
 
-      let serverOptions =
-        createServerOptions env serviceProvider options.readOnly
+    let serverOptions = createServerOptions env serviceProvider options.readOnly
 
-      match options.mode with
-      | Stdio ->
-        let transport = StdioServerTransport("migrondi-mcp", loggerFactory)
+    match options.mode with
+    | Stdio ->
+      let transport = StdioServerTransport("migrondi-mcp", loggerFactory)
 
-        use server =
-          McpServer.Create(
-            transport,
-            serverOptions,
-            loggerFactory,
-            serviceProvider
-          )
+      use server =
+        McpServer.Create(
+          transport,
+          serverOptions,
+          loggerFactory,
+          serviceProvider
+        )
 
-        do! server.RunAsync()
-      | Http port ->
-        do!
-          HttpServer.runHttpServer
-            port
-            serverOptions
-            loggerFactory
-            serviceProvider
-            CancellationToken.None
-    }
+      do! server.RunAsync()
+    | Http port ->
+      do!
+        HttpServer.runHttpServer
+          port
+          serverOptions
+          loggerFactory
+          serviceProvider
+          CancellationToken.None
+  }

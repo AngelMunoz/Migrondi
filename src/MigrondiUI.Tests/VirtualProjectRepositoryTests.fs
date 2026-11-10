@@ -193,138 +193,77 @@ type VirtualProjectRepositoryTests() =
   [<Fact>]
   member _.``GetMigrationByName returns migration when it exists in specified project``
     ()
-    =
-    task {
-      let ct = CancellationToken.None
-      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+    = task {
+    let ct = CancellationToken.None
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 
-      use conn = connectionFactory()
+    use conn = connectionFactory()
 
-      let projectId =
-        TestHelpers.insertVirtualProject
-          conn
-          "TestProject1"
-          "Data Source=:memory:"
-
-      TestHelpers.insertMigration
+    let projectId =
+      TestHelpers.insertVirtualProject
         conn
-        projectId
-        "create_users_table"
-        timestamp
-        "CREATE TABLE users (id INTEGER PRIMARY KEY);"
-        "DROP TABLE users;"
-      |> ignore
+        "TestProject1"
+        "Data Source=:memory:"
 
-      let! result =
-        vProjects.GetMigrationByName projectId "create_users_table" ct
+    TestHelpers.insertMigration
+      conn
+      projectId
+      "create_users_table"
+      timestamp
+      "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+      "DROP TABLE users;"
+    |> ignore
 
-      Assert.True(result.IsSome, "Migration should be found")
-      Assert.Equal("create_users_table", result.Value.name)
-      Assert.Equal(projectId, result.Value.projectId)
-    }
+    let! result = vProjects.GetMigrationByName projectId "create_users_table" ct
+
+    Assert.True(result.IsSome, "Migration should be found")
+    Assert.Equal("create_users_table", result.Value.name)
+    Assert.Equal(projectId, result.Value.projectId)
+  }
 
   [<Fact>]
   member _.``GetMigrationByName returns None when migration exists in different project``
     ()
-    =
-    task {
-      let ct = CancellationToken.None
-      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+    = task {
+    let ct = CancellationToken.None
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 
-      use conn = connectionFactory()
+    use conn = connectionFactory()
 
-      let projectId1 =
-        TestHelpers.insertVirtualProject
-          conn
-          "TestProject1"
-          "Data Source=:memory:"
-
-      let projectId2 =
-        TestHelpers.insertVirtualProject
-          conn
-          "TestProject2"
-          "Data Source=:memory:"
-
-      TestHelpers.insertMigration
+    let projectId1 =
+      TestHelpers.insertVirtualProject
         conn
-        projectId1
-        "create_users_table"
-        timestamp
-        "CREATE TABLE users (id INTEGER PRIMARY KEY);"
-        "DROP TABLE users;"
-      |> ignore
+        "TestProject1"
+        "Data Source=:memory:"
 
-      let! result =
-        vProjects.GetMigrationByName projectId2 "create_users_table" ct
+    let projectId2 =
+      TestHelpers.insertVirtualProject
+        conn
+        "TestProject2"
+        "Data Source=:memory:"
 
-      Assert.True(
-        result.IsNone,
-        "Migration should not be found in different project"
-      )
-    }
+    TestHelpers.insertMigration
+      conn
+      projectId1
+      "create_users_table"
+      timestamp
+      "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+      "DROP TABLE users;"
+    |> ignore
+
+    let! result =
+      vProjects.GetMigrationByName projectId2 "create_users_table" ct
+
+    Assert.True(
+      result.IsNone,
+      "Migration should not be found in different project"
+    )
+  }
 
   [<Fact>]
   member _.``GetMigrationByName returns correct migration when both projects have same name``
     ()
-    =
-    task {
-      let ct = CancellationToken.None
-      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-
-      use conn = connectionFactory()
-
-      let projectId1 =
-        TestHelpers.insertVirtualProject
-          conn
-          "TestProject1"
-          "Data Source=:memory:"
-
-      let projectId2 =
-        TestHelpers.insertVirtualProject
-          conn
-          "TestProject2"
-          "Data Source=:memory:"
-
-      TestHelpers.insertMigration
-        conn
-        projectId1
-        "create_users_table"
-        timestamp
-        "CREATE TABLE users (id INTEGER PRIMARY KEY);"
-        "DROP TABLE users;"
-      |> ignore
-
-      TestHelpers.insertMigration
-        conn
-        projectId2
-        "create_users_table"
-        timestamp
-        "CREATE TABLE users (id INTEGER, name TEXT);"
-        "DROP TABLE users;"
-      |> ignore
-
-      let! result1 =
-        vProjects.GetMigrationByName projectId1 "create_users_table" ct
-
-      let! result2 =
-        vProjects.GetMigrationByName projectId2 "create_users_table" ct
-
-      Assert.True(result1.IsSome, "Migration should be found in project 1")
-      Assert.True(result2.IsSome, "Migration should be found in project 2")
-
-      Assert.Equal(
-        "CREATE TABLE users (id INTEGER PRIMARY KEY);",
-        result1.Value.upContent
-      )
-
-      Assert.Equal(
-        "CREATE TABLE users (id INTEGER, name TEXT);",
-        result2.Value.upContent
-      )
-    }
-
-  [<Fact>]
-  member _.``UpdateMigration updates migration in correct project only``() = task {
+    = task {
     let ct = CancellationToken.None
     let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
 
@@ -356,21 +295,9 @@ type VirtualProjectRepositoryTests() =
       projectId2
       "create_users_table"
       timestamp
-      "CREATE TABLE users (id INTEGER);"
+      "CREATE TABLE users (id INTEGER, name TEXT);"
       "DROP TABLE users;"
     |> ignore
-
-    let updatedMigration: VirtualMigration = {
-      id = Guid.NewGuid()
-      name = "create_users_table"
-      timestamp = timestamp
-      upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);"
-      downContent = "DROP TABLE users;"
-      projectId = projectId1
-      manualTransaction = false
-    }
-
-    do! vProjects.UpdateMigration updatedMigration ct
 
     let! result1 =
       vProjects.GetMigrationByName projectId1 "create_users_table" ct
@@ -378,18 +305,22 @@ type VirtualProjectRepositoryTests() =
     let! result2 =
       vProjects.GetMigrationByName projectId2 "create_users_table" ct
 
+    Assert.True(result1.IsSome, "Migration should be found in project 1")
+    Assert.True(result2.IsSome, "Migration should be found in project 2")
+
     Assert.Equal(
-      "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);",
+      "CREATE TABLE users (id INTEGER PRIMARY KEY);",
       result1.Value.upContent
     )
 
-    Assert.Equal("CREATE TABLE users (id INTEGER);", result2.Value.upContent)
+    Assert.Equal(
+      "CREATE TABLE users (id INTEGER, name TEXT);",
+      result2.Value.upContent
+    )
   }
 
   [<Fact>]
-  member _.``RemoveMigrationByName deletes migration in correct project only``
-    ()
-    =
+  member _.``UpdateMigration updates migration in correct project only``() =
     task {
       let ct = CancellationToken.None
       let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
@@ -426,7 +357,17 @@ type VirtualProjectRepositoryTests() =
         "DROP TABLE users;"
       |> ignore
 
-      do! vProjects.RemoveMigrationByName projectId1 "create_users_table" ct
+      let updatedMigration: VirtualMigration = {
+        id = Guid.NewGuid()
+        name = "create_users_table"
+        timestamp = timestamp
+        upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);"
+        downContent = "DROP TABLE users;"
+        projectId = projectId1
+        manualTransaction = false
+      }
+
+      do! vProjects.UpdateMigration updatedMigration ct
 
       let! result1 =
         vProjects.GetMigrationByName projectId1 "create_users_table" ct
@@ -434,6 +375,61 @@ type VirtualProjectRepositoryTests() =
       let! result2 =
         vProjects.GetMigrationByName projectId2 "create_users_table" ct
 
-      Assert.True(result1.IsNone, "Migration should be deleted from project 1")
-      Assert.True(result2.IsSome, "Migration should still exist in project 2")
+      Assert.Equal(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);",
+        result1.Value.upContent
+      )
+
+      Assert.Equal("CREATE TABLE users (id INTEGER);", result2.Value.upContent)
     }
+
+  [<Fact>]
+  member _.``RemoveMigrationByName deletes migration in correct project only``
+    ()
+    = task {
+    let ct = CancellationToken.None
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+    use conn = connectionFactory()
+
+    let projectId1 =
+      TestHelpers.insertVirtualProject
+        conn
+        "TestProject1"
+        "Data Source=:memory:"
+
+    let projectId2 =
+      TestHelpers.insertVirtualProject
+        conn
+        "TestProject2"
+        "Data Source=:memory:"
+
+    TestHelpers.insertMigration
+      conn
+      projectId1
+      "create_users_table"
+      timestamp
+      "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+      "DROP TABLE users;"
+    |> ignore
+
+    TestHelpers.insertMigration
+      conn
+      projectId2
+      "create_users_table"
+      timestamp
+      "CREATE TABLE users (id INTEGER);"
+      "DROP TABLE users;"
+    |> ignore
+
+    do! vProjects.RemoveMigrationByName projectId1 "create_users_table" ct
+
+    let! result1 =
+      vProjects.GetMigrationByName projectId1 "create_users_table" ct
+
+    let! result2 =
+      vProjects.GetMigrationByName projectId2 "create_users_table" ct
+
+    Assert.True(result1.IsNone, "Migration should be deleted from project 1")
+    Assert.True(result2.IsSome, "Migration should still exist in project 2")
+  }

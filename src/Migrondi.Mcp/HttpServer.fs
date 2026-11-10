@@ -99,83 +99,80 @@ module private HttpServerHelpers =
     (loggerFactory: ILoggerFactory)
     (serviceProvider: IServiceProvider)
     (cts: CancellationTokenSource)
-    : Task<unit> =
-    task {
-      let sessionId = getSessionId context
+    : Task<unit> = task {
+    let sessionId = getSessionId context
 
-      try
-        let session =
-          match sessionId with
-          | Some id ->
-            match getSession sessions id with
-            | Some s -> s
-            | None ->
-              createSession serverOptions loggerFactory serviceProvider cts
+    try
+      let session =
+        match sessionId with
+        | Some id ->
+          match getSession sessions id with
+          | Some s -> s
           | None ->
             createSession serverOptions loggerFactory serviceProvider cts
+        | None -> createSession serverOptions loggerFactory serviceProvider cts
 
-        sessions[session.id] <- session
+      sessions[session.id] <- session
 
-        use stream = context.Request.InputStream
-        use reader = new IO.StreamReader(stream)
-        let! body = reader.ReadToEndAsync(cts.Token)
+      use stream = context.Request.InputStream
+      use reader = new IO.StreamReader(stream)
+      let! body = reader.ReadToEndAsync(cts.Token)
 
-        let message =
-          System.Text.Json.JsonSerializer.Deserialize<JsonRpcMessage>(
-            body,
-            McpJsonUtilities.DefaultOptions
+      let message =
+        System.Text.Json.JsonSerializer.Deserialize<JsonRpcMessage>(
+          body,
+          McpJsonUtilities.DefaultOptions
+        )
+
+      match message with
+      | null -> sendError context 400 "Invalid JSON-RPC message"
+      | msg ->
+        context.Response.Headers.Add("Mcp-Session-Id", session.id)
+        use responseStream = context.Response.OutputStream
+
+        let! wroteResponse =
+          session.transport.HandlePostRequestAsync(
+            msg,
+            responseStream,
+            cts.Token
           )
 
-        match message with
-        | null -> sendError context 400 "Invalid JSON-RPC message"
-        | msg ->
-          context.Response.Headers.Add("Mcp-Session-Id", session.id)
-          use responseStream = context.Response.OutputStream
-
-          let! wroteResponse =
-            session.transport.HandlePostRequestAsync(
-              msg,
-              responseStream,
-              cts.Token
-            )
-
-          if not wroteResponse then
-            context.Response.StatusCode <- 202
-            context.Response.Close()
-      with ex ->
-        sendError context 500 $"Internal server error: {ex.Message}"
-    }
+        if not wroteResponse then
+          context.Response.StatusCode <- 202
+          context.Response.Close()
+    with ex ->
+      sendError context 500 $"Internal server error: {ex.Message}"
+  }
 
   let handleGetRequest
     (context: Net.HttpListenerContext)
     (sessions: ConcurrentDictionary<string, McpHttpSession>)
     (cts: CancellationTokenSource)
-    : Task<unit> =
-    task {
-      let sessionId = getSessionId context
+    : Task<unit> = task {
+    let sessionId = getSessionId context
 
-      match sessionId with
-      | None -> sendError context 400 "Mcp-Session-Id header is required"
-      | Some id ->
-        match getSession sessions id with
-        | None ->
-          context.Response.StatusCode <- 404
-          context.Response.Close()
-        | Some session ->
-          context.Response.Headers.Add("Mcp-Session-Id", session.id)
-          context.Response.ContentType <- "text/event-stream"
-          context.Response.Headers.Add("Cache-Control", "no-cache")
+    match sessionId with
+    | None -> sendError context 400 "Mcp-Session-Id header is required"
+    | Some id ->
+      match getSession sessions id with
+      | None ->
+        context.Response.StatusCode <- 404
+        context.Response.Close()
+      | Some session ->
+        context.Response.Headers.Add("Mcp-Session-Id", session.id)
+        context.Response.ContentType <- "text/event-stream"
+        context.Response.Headers.Add("Cache-Control", "no-cache")
 
-          try
-            do!
-              session.transport.HandleGetRequestAsync(
-                context.Response.OutputStream,
-                cts.Token
-              )
-          with
-          | :? OperationCanceledException -> ()
-          | _ -> ()
-    }
+        try
+          do!
+            session.transport.HandleGetRequestAsync(
+              context.Response.OutputStream,
+              cts.Token
+            )
+        with
+        | :? OperationCanceledException -> ()
+        | _ -> ()
+  }
 
   let handleDeleteRequest
     (context: Net.HttpListenerContext)
@@ -284,7 +281,8 @@ module HttpServer =
     (serviceProvider: IServiceProvider)
     : IMcpHttpServer =
 
-    { new IMcpHttpServer with
+    {
+      new IMcpHttpServer with
         member _.Run(ct: CancellationToken) : Task<unit> =
           runHttpServer port serverOptions loggerFactory serviceProvider ct
     }

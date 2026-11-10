@@ -165,38 +165,38 @@ type MigrondiFactoryTests() =
   member _.``MigrondiFactory preserves virtual URI scheme migrondi-ui``() =
     let mutable receivedUri: Uri option = None
 
-    let mockSource =
-      { new IMiMigrationSource with
-          member _.ReadContent(uri: Uri) =
-            receivedUri <- Some uri
-            ""
+    let mockSource = {
+      new IMiMigrationSource with
+        member _.ReadContent(uri: Uri) =
+          receivedUri <- Some uri
+          ""
 
-          member _.ReadContentAsync(uri: Uri, ?cancellationToken) =
-            receivedUri <- Some uri
-            Task.FromResult("")
+        member _.ReadContentAsync(uri: Uri, ?cancellationToken) =
+          receivedUri <- Some uri
+          Task.FromResult("")
 
-          member _.WriteContent(uri: Uri, content: string) =
-            receivedUri <- Some uri
+        member _.WriteContent(uri: Uri, content: string) =
+          receivedUri <- Some uri
 
-          member _.WriteContentAsync
-            (
-              uri: Uri,
-              content: string,
-              ?cancellationToken: Threading.CancellationToken
-            ) =
-            receivedUri <- Some uri
-            Task.CompletedTask
+        member _.WriteContentAsync
+          (
+            uri: Uri,
+            content: string,
+            ?cancellationToken: Threading.CancellationToken
+          ) =
+          receivedUri <- Some uri
+          Task.CompletedTask
 
-          member _.ListFiles(locationUri: Uri) =
-            receivedUri <- Some locationUri
-            Seq.empty
+        member _.ListFiles(locationUri: Uri) =
+          receivedUri <- Some locationUri
+          Seq.empty
 
-          member _.ListFilesAsync
-            (locationUri: Uri, ?cancellationToken: Threading.CancellationToken)
-            =
-            receivedUri <- Some locationUri
-            Task.FromResult(Seq.empty :> Uri seq)
-      }
+        member _.ListFilesAsync
+          (locationUri: Uri, ?cancellationToken: Threading.CancellationToken)
+          =
+          receivedUri <- Some locationUri
+          Task.FromResult(Seq.empty :> Uri seq)
+    }
 
     let rootDir = "migrondi-ui://projects/virtual/test-123/"
 
@@ -237,38 +237,38 @@ type MigrondiFactoryTests() =
   member _.``MigrondiFactory preserves https URI scheme``() =
     let mutable receivedUri: Uri option = None
 
-    let mockSource =
-      { new IMiMigrationSource with
-          member _.ReadContent(uri: Uri) =
-            receivedUri <- Some uri
-            ""
+    let mockSource = {
+      new IMiMigrationSource with
+        member _.ReadContent(uri: Uri) =
+          receivedUri <- Some uri
+          ""
 
-          member _.ReadContentAsync(uri: Uri, ?cancellationToken) =
-            receivedUri <- Some uri
-            Task.FromResult("")
+        member _.ReadContentAsync(uri: Uri, ?cancellationToken) =
+          receivedUri <- Some uri
+          Task.FromResult("")
 
-          member _.WriteContent(uri: Uri, content: string) =
-            receivedUri <- Some uri
+        member _.WriteContent(uri: Uri, content: string) =
+          receivedUri <- Some uri
 
-          member _.WriteContentAsync
-            (
-              uri: Uri,
-              content: string,
-              ?cancellationToken: Threading.CancellationToken
-            ) =
-            receivedUri <- Some uri
-            Task.CompletedTask
+        member _.WriteContentAsync
+          (
+            uri: Uri,
+            content: string,
+            ?cancellationToken: Threading.CancellationToken
+          ) =
+          receivedUri <- Some uri
+          Task.CompletedTask
 
-          member _.ListFiles(locationUri: Uri) =
-            receivedUri <- Some locationUri
-            Seq.empty
+        member _.ListFiles(locationUri: Uri) =
+          receivedUri <- Some locationUri
+          Seq.empty
 
-          member _.ListFilesAsync
-            (locationUri: Uri, ?cancellationToken: Threading.CancellationToken)
-            =
-            receivedUri <- Some locationUri
-            Task.FromResult(Seq.empty :> Uri seq)
-      }
+        member _.ListFilesAsync
+          (locationUri: Uri, ?cancellationToken: Threading.CancellationToken)
+          =
+          receivedUri <- Some locationUri
+          Task.FromResult(Seq.empty :> Uri seq)
+    }
 
     let rootDir = "https://example.com/migrations/"
 

@@ -278,178 +278,7 @@ type VirtualFsTests() =
       masterConnection.Dispose()
 
   [<Fact>]
-  member _.``ReadContentAsync reads migration from correct project only``() = task {
-    let ct = CancellationToken.None
-    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-
-    use conn = connectionFactory()
-
-    let projectId1 =
-      TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
-
-    let projectId2 =
-      TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
-
-    TestHelpers.insertMigration
-      conn
-      projectId1
-      "create_users"
-      timestamp
-      "CREATE TABLE users (id INTEGER PRIMARY KEY);"
-      "DROP TABLE users;"
-    |> ignore
-
-    TestHelpers.insertMigration
-      conn
-      projectId2
-      "create_users"
-      timestamp
-      "CREATE TABLE users (id INTEGER, name TEXT);"
-      "DROP TABLE users;"
-    |> ignore
-
-    let uri1 =
-      Uri(
-        $"migrondi-ui://projects/virtual/{projectId1}/{timestamp}_create_users.sql"
-      )
-
-    let uri2 =
-      Uri(
-        $"migrondi-ui://projects/virtual/{projectId2}/{timestamp}_create_users.sql"
-      )
-
-    let! content1 = vfs.ReadContentAsync(uri1, ct)
-    let! content2 = vfs.ReadContentAsync(uri2, ct)
-
-    Assert.Contains("CREATE TABLE users (id INTEGER PRIMARY KEY);", content1)
-    Assert.Contains("CREATE TABLE users (id INTEGER, name TEXT);", content2)
-  }
-
-  [<Fact>]
-  member _.``WriteContentAsync updates migration in correct project only``() = task {
-    let ct = CancellationToken.None
-    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-
-    use conn = connectionFactory()
-
-    let projectId1 =
-      TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
-
-    let projectId2 =
-      TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
-
-    TestHelpers.insertMigration
-      conn
-      projectId1
-      "create_users"
-      timestamp
-      "CREATE TABLE users (id INTEGER PRIMARY KEY);"
-      "DROP TABLE users;"
-    |> ignore
-
-    TestHelpers.insertMigration
-      conn
-      projectId2
-      "create_users"
-      timestamp
-      "CREATE TABLE users (id INTEGER);"
-      "DROP TABLE users;"
-    |> ignore
-
-    let uri1 =
-      Uri(
-        $"migrondi-ui://projects/virtual/{projectId1}/{timestamp}_create_users.sql"
-      )
-
-    let updatedContent =
-      MiSerializer.Encode {
-        name = "create_users"
-        timestamp = timestamp
-        upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);"
-        downContent = "DROP TABLE users;"
-        manualTransaction = false
-      }
-
-    do! vfs.WriteContentAsync(uri1, updatedContent, ct)
-
-    let migration1 =
-      TestHelpers.getMigrationByName conn projectId1 "create_users"
-
-    let migration2 =
-      TestHelpers.getMigrationByName conn projectId2 "create_users"
-
-    Assert.Equal(
-      "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);",
-      migration1.Value.upContent
-    )
-
-    Assert.Equal("CREATE TABLE users (id INTEGER);", migration2.Value.upContent)
-  }
-
-  [<Fact>]
-  member _.``WriteContentAsync updates existing migration instead of inserting duplicate``
-    ()
-    =
-    task {
-      let ct = CancellationToken.None
-      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-
-      use conn = connectionFactory()
-
-      let projectId =
-        TestHelpers.insertVirtualProject
-          conn
-          "UpdateTest"
-          "Data Source=:memory:"
-
-      TestHelpers.insertMigration
-        conn
-        projectId
-        "update_test"
-        timestamp
-        "CREATE TABLE users (id INTEGER PRIMARY KEY);"
-        "DROP TABLE users;"
-      |> ignore
-
-      let migrationUri =
-        Uri(
-          $"migrondi-ui://projects/virtual/{projectId}/{timestamp}_update_test.sql"
-        )
-
-      let updatedContent =
-        MiSerializer.Encode {
-          name = "update_test"
-          timestamp = timestamp
-          upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);"
-          downContent = "DROP TABLE users;"
-          manualTransaction = false
-        }
-
-      do! vfs.WriteContentAsync(migrationUri, updatedContent, ct)
-
-      let migrations = TestHelpers.getMigrations conn projectId
-
-      Assert.True(
-        migrations.Length = 1,
-        $"Expected 1 migration after update, but found {migrations.Length}. This indicates WriteContentAsync inserted a duplicate instead of updating."
-      )
-
-      let updatedMigration =
-        TestHelpers.getMigrationByName conn projectId "update_test"
-
-      match updatedMigration with
-      | Some m ->
-        Assert.Equal(
-          "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
-          m.upContent
-        )
-      | None -> Assert.Fail "Migration should exist after update"
-    }
-
-  [<Fact>]
-  member _.``ReadContentAsync returns not found when migration exists in different project``
-    ()
-    =
+  member _.``ReadContentAsync reads migration from correct project only``() =
     task {
       let ct = CancellationToken.None
       let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
@@ -471,14 +300,185 @@ type VirtualFsTests() =
         "DROP TABLE users;"
       |> ignore
 
+      TestHelpers.insertMigration
+        conn
+        projectId2
+        "create_users"
+        timestamp
+        "CREATE TABLE users (id INTEGER, name TEXT);"
+        "DROP TABLE users;"
+      |> ignore
+
+      let uri1 =
+        Uri(
+          $"migrondi-ui://projects/virtual/{projectId1}/{timestamp}_create_users.sql"
+        )
+
       let uri2 =
         Uri(
           $"migrondi-ui://projects/virtual/{projectId2}/{timestamp}_create_users.sql"
         )
 
-      let! ex =
-        Assert.ThrowsAsync<Exception>(fun () ->
-          vfs.ReadContentAsync(uri2, ct) :> Task)
+      let! content1 = vfs.ReadContentAsync(uri1, ct)
+      let! content2 = vfs.ReadContentAsync(uri2, ct)
 
-      Assert.Contains("not found", ex.Message.ToLower())
+      Assert.Contains("CREATE TABLE users (id INTEGER PRIMARY KEY);", content1)
+      Assert.Contains("CREATE TABLE users (id INTEGER, name TEXT);", content2)
     }
+
+  [<Fact>]
+  member _.``WriteContentAsync updates migration in correct project only``() =
+    task {
+      let ct = CancellationToken.None
+      let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+      use conn = connectionFactory()
+
+      let projectId1 =
+        TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
+
+      let projectId2 =
+        TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
+
+      TestHelpers.insertMigration
+        conn
+        projectId1
+        "create_users"
+        timestamp
+        "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+        "DROP TABLE users;"
+      |> ignore
+
+      TestHelpers.insertMigration
+        conn
+        projectId2
+        "create_users"
+        timestamp
+        "CREATE TABLE users (id INTEGER);"
+        "DROP TABLE users;"
+      |> ignore
+
+      let uri1 =
+        Uri(
+          $"migrondi-ui://projects/virtual/{projectId1}/{timestamp}_create_users.sql"
+        )
+
+      let updatedContent =
+        MiSerializer.Encode {
+          name = "create_users"
+          timestamp = timestamp
+          upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);"
+          downContent = "DROP TABLE users;"
+          manualTransaction = false
+        }
+
+      do! vfs.WriteContentAsync(uri1, updatedContent, ct)
+
+      let migration1 =
+        TestHelpers.getMigrationByName conn projectId1 "create_users"
+
+      let migration2 =
+        TestHelpers.getMigrationByName conn projectId2 "create_users"
+
+      Assert.Equal(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);",
+        migration1.Value.upContent
+      )
+
+      Assert.Equal(
+        "CREATE TABLE users (id INTEGER);",
+        migration2.Value.upContent
+      )
+    }
+
+  [<Fact>]
+  member _.``WriteContentAsync updates existing migration instead of inserting duplicate``
+    ()
+    = task {
+    let ct = CancellationToken.None
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+    use conn = connectionFactory()
+
+    let projectId =
+      TestHelpers.insertVirtualProject conn "UpdateTest" "Data Source=:memory:"
+
+    TestHelpers.insertMigration
+      conn
+      projectId
+      "update_test"
+      timestamp
+      "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+      "DROP TABLE users;"
+    |> ignore
+
+    let migrationUri =
+      Uri(
+        $"migrondi-ui://projects/virtual/{projectId}/{timestamp}_update_test.sql"
+      )
+
+    let updatedContent =
+      MiSerializer.Encode {
+        name = "update_test"
+        timestamp = timestamp
+        upContent = "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);"
+        downContent = "DROP TABLE users;"
+        manualTransaction = false
+      }
+
+    do! vfs.WriteContentAsync(migrationUri, updatedContent, ct)
+
+    let migrations = TestHelpers.getMigrations conn projectId
+
+    Assert.True(
+      migrations.Length = 1,
+      $"Expected 1 migration after update, but found {migrations.Length}. This indicates WriteContentAsync inserted a duplicate instead of updating."
+    )
+
+    let updatedMigration =
+      TestHelpers.getMigrationByName conn projectId "update_test"
+
+    match updatedMigration with
+    | Some m ->
+      Assert.Equal(
+        "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);",
+        m.upContent
+      )
+    | None -> Assert.Fail "Migration should exist after update"
+  }
+
+  [<Fact>]
+  member _.``ReadContentAsync returns not found when migration exists in different project``
+    ()
+    = task {
+    let ct = CancellationToken.None
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+
+    use conn = connectionFactory()
+
+    let projectId1 =
+      TestHelpers.insertVirtualProject conn "Project1" "Data Source=:memory:"
+
+    let projectId2 =
+      TestHelpers.insertVirtualProject conn "Project2" "Data Source=:memory:"
+
+    TestHelpers.insertMigration
+      conn
+      projectId1
+      "create_users"
+      timestamp
+      "CREATE TABLE users (id INTEGER PRIMARY KEY);"
+      "DROP TABLE users;"
+    |> ignore
+
+    let uri2 =
+      Uri(
+        $"migrondi-ui://projects/virtual/{projectId2}/{timestamp}_create_users.sql"
+      )
+
+    let! ex =
+      Assert.ThrowsAsync<Exception>(fun () ->
+        vfs.ReadContentAsync(uri2, ct) :> Task)
+
+    Assert.Contains("not found", ex.Message.ToLower())
+  }

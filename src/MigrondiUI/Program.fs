@@ -24,9 +24,11 @@ open MigrondiUI.Views.Routes
 Log.Logger <-
   LoggerConfiguration()
 #if DEBUG
-    .MinimumLevel.Debug()
+    .MinimumLevel
+    .Debug()
 #else
-    .MinimumLevel.Information()
+    .MinimumLevel
+    .Information()
 #endif
     .WriteTo.Console()
     .CreateLogger()

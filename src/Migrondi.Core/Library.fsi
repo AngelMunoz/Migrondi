@@ -12,7 +12,8 @@ module internal Matcher =
     /// This is currently deprecated, don't use this to validate your names.
     /// Please check out the V1 module for the current schema
     [<Literal>]
-    val MigrationNameSchema: string = "^(?<Name>.+)_(?<Timestamp>[0-9]+).(sql|SQL)$"
+    val MigrationNameSchema: string =
+      "^(?<Name>.+)_(?<Timestamp>[0-9]+).(sql|SQL)$"
 
     val reg: Lazy<System.Text.RegularExpressions.Regex>
 
@@ -21,7 +22,8 @@ module internal Matcher =
     /// have to have this REGEX in mind when creating migration in custom implementations
     /// of the  <see cref="Migrondi.Core.FileSystem.IMiFileSystem">FileSystem</see> type
     [<Literal>]
-    val MigrationNameSchema: string = "^(?<Timestamp>[0-9]+)_(?<Name>.+).(sql|SQL)$"
+    val MigrationNameSchema: string =
+      "^(?<Timestamp>[0-9]+)_(?<Name>.+).(sql|SQL)$"
 
     val reg: Lazy<System.Text.RegularExpressions.Regex>
 

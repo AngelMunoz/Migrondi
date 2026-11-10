@@ -38,12 +38,11 @@ module Cli =
 
     static member GetOptions
       (results: ParseResults<NewArgs>, ?noColor: bool, ?asJson: bool)
-      : NewOptions =
-      {
-        name = results.GetResult(Name)
-        noColor = defaultArg noColor false
-        json = defaultArg asJson false
-      }
+      : NewOptions = {
+      name = results.GetResult(Name)
+      noColor = defaultArg noColor false
+      json = defaultArg asJson false
+    }
 
   [<RequireQualifiedAccess>]
   type UpArgs =
@@ -59,14 +58,12 @@ module Cli =
 
     static member GetOptions
       (results: ParseResults<UpArgs>, ?noColor: bool, ?asJson: bool)
-      : UpOptions =
-      {
-        total = defaultArg (results.TryGetResult(Total) |> Option.flatten) 0
-        dryRun =
-          defaultArg (results.TryGetResult(Dry_Run) |> Option.flatten) true
-        noColor = defaultArg noColor false
-        json = defaultArg asJson false
-      }
+      : UpOptions = {
+      total = defaultArg (results.TryGetResult(Total) |> Option.flatten) 0
+      dryRun = defaultArg (results.TryGetResult(Dry_Run) |> Option.flatten) true
+      noColor = defaultArg noColor false
+      json = defaultArg asJson false
+    }
 
   [<RequireQualifiedAccess>]
   type DownArgs =
@@ -82,14 +79,12 @@ module Cli =
 
     static member GetOptions
       (results: ParseResults<DownArgs>, ?noColor: bool, ?asJson: bool)
-      : DownOptions =
-      {
-        total = defaultArg (results.TryGetResult(Total) |> Option.flatten) 0
-        dryRun =
-          defaultArg (results.TryGetResult(Dry_Run) |> Option.flatten) true
-        noColor = defaultArg noColor false
-        json = defaultArg asJson false
-      }
+      : DownOptions = {
+      total = defaultArg (results.TryGetResult(Total) |> Option.flatten) 0
+      dryRun = defaultArg (results.TryGetResult(Dry_Run) |> Option.flatten) true
+      noColor = defaultArg noColor false
+      json = defaultArg asJson false
+    }
 
   [<RequireQualifiedAccess>]
   type ListArgs =
@@ -105,16 +100,15 @@ module Cli =
 
     static member GetOptions
       (results: ParseResults<ListArgs>, ?noColor: bool, ?asJson: bool)
-      : ListOptions =
-      {
-        amount = defaultArg (results.TryGetResult(Amount) |> Option.flatten) -1
-        listKind =
-          defaultArg
-            (results.TryGetResult(Kind) |> Option.flatten)
-            MigrationListEnum.Pending
-        noColor = defaultArg noColor false
-        json = defaultArg asJson false
-      }
+      : ListOptions = {
+      amount = defaultArg (results.TryGetResult(Amount) |> Option.flatten) -1
+      listKind =
+        defaultArg
+          (results.TryGetResult(Kind) |> Option.flatten)
+          MigrationListEnum.Pending
+      noColor = defaultArg noColor false
+      json = defaultArg asJson false
+    }
 
   type StatusArgs =
     | [<AltCommandLine("-n"); Mandatory>] Name of string
@@ -126,12 +120,11 @@ module Cli =
 
     static member GetOptions
       (results: ParseResults<StatusArgs>, ?noColor: bool, ?asJson: bool)
-      : StatusOptions =
-      {
-        filename = results.GetResult(Name)
-        noColor = defaultArg noColor false
-        json = defaultArg asJson false
-      }
+      : StatusOptions = {
+      filename = results.GetResult(Name)
+      noColor = defaultArg noColor false
+      json = defaultArg asJson false
+    }
 
   type MigrondiArgs =
     | [<CliPrefix(CliPrefix.None)>] Init of ParseResults<InitArgs>

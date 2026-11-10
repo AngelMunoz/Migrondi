@@ -114,7 +114,7 @@ type EditableMigrationView
     UserControl()
       .Content(
         isDirty
-        |> AVal.map (function
+        |> AVal.map(function
           | true ->
             saveMigrationBtn(fun () -> asyncEx {
 

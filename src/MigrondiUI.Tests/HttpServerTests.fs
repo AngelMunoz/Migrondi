@@ -14,7 +14,7 @@ open Xunit
 open MigrondiUI.Mcp
 
 let private freePort() =
-  let listener = TcpListener(IPAddress.Loopback, 0)
+  let listener = new TcpListener(IPAddress.Loopback, 0)
   listener.Start()
   let port = (listener.LocalEndpoint :?> IPEndPoint).Port
   listener.Stop()

@@ -54,62 +54,59 @@ To implement a custom storage backend, you implement the `IMiMigrationSource` in
 Using an object expression is the recommended way to implement this interface:
 *)
 
-let createCustomSource(logger: ILogger) =
-  { new IMiMigrationSource with
-      member _.ReadContent(uri: Uri) =
-        logger.LogDebug("Reading content from {Path}", uri.ToString())
-        // Implement your sync read logic here
-        "SQL CONTENT"
+let createCustomSource(logger: ILogger) = {
+  new IMiMigrationSource with
+    member _.ReadContent(uri: Uri) =
+      logger.LogDebug("Reading content from {Path}", uri.ToString())
+      // Implement your sync read logic here
+      "SQL CONTENT"
 
-      member _.ReadContentAsync
-        (uri: Uri, [<Optional>] ?cancellationToken: CancellationToken)
-        =
-        task {
-          logger.LogDebug(
-            "Reading content asynchronously from {Path}",
-            uri.ToString()
-          )
-          // Implement your async read logic here
-          return "SQL CONTENT"
-        }
+    member _.ReadContentAsync
+      (uri: Uri, [<Optional>] ?cancellationToken: CancellationToken)
+      = task {
+      logger.LogDebug(
+        "Reading content asynchronously from {Path}",
+        uri.ToString()
+      )
+      // Implement your async read logic here
+      return "SQL CONTENT"
+    }
 
-      member _.WriteContent(uri: Uri, content: string) =
-        logger.LogDebug("Writing content to {Path}", uri.ToString())
-        // Implement your sync write logic here
-        ()
+    member _.WriteContent(uri: Uri, content: string) =
+      logger.LogDebug("Writing content to {Path}", uri.ToString())
+      // Implement your sync write logic here
+      ()
 
-      member _.WriteContentAsync
-        (
-          uri: Uri,
-          content: string,
-          [<Optional>] ?cancellationToken: CancellationToken
-        ) =
-        task {
-          logger.LogDebug(
-            "Writing content asynchronously to {Path}",
-            uri.ToString()
-          )
-          // Implement your async write logic here
-          ()
-        }
+    member _.WriteContentAsync
+      (
+        uri: Uri,
+        content: string,
+        [<Optional>] ?cancellationToken: CancellationToken
+      ) = task {
+      logger.LogDebug(
+        "Writing content asynchronously to {Path}",
+        uri.ToString()
+      )
+      // Implement your async write logic here
+      ()
+    }
 
-      member _.ListFiles(locationUri: Uri) =
-        logger.LogDebug("Listing files in {Path}", locationUri.ToString())
-        // Return a sequence of URIs for migrations at this location
-        Seq.empty
+    member _.ListFiles(locationUri: Uri) =
+      logger.LogDebug("Listing files in {Path}", locationUri.ToString())
+      // Return a sequence of URIs for migrations at this location
+      Seq.empty
 
-      member _.ListFilesAsync
-        (locationUri: Uri, [<Optional>] ?cancellationToken: CancellationToken)
-        =
-        task {
-          logger.LogDebug(
-            "Listing files asynchronously in {Path}",
-            locationUri.ToString()
-          )
-          // Return URIs asynchronously
-          return Seq.empty
-        }
-  }
+    member _.ListFilesAsync
+      (locationUri: Uri, [<Optional>] ?cancellationToken: CancellationToken)
+      = task {
+      logger.LogDebug(
+        "Listing files asynchronously in {Path}",
+        locationUri.ToString()
+      )
+      // Return URIs asynchronously
+      return Seq.empty
+    }
+}
 
 (**
 ## Usage with MigrondiFactory

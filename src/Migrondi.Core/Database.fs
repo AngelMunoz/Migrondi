@@ -509,71 +509,44 @@ module MigrationsAsyncImpl =
     (connection: DbConnection) // Changed IDbConnection to DbConnection
     (driver: MigrondiDriver)
     (tableName: string)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
+    = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
 
-      try
-        use command = connection.CreateCommand()
-        command.CommandText <- Queries.createTable driver tableName
-        do! command.ExecuteNonQueryAsync(token) :> Task
+    try
+      use command = connection.CreateCommand()
+      command.CommandText <- Queries.createTable driver tableName
+      do! command.ExecuteNonQueryAsync(token) :> Task
 
+      return ()
+    with ex ->
+      if
+        ex.Message.Contains(
+          "already exists",
+          StringComparison.InvariantCultureIgnoreCase
+        )
+      then
         return ()
-      with ex ->
-        if
-          ex.Message.Contains(
-            "already exists",
-            StringComparison.InvariantCultureIgnoreCase
-          )
-        then
-          return ()
-        else
-          reriseCustom(SetupDatabaseFailed)
-    }
-
-  let findMigrationAsync (connection: DbConnection) tableName name = cancellableTask { // Changed signature
-    let! token = CancellableTask.getCancellationToken() // Get token from context
-    use command = connection.CreateCommand()
-
-    command.CommandText <-
-      $"SELECT id, name, timestamp FROM %s{tableName} WHERE name = @name"
-
-    let param = command.CreateParameter()
-    param.ParameterName <- "@name"
-    param.Value <- name
-    command.Parameters.Add(param) |> ignore
-
-    use! reader = command.ExecuteReaderAsync(token) // Use token
-    let! result = reader.ReadAsync(token) // Use token
-
-    if result then
-      return
-        Some {
-          id = reader.GetInt32(0)
-          name = reader.GetString(1)
-          timestamp = reader.GetInt64(2)
-        }
-    else
-      return None
+      else
+        reriseCustom(SetupDatabaseFailed)
   }
 
-  let findLastAppliedAsync
-    (connection: DbConnection)
-    (driver: MigrondiDriver)
-    (tableName: string)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
-
+  let findMigrationAsync (connection: DbConnection) tableName name =
+    cancellableTask { // Changed signature
+      let! token = CancellableTask.getCancellationToken() // Get token from context
       use command = connection.CreateCommand()
 
-      command.CommandText <- Queries.getFirstResultQuery(tableName, driver)
+      command.CommandText <-
+        $"SELECT id, name, timestamp FROM %s{tableName} WHERE name = @name"
+
+      let param = command.CreateParameter()
+      param.ParameterName <- "@name"
+      param.Value <- name
+      command.Parameters.Add(param) |> ignore
 
       use! reader = command.ExecuteReaderAsync(token) // Use token
+      let! result = reader.ReadAsync(token) // Use token
 
-      let! hasRow = reader.ReadAsync(token)
-
-      if hasRow then
+      if result then
         return
           Some {
             id = reader.GetInt32(0)
@@ -583,6 +556,32 @@ module MigrationsAsyncImpl =
       else
         return None
     }
+
+  let findLastAppliedAsync
+    (connection: DbConnection)
+    (driver: MigrondiDriver)
+    (tableName: string)
+    = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+
+    use command = connection.CreateCommand()
+
+    command.CommandText <- Queries.getFirstResultQuery(tableName, driver)
+
+    use! reader = command.ExecuteReaderAsync(token) // Use token
+
+    let! hasRow = reader.ReadAsync(token)
+
+    if hasRow then
+      return
+        Some {
+          id = reader.GetInt32(0)
+          name = reader.GetString(1)
+          timestamp = reader.GetInt64(2)
+        }
+    else
+      return None
+  }
 
   let readMigrationRecords(reader: DbDataReader) = cancellableTask {
     let! token = CancellableTask.getCancellationToken()
@@ -598,239 +597,235 @@ module MigrationsAsyncImpl =
     return List.ofSeq records
   }
 
-  let listMigrationsAsync (connection: DbConnection) (tableName: string) = cancellableTask { // Changed signature
-    let! token = CancellableTask.getCancellationToken() // Get token from context
-    use command = connection.CreateCommand()
+  let listMigrationsAsync (connection: DbConnection) (tableName: string) =
+    cancellableTask { // Changed signature
+      let! token = CancellableTask.getCancellationToken() // Get token from context
+      use command = connection.CreateCommand()
 
-    command.CommandText <-
-      $"SELECT id, name, timestamp FROM %s{tableName} ORDER BY timestamp DESC"
+      command.CommandText <-
+        $"SELECT id, name, timestamp FROM %s{tableName} ORDER BY timestamp DESC"
 
-    use! reader = command.ExecuteReaderAsync token
+      use! reader = command.ExecuteReaderAsync token
 
-    return! readMigrationRecords reader
-  }
+      return! readMigrationRecords reader
+    }
 
   let runQueryAsync
     (logger: ILogger, connection: DbConnection, tableName: string) // Changed to DbConnection
     (migration: Migration, content: string, isUp: bool)
-    =
-    cancellableTask {
-      logger.LogDebug(
-        "Applying migration {Name} with content: {Content}",
-        migration.name,
-        content
-      )
+    = cancellableTask {
+    logger.LogDebug(
+      "Applying migration {Name} with content: {Content}",
+      migration.name,
+      content
+    )
 
-      let! token = CancellableTask.getCancellationToken()
+    let! token = CancellableTask.getCancellationToken()
 
-      if migration.manualTransaction then
-        logger.LogDebug("Executing migration in manual transaction mode")
+    if migration.manualTransaction then
+      logger.LogDebug("Executing migration in manual transaction mode")
 
-        try
-          if connection.State <> ConnectionState.Open then
-            do! connection.OpenAsync(token)
-
-          use command = connection.CreateCommand()
-          command.CommandText <- content
-          do! command.ExecuteNonQueryAsync(token) :> Task
-
-          if isUp then
-            use insertCmd = connection.CreateCommand()
-
-            insertCmd.CommandText <-
-              $"INSERT INTO {tableName} (name, timestamp) VALUES (@name, @timestamp)"
-
-            let nameParam = insertCmd.CreateParameter()
-            nameParam.ParameterName <- "@name"
-            nameParam.Value <- migration.name
-            insertCmd.Parameters.Add(nameParam) |> ignore
-            let tsParam = insertCmd.CreateParameter()
-            tsParam.ParameterName <- "@timestamp"
-            tsParam.Value <- migration.timestamp
-            insertCmd.Parameters.Add(tsParam) |> ignore
-            do! insertCmd.ExecuteNonQueryAsync(token) :> Task
-            return ()
-          else
-            use deleteCmd = connection.CreateCommand()
-
-            deleteCmd.CommandText <-
-              $"DELETE FROM {tableName} WHERE name = @name"
-
-            let nameParam = deleteCmd.CreateParameter()
-            nameParam.ParameterName <- "@name"
-            nameParam.Value <- migration.name
-            deleteCmd.Parameters.Add(nameParam) |> ignore
-            do! deleteCmd.ExecuteNonQueryAsync(token) :> Task
-            return ()
-        with ex ->
-          logger.LogError(
-            "Failed to execute migration {Name} due: {Message}",
-            migration.name,
-            ex.Message
-          )
-
-          if isUp then
-            raise(MigrationApplicationFailed migration)
-          else
-            raise(MigrationRollbackFailed migration)
-      else
+      try
         if connection.State <> ConnectionState.Open then
           do! connection.OpenAsync(token)
-        // BeginTransaction is synchronous.
-        use! transaction = connection.BeginTransactionAsync(token)
 
-        try
-          use command = connection.CreateCommand()
-          command.CommandText <- content
-          command.Transaction <- transaction
-          do! command.ExecuteNonQueryAsync(token) :> Task
+        use command = connection.CreateCommand()
+        command.CommandText <- content
+        do! command.ExecuteNonQueryAsync(token) :> Task
 
-          if isUp then
-            use insertCmd = connection.CreateCommand()
+        if isUp then
+          use insertCmd = connection.CreateCommand()
 
-            insertCmd.CommandText <-
-              $"INSERT INTO {tableName} (name, timestamp) VALUES (@name, @timestamp)"
+          insertCmd.CommandText <-
+            $"INSERT INTO {tableName} (name, timestamp) VALUES (@name, @timestamp)"
 
-            insertCmd.Transaction <- transaction
-            let nameParam = insertCmd.CreateParameter()
-            nameParam.ParameterName <- "@name"
-            nameParam.Value <- migration.name
-            insertCmd.Parameters.Add(nameParam) |> ignore
-            let tsParam = insertCmd.CreateParameter()
-            tsParam.ParameterName <- "@timestamp"
-            tsParam.Value <- migration.timestamp
-            insertCmd.Parameters.Add(tsParam) |> ignore
-            do! insertCmd.ExecuteNonQueryAsync(token) :> Task
-            ()
-          else
-            use deleteCmd = connection.CreateCommand()
-
-            deleteCmd.CommandText <-
-              $"DELETE FROM {tableName} WHERE name = @name"
-
-            deleteCmd.Transaction <- transaction
-            let nameParam = deleteCmd.CreateParameter()
-            nameParam.ParameterName <- "@name"
-            nameParam.Value <- migration.name
-            deleteCmd.Parameters.Add(nameParam) |> ignore
-            do! deleteCmd.ExecuteNonQueryAsync(token) :> Task
-            ()
-
-          do! transaction.CommitAsync(token)
+          let nameParam = insertCmd.CreateParameter()
+          nameParam.ParameterName <- "@name"
+          nameParam.Value <- migration.name
+          insertCmd.Parameters.Add(nameParam) |> ignore
+          let tsParam = insertCmd.CreateParameter()
+          tsParam.ParameterName <- "@timestamp"
+          tsParam.Value <- migration.timestamp
+          insertCmd.Parameters.Add(tsParam) |> ignore
+          do! insertCmd.ExecuteNonQueryAsync(token) :> Task
           return ()
-        with ex ->
-          logger.LogError(
-            "Failed to execute migration {Name} due: {Message}",
-            migration.name,
-            ex.Message
-          )
+        else
+          use deleteCmd = connection.CreateCommand()
 
-          do! transaction.RollbackAsync(token)
+          deleteCmd.CommandText <- $"DELETE FROM {tableName} WHERE name = @name"
 
-          if isUp then
-            raise(MigrationApplicationFailed migration)
-          else
-            raise(MigrationRollbackFailed migration)
-    }
+          let nameParam = deleteCmd.CreateParameter()
+          nameParam.ParameterName <- "@name"
+          nameParam.Value <- migration.name
+          deleteCmd.Parameters.Add(nameParam) |> ignore
+          do! deleteCmd.ExecuteNonQueryAsync(token) :> Task
+          return ()
+      with ex ->
+        logger.LogError(
+          "Failed to execute migration {Name} due: {Message}",
+          migration.name,
+          ex.Message
+        )
+
+        if isUp then
+          raise(MigrationApplicationFailed migration)
+        else
+          raise(MigrationRollbackFailed migration)
+    else
+      if connection.State <> ConnectionState.Open then
+        do! connection.OpenAsync(token)
+      // BeginTransaction is synchronous.
+      use! transaction = connection.BeginTransactionAsync(token)
+
+      try
+        use command = connection.CreateCommand()
+        command.CommandText <- content
+        command.Transaction <- transaction
+        do! command.ExecuteNonQueryAsync(token) :> Task
+
+        if isUp then
+          use insertCmd = connection.CreateCommand()
+
+          insertCmd.CommandText <-
+            $"INSERT INTO {tableName} (name, timestamp) VALUES (@name, @timestamp)"
+
+          insertCmd.Transaction <- transaction
+          let nameParam = insertCmd.CreateParameter()
+          nameParam.ParameterName <- "@name"
+          nameParam.Value <- migration.name
+          insertCmd.Parameters.Add(nameParam) |> ignore
+          let tsParam = insertCmd.CreateParameter()
+          tsParam.ParameterName <- "@timestamp"
+          tsParam.Value <- migration.timestamp
+          insertCmd.Parameters.Add(tsParam) |> ignore
+          do! insertCmd.ExecuteNonQueryAsync(token) :> Task
+          ()
+        else
+          use deleteCmd = connection.CreateCommand()
+
+          deleteCmd.CommandText <- $"DELETE FROM {tableName} WHERE name = @name"
+
+          deleteCmd.Transaction <- transaction
+          let nameParam = deleteCmd.CreateParameter()
+          nameParam.ParameterName <- "@name"
+          nameParam.Value <- migration.name
+          deleteCmd.Parameters.Add(nameParam) |> ignore
+          do! deleteCmd.ExecuteNonQueryAsync(token) :> Task
+          ()
+
+        do! transaction.CommitAsync(token)
+        return ()
+      with ex ->
+        logger.LogError(
+          "Failed to execute migration {Name} due: {Message}",
+          migration.name,
+          ex.Message
+        )
+
+        do! transaction.RollbackAsync(token)
+
+        if isUp then
+          raise(MigrationApplicationFailed migration)
+        else
+          raise(MigrationRollbackFailed migration)
+  }
 
   let applyMigrationsAsync
     (connection: DbConnection) // Changed to DbConnection
     (logger: ILogger)
     tableName
     (migrations: Migration list)
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
-      let executeMigration = runQueryAsync(logger, connection, tableName)
+    = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+    let executeMigration = runQueryAsync(logger, connection, tableName)
 
-      for migration in migrations do
-        let content = migration.upContent
+    for migration in migrations do
+      let content = migration.upContent
 
-        if String.IsNullOrWhiteSpace(content) then
-          logger.LogError(
-            "Migration {Name} does not have an up migration, the migration process will stop here.",
-            migration.name
-          )
+      if String.IsNullOrWhiteSpace(content) then
+        logger.LogError(
+          "Migration {Name} does not have an up migration, the migration process will stop here.",
+          migration.name
+        )
 
-          raise(MigrationApplicationFailed migration)
+        raise(MigrationApplicationFailed migration)
 
-        do! executeMigration(migration, content, true)
+      do! executeMigration(migration, content, true)
 
-      let migrationNames = migrations |> List.map(_.name)
+    let migrationNames = migrations |> List.map(_.name)
 
-      if List.isEmpty migrationNames then
-        return []
-      else
-        use command = connection.CreateCommand()
+    if List.isEmpty migrationNames then
+      return []
+    else
+      use command = connection.CreateCommand()
 
-        let namePlaceholders =
-          String.Join(",", migrationNames |> List.mapi(fun i _ -> $"@name{i}"))
+      let namePlaceholders =
+        String.Join(",", migrationNames |> List.mapi(fun i _ -> $"@name{i}"))
 
-        command.CommandText <-
-          Queries.getResultsByNamesQuery tableName namePlaceholders
+      command.CommandText <-
+        Queries.getResultsByNamesQuery tableName namePlaceholders
 
-        migrationNames
-        |> List.iteri(fun i name ->
-          let param = command.CreateParameter()
-          param.ParameterName <- $"@name{i}"
-          param.Value <- name
-          command.Parameters.Add(param) |> ignore)
+      migrationNames
+      |> List.iteri(fun i name ->
+        let param = command.CreateParameter()
+        param.ParameterName <- $"@name{i}"
+        param.Value <- name
+        command.Parameters.Add(param) |> ignore)
 
-        use! reader = command.ExecuteReaderAsync token
+      use! reader = command.ExecuteReaderAsync token
 
-        return! readMigrationRecords reader
-    }
+      return! readMigrationRecords reader
+  }
 
   let rollbackMigrationsAsync
     (connection: DbConnection) // Changed to DbConnection
     (logger: ILogger)
     tableName
     (migrationsToRollback: Migration list) // Renamed for clarity
-    =
-    cancellableTask {
-      let! token = CancellableTask.getCancellationToken()
-      let executeMigration = runQueryAsync(logger, connection, tableName)
+    = cancellableTask {
+    let! token = CancellableTask.getCancellationToken()
+    let executeMigration = runQueryAsync(logger, connection, tableName)
 
-      // Get the records from DB *before* rolling them back to return them
-      let migrationNames = migrationsToRollback |> List.map(_.name)
-      let mutable rolledBackRecords = [] // Default to empty list
+    // Get the records from DB *before* rolling them back to return them
+    let migrationNames = migrationsToRollback |> List.map(_.name)
+    let mutable rolledBackRecords = [] // Default to empty list
 
-      if not(List.isEmpty migrationNames) then
-        use command = connection.CreateCommand()
+    if not(List.isEmpty migrationNames) then
+      use command = connection.CreateCommand()
 
-        let namePlaceholders =
-          String.Join(",", migrationNames |> List.mapi(fun i _ -> $"@name{i}"))
+      let namePlaceholders =
+        String.Join(",", migrationNames |> List.mapi(fun i _ -> $"@name{i}"))
 
-        command.CommandText <-
-          Queries.getResultsByNamesQuery tableName namePlaceholders
+      command.CommandText <-
+        Queries.getResultsByNamesQuery tableName namePlaceholders
 
-        migrationNames
-        |> List.iteri(fun i name ->
-          let param = command.CreateParameter()
-          param.ParameterName <- $"@name{i}"
-          param.Value <- name
-          command.Parameters.Add(param) |> ignore)
+      migrationNames
+      |> List.iteri(fun i name ->
+        let param = command.CreateParameter()
+        param.ParameterName <- $"@name{i}"
+        param.Value <- name
+        command.Parameters.Add(param) |> ignore)
 
-        use! reader = command.ExecuteReaderAsync token
+      use! reader = command.ExecuteReaderAsync token
 
-        let! records = readMigrationRecords reader
-        rolledBackRecords <- records
+      let! records = readMigrationRecords reader
+      rolledBackRecords <- records
 
-      for migration in migrationsToRollback do
-        let content = migration.downContent
+    for migration in migrationsToRollback do
+      let content = migration.downContent
 
-        if String.IsNullOrWhiteSpace(content) then
-          logger.LogError(
-            "Migration {Name} does not have a down migration, the rollback process will stop here.",
-            migration.name
-          )
+      if String.IsNullOrWhiteSpace(content) then
+        logger.LogError(
+          "Migration {Name} does not have a down migration, the rollback process will stop here.",
+          migration.name
+        )
 
-          raise(MigrationRollbackFailed migration)
+        raise(MigrationRollbackFailed migration)
 
-        do! executeMigration(migration, content, false)
+      do! executeMigration(migration, content, false)
 
-      return rolledBackRecords // Return the records that were present before rollback
-    }
+    return rolledBackRecords // Return the records that were present before rollback
+  }
 
 [<Class>]
 type internal MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
@@ -918,51 +913,49 @@ type internal MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
 
     member _.ApplyMigrationsAsync
       (migrations: Migration seq, [<Optional>] ?cancellationToken)
-      =
-      task {
-        let token = defaultArg cancellationToken CancellationToken.None
+      = task {
+      let token = defaultArg cancellationToken CancellationToken.None
 
-        use connection =
-          MigrationsImpl.getConnection(config.connection, config.driver)
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
 
-        if connection.State <> ConnectionState.Open then
-          do! connection.OpenAsync(token)
+      if connection.State <> ConnectionState.Open then
+        do! connection.OpenAsync(token)
 
-        let computation =
-          migrations
-          |> Seq.toList
-          |> MigrationsAsyncImpl.applyMigrationsAsync
-            connection
-            logger
-            config.tableName
+      let computation =
+        migrations
+        |> Seq.toList
+        |> MigrationsAsyncImpl.applyMigrationsAsync
+          connection
+          logger
+          config.tableName
 
-        let! result = computation token
-        return result :> IReadOnlyList<MigrationRecord>
-      }
+      let! result = computation token
+      return result :> IReadOnlyList<MigrationRecord>
+    }
 
     member _.RollbackMigrationsAsync
       (migrations: Migration seq, [<Optional>] ?cancellationToken)
-      =
-      task {
-        let token = defaultArg cancellationToken CancellationToken.None
+      = task {
+      let token = defaultArg cancellationToken CancellationToken.None
 
-        use connection =
-          MigrationsImpl.getConnection(config.connection, config.driver)
+      use connection =
+        MigrationsImpl.getConnection(config.connection, config.driver)
 
-        if connection.State <> ConnectionState.Open then
-          do! connection.OpenAsync(token)
+      if connection.State <> ConnectionState.Open then
+        do! connection.OpenAsync(token)
 
-        let computation =
-          migrations
-          |> Seq.toList
-          |> MigrationsAsyncImpl.rollbackMigrationsAsync
-            connection
-            logger
-            config.tableName
+      let computation =
+        migrations
+        |> Seq.toList
+        |> MigrationsAsyncImpl.rollbackMigrationsAsync
+          connection
+          logger
+          config.tableName
 
-        let! result = computation token
-        return result :> IReadOnlyList<MigrationRecord>
-      }
+      let! result = computation token
+      return result :> IReadOnlyList<MigrationRecord>
+    }
 
     member _.SetupDatabaseAsync([<Optional>] ?cancellationToken) = task {
 
@@ -983,24 +976,25 @@ type internal MiDatabaseHandler(logger: ILogger, config: MigrondiConfig) =
     }
 
 
-    member _.FindMigrationAsync(name: string, [<Optional>] ?cancellationToken) = task {
+    member _.FindMigrationAsync(name: string, [<Optional>] ?cancellationToken) =
+      task {
 
-      // Token for the outer task block is implicitly passed to cancellableTask
-      use connection =
-        MigrationsImpl.getConnection(config.connection, config.driver)
+        // Token for the outer task block is implicitly passed to cancellableTask
+        use connection =
+          MigrationsImpl.getConnection(config.connection, config.driver)
 
-      let token = defaultArg cancellationToken CancellationToken.None
+        let token = defaultArg cancellationToken CancellationToken.None
 
-      if connection.State <> ConnectionState.Open then
-        do! connection.OpenAsync(token)
+        if connection.State <> ConnectionState.Open then
+          do! connection.OpenAsync(token)
 
-      return!
-        MigrationsAsyncImpl.findMigrationAsync
-          connection
-          config.tableName
-          name
-          token
-    }
+        return!
+          MigrationsAsyncImpl.findMigrationAsync
+            connection
+            config.tableName
+            name
+            token
+      }
 
     member _.ListMigrationsAsync([<Optional>] ?cancellationToken) = task {
       // Token for the outer task block is implicitly passed to cancellableTask

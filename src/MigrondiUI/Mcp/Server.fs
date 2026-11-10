@@ -50,7 +50,8 @@ module Server =
     (loggerFactory: ILoggerFactory)
     : IMcpServer =
 
-    { new IMcpServer with
+    {
+      new IMcpServer with
         member _.Run() : Async<unit> =
           runMcpServer connectionFactory options loggerFactory
     }

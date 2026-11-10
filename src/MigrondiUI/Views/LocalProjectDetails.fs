@@ -318,18 +318,16 @@ let buildDetailsView
     projects: Services.IProjectCollection,
     migrondiFactory: Services.IMigrationOperationsFactory,
     onNavigateBack: unit -> unit
-  ) =
-  asyncEx {
-    let! project = projects.Get projectId
+  ) = asyncEx {
+  let! project = projects.Get projectId
 
-    match project with
-    | Some(Local p) ->
-      let vm = LocalProjectDetailsVM(logger, projects, migrondiFactory, p)
-      return Some(LProjectDetailsView(vm, onNavigateBack) :> Control)
-    | Some(Virtual _) ->
-      return failwith "Expected local project but got virtual"
-    | None -> return None
-  }
+  match project with
+  | Some(Local p) ->
+    let vm = LocalProjectDetailsVM(logger, projects, migrondiFactory, p)
+    return Some(LProjectDetailsView(vm, onNavigateBack) :> Control)
+  | Some(Virtual _) -> return failwith "Expected local project but got virtual"
+  | None -> return None
+}
 
 let buildProjectNotFound(id: Guid) : Control =
   UserControl()

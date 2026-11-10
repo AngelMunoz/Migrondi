@@ -309,7 +309,7 @@ type MigrationOperations
 
       let appliedNames =
         status
-        |> Seq.choose (function
+        |> Seq.choose(function
           | Applied m -> Some m.name
           | Pending _ -> None)
         |> Set.ofSeq
@@ -351,7 +351,7 @@ type MigrationOperations
 
       let appliedNames =
         status
-        |> Seq.choose (function
+        |> Seq.choose(function
           | Applied m -> Some m.name
           | Pending _ -> None)
         |> Set.ofSeq
