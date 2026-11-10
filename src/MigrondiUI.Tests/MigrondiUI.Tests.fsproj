@@ -17,6 +17,7 @@
     <Compile Include="VirtualProjectRepositoryTests.fs" />
     <Compile Include="VirtualFsTests.fs" />
     <Compile Include="McpServer.fs" />
+    <Compile Include="HttpServerTests.fs" />
     <Compile Include="Program.fs" />
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

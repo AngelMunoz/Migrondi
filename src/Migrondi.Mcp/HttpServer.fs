@@ -236,20 +236,45 @@ module HttpServer =
 
           match result with
           | Choice1Of2() -> ()
+          | Choice2Of2(:? OperationCanceledException) -> ()
           | Choice2Of2 ex ->
             logger.LogError(ex, "Error handling HTTP request (fire-and-forget)")
         }
-        |> Async.StartImmediate
+        |> fun work -> Async.StartImmediate(work, linkedCts.Token)
+
+      // GetContextAsync takes no token. Stopping the listener when the
+      // token fires is what wakes the accept loop on an idle server.
+      use _cancellationRegistration =
+        linkedCts.Token.Register(fun () ->
+          try
+            listener.Stop()
+          with _ ->
+            ())
 
       try
-        while not linkedCts.Token.IsCancellationRequested do
-          let! context = listener.GetContextAsync()
-          fireAndForgetRequest context
-      with :? OperationCanceledException ->
-        ()
+        try
+          while not linkedCts.Token.IsCancellationRequested do
+            let! context = listener.GetContextAsync()
+            fireAndForgetRequest context
+        with
+        | :? OperationCanceledException -> ()
+        | :? Net.HttpListenerException when
+          linkedCts.Token.IsCancellationRequested
+          ->
+          ()
+        | :? ObjectDisposedException when
+          linkedCts.Token.IsCancellationRequested
+          ->
+          ()
+      finally
+        linkedCts.Cancel()
 
-      listener.Stop()
-      HttpServerHelpers.cleanupSessions sessions
+        try
+          listener.Stop()
+        with _ ->
+          ()
+
+        HttpServerHelpers.cleanupSessions sessions
     }
 
   let create
