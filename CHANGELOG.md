@@ -5,6 +5,7 @@
 ### Added
 
 - **Migrondi:** `new` accepts `--up`/`--down` inline SQL and `--up-file`/`--down-file` to read a section from a file (or stdin with `-`), so a migration can be created with its content in one call instead of creating an empty file and editing it afterwards.
+- **Migrondi:** `list` accepts `--pending`/`--applied`, `--limit`/`--last`, `--search <text>`, and `--show-path`/`--show-content` to filter and inspect migrations without scanning the migrations folder by hand.
 
 ### Changed
 

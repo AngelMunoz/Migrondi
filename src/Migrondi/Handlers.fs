@@ -437,13 +437,106 @@ module internal Migrations =
 
     0
 
-  let listMigrations
-    (
-      useJson: bool,
-      logger: ILogger,
-      kind: MigrationType option,
-      migrondi: IMigrondi
-    ) =
+  type ListFilters = {
+    Kind: MigrationType option
+    Pending: bool option
+    Applied: bool option
+    Limit: int option
+    Last: int option
+    Search: string option
+    ShowPath: bool
+    ShowContent: bool
+  }
+
+  type ListArgs = {
+    UseJson: bool
+    MigrationsDir: string
+    Filters: ListFilters
+  }
+
+  type StatusSelection =
+    | AllMigrations
+    | AppliedOnly
+    | PendingOnly
+
+  /// Resolves the status flags to one selection, rejecting combinations
+  /// that contradict each other.
+  let statusSelection(filters: ListFilters) : Result<StatusSelection, string> =
+    let wantsPending = filters.Pending = Some true
+    let wantsApplied = filters.Applied = Some true
+
+    match filters.Kind, wantsPending, wantsApplied with
+    | _, true, true -> Error "--pending and --applied cannot be used together."
+    | Some MigrationType.Up, true, _ ->
+      Error "--kind up lists applied migrations and conflicts with --pending."
+    | Some MigrationType.Down, _, true ->
+      Error "--kind down lists pending migrations and conflicts with --applied."
+    | Some MigrationType.Up, _, _
+    | _, _, true -> Ok AppliedOnly
+    | Some MigrationType.Down, _, _
+    | _, true, _ -> Ok PendingOnly
+    | None, false, false -> Ok AllMigrations
+
+  /// Applies status, search, and count filters to the migrations, in the
+  /// order returned by the core (newest first). `--limit` keeps the first
+  /// entries of that order; `--last` keeps the final entries.
+  let filterMigrations
+    (filters: ListFilters, migrations: MigrationStatus seq)
+    : Result<MigrationStatus list, string> =
+    let matchesSearch (text: string) (status: MigrationStatus) =
+      let migration = status.Value
+
+      [ migration.name; migration.upContent; migration.downContent ]
+      |> List.exists(fun value ->
+        value.Contains(text, StringComparison.OrdinalIgnoreCase))
+
+    result {
+      let! selection = statusSelection filters
+
+      let byStatus =
+        migrations
+        |> Seq.filter(fun status ->
+          match selection, status with
+          | AppliedOnly, Pending _
+          | PendingOnly, Applied _ -> false
+          | _ -> true)
+        |> List.ofSeq
+
+      let searched =
+        match filters.Search with
+        | Some text -> byStatus |> List.filter(matchesSearch text)
+        | None -> byStatus
+
+      match filters.Limit, filters.Last with
+      | Some _, Some _ ->
+        return! Error "--limit and --last cannot be used together."
+      | Some limit, None ->
+        if limit <= 0 then
+          return! Error "--limit must be a positive number."
+        else
+          return searched |> List.truncate limit
+      | None, Some last ->
+        if last <= 0 then
+          return! Error "--last must be a positive number."
+        else
+          return searched |> List.skip(max 0 (searched.Length - last))
+      | None, None -> return searched
+    }
+
+  /// Reconstructs the migration file name from the decoded name, which
+  /// may already carry the extension, the V1 timestamp prefix, only the
+  /// V0 timestamp suffix, or neither.
+  let migrationFileName(migration: Migration) =
+    let name = migration.name
+    let timestamp = migration.timestamp.ToString()
+
+    match name with
+    | _ when name.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) -> name
+    | _ when name.StartsWith($"{timestamp}_") -> $"{name}.sql"
+    | _ when name.EndsWith($"_{timestamp}") -> $"{name}.sql"
+    | _ -> $"{timestamp}_{name}.sql"
+
+  let listMigrations(logger: ILogger, migrondi: IMigrondi, args: ListArgs) =
 
     let printMigrationsTable(table: Table, migrations: Migration seq) =
 
@@ -537,46 +630,63 @@ module internal Migrations =
 
       logger.LogInformation("Listing migrations: {@Migrations}", data)
 
-    let allMigrations = migrondi.MigrationsList()
+    let showDetails(selected: MigrationStatus list) =
+      for status in selected do
+        let migration = status.Value
 
-    match kind with
-    | Some MigrationType.Up ->
-      let applied =
-        allMigrations
-        |> Seq.choose(fun m ->
-          match m with
-          | Applied a -> Some a
-          | _ -> None)
+        if args.Filters.ShowPath then
+          let fileName = migrationFileName migration
 
-      if useJson then
-        printJson(applied, "Applied")
-      else
-        let table = Table()
-        table.Title <- TableTitle("Applied Migrations")
-        printMigrationsTable(table, applied)
-    | Some MigrationType.Down ->
-      let pending =
-        allMigrations
-        |> Seq.choose(fun m ->
-          match m with
-          | Applied _ -> None
-          | Pending a -> Some a)
+          logger.LogInformation(
+            "Migration {MigrationName} is at {MigrationPath}",
+            migration.name,
+            Path.Combine(args.MigrationsDir, fileName)
+          )
 
-      if useJson then
-        printJson(pending, "Pending")
-      else
-        let table = Table()
-        table.Title <- TableTitle("Pending Migrations")
-        printMigrationsTable(table, pending)
-    | None ->
-      if useJson then
-        printJsonBoth(allMigrations)
-      else
-        let table = Table()
-        table.Title <- TableTitle("All Migrations")
-        printBothMigrationsTable(table, allMigrations)
+        if args.Filters.ShowContent then
+          logger.LogInformation(
+            "Migration {MigrationName}\n------ UP ------\n{UpContent}\n------ DOWN ------\n{DownContent}",
+            migration.name,
+            migration.upContent,
+            migration.downContent
+          )
 
-    0
+    match
+      statusSelection args.Filters,
+      filterMigrations(args.Filters, migrondi.MigrationsList())
+    with
+    | Error message, _
+    | _, Error message ->
+      logger.LogError("{Message}", message)
+      1
+    | Ok selection, Ok selected ->
+      let migrations = selected |> List.map(fun status -> status.Value)
+
+      match selection with
+      | AppliedOnly ->
+        if args.UseJson then
+          printJson(migrations, "Applied")
+        else
+          let table = Table()
+          table.Title <- TableTitle("Applied Migrations")
+          printMigrationsTable(table, migrations)
+      | PendingOnly ->
+        if args.UseJson then
+          printJson(migrations, "Pending")
+        else
+          let table = Table()
+          table.Title <- TableTitle("Pending Migrations")
+          printMigrationsTable(table, migrations)
+      | AllMigrations ->
+        if args.UseJson then
+          printJsonBoth(selected)
+        else
+          let table = Table()
+          table.Title <- TableTitle("All Migrations")
+          printBothMigrationsTable(table, selected)
+
+      showDetails selected
+      0
 
   let migrationStatus(name: string, logger: ILogger, migrondi: IMigrondi) =
     let fileName =

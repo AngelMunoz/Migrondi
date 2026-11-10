@@ -65,8 +65,34 @@ module internal ArgumentMapper =
 
     appEnv.Logger, appEnv.Migrondi, args
 
-  let inline List (appEnv: AppEnv) (kind: MigrationType option) =
-    appEnv.JsonOutput, appEnv.Logger, kind, appEnv.Migrondi
+  let inline List
+    (appEnv: AppEnv)
+    (
+      kind: MigrationType option,
+      pending: bool option,
+      applied: bool option,
+      limit: int option,
+      last: int option,
+      search: string option,
+      showPath: bool option,
+      showContent: bool option
+    ) =
+    let args: Migrations.ListArgs = {
+      UseJson = appEnv.JsonOutput
+      MigrationsDir = appEnv.Configuration.migrations
+      Filters = {
+        Kind = kind
+        Pending = pending
+        Applied = applied
+        Limit = limit
+        Last = last
+        Search = search
+        ShowPath = defaultArg showPath false
+        ShowContent = defaultArg showContent false
+      }
+    }
+
+    appEnv.Logger, appEnv.Migrondi, args
 
   let inline Status (appEnv: AppEnv) (name: string) =
     name, appEnv.Logger, appEnv.Migrondi
@@ -141,7 +167,16 @@ module internal Commands =
 
     addAlias "show"
 
-    inputs ListArgs.MigrationKind
+    inputs(
+      ListArgs.MigrationKind,
+      ListArgs.pending,
+      ListArgs.applied,
+      ListArgs.limit,
+      ListArgs.last,
+      ListArgs.search,
+      ListArgs.showPath,
+      ListArgs.showContent
+    )
 
     setAction(
       withSetup appEnv (ArgumentMapper.List appEnv >> Migrations.listMigrations)
