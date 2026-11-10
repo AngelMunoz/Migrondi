@@ -12,7 +12,6 @@ open ModelContextProtocol.Protocol
 open IcedTasks
 
 open MigrondiUI
-open MigrondiUI.Projects
 open Migrondi.Core
 
 type McpMode =
