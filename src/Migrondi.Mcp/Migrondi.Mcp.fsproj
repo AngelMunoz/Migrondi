@@ -16,8 +16,14 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
+    <Compile Include="Results.fs" />
+    <Compile Include="HttpServer.fs" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="IcedTasks" />
+    <PackageReference Include="JDeck" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="ModelContextProtocol" />
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
   </ItemGroup>
 </Project>

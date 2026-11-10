@@ -12,7 +12,6 @@ open ModelContextProtocol.Protocol
 open JDeck
 open JDeck.Encoding
 
-open MigrondiUI.Projects
 open Migrondi.Core
 
 module McpResults =
@@ -510,7 +509,7 @@ module McpResults =
           ]
         | ImportError err -> Json.object [ "error", Encode.string err ]
 
-module internal McpResultMapper =
+module McpResultMapper =
 
   open McpResults
 
