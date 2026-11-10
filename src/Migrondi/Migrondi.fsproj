@@ -16,6 +16,9 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Migrondi.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
   </ItemGroup>
   <ItemGroup>

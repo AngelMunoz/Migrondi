@@ -247,43 +247,118 @@ module internal Init =
 [<RequireQualifiedAccess>]
 module internal Migrations =
 
+  /// Raw content sources for a new migration, as given on the command line.
+  type NewContentArgs = {
+    Up: string option
+    Down: string option
+    UpFile: string option
+    DownFile: string option
+  }
+
+  /// Content resolved from NewContentArgs; a section is absent when
+  /// neither its inline nor its file source was given.
+  type ResolvedNewContent = {
+    UpContent: string option
+    DownContent: string option
+  }
+
+  type NewMigrationArgs = {
+    Name: string
+    ManualTransaction: bool option
+    Content: NewContentArgs
+    Stdin: TextReader
+  }
+
+  /// Resolves one migration section from its inline or file source.
+  /// `-` as the file path reads the section from stdin; stdin can only
+  /// feed one section because it can be consumed only once.
+  let resolveNewContent
+    (stdin: TextReader, args: NewContentArgs)
+    : Result<ResolvedNewContent, string> =
+    let tryRead(label: string, source: string, read: unit -> string) =
+      try
+        Ok(Some(read()))
+      with
+      | :? IOException as ex ->
+        Error $"Could not read the {label} from '{source}': {ex.Message}"
+      | :? UnauthorizedAccessException as ex ->
+        Error $"Could not read the {label} from '{source}': {ex.Message}"
+      | :? SecurityException as ex ->
+        Error $"Could not read the {label} from '{source}': {ex.Message}"
+      | :? ArgumentException as ex ->
+        Error $"Could not read the {label} from '{source}': {ex.Message}"
+      | :? NotSupportedException as ex ->
+        Error $"Could not read the {label} from '{source}': {ex.Message}"
+
+    let resolveSection
+      (label: string, inlineContent: string option, file: string option)
+      =
+      match inlineContent, file with
+      | Some _, Some _ ->
+        Error
+          $"Use either --{label} or --{label}-file for the {label} section, not both."
+      | Some content, None -> Ok(Some content)
+      | None, Some "-" -> tryRead(label, "stdin", stdin.ReadToEnd)
+      | None, Some path -> tryRead(label, path, fun () -> File.ReadAllText path)
+      | None, None -> Ok None
+
+    match args.UpFile, args.DownFile with
+    | Some "-", Some "-" ->
+      Error "stdin ('-') can only be used for one of --up-file or --down-file."
+    | _ -> result {
+        let! upContent = resolveSection("up", args.Up, args.UpFile)
+        let! downContent = resolveSection("down", args.Down, args.DownFile)
+
+        return {
+          UpContent = upContent
+          DownContent = downContent
+        }
+      }
+
   let newMigration
-    (
-      name: string,
-      manualTransaction: bool option,
-      logger: ILogger,
-      migrondi: IMigrondi
-    ) =
+    (logger: ILogger, migrondi: IMigrondi, args: NewMigrationArgs)
+    =
     logger.LogInformation(
       "Creating a new migration with name: {MigrationName}.",
-      name
+      args.Name
     )
 
-    try
-      let migration =
-        migrondi.RunNew(name, ?manualTransaction = manualTransaction)
-
-      logger.LogInformation(
-        "Migration {MigrationName} created successfully.",
-        migration.name
-      )
-
-      0
-    with
-    | :? IOException as e ->
-      logger.LogError(
-        "There was a problem when writing the migration file: '{Message}'",
-        e.Message
-      )
-
+    match resolveNewContent(args.Stdin, args.Content) with
+    | Error message ->
+      logger.LogError("{Message}", message)
       1
-    | :? SecurityException as e ->
-      logger.LogError(
-        "The user does not have permissions on this directory/file, please check the permissions and try again.\n{Message}",
-        e.Message
-      )
+    | Ok resolved ->
 
-      1
+      try
+        let migration =
+          migrondi.RunNew(
+            args.Name,
+            ?upContent = resolved.UpContent,
+            ?downContent = resolved.DownContent,
+            ?manualTransaction = args.ManualTransaction
+          )
+
+        logger.LogInformation(
+          "Migration {MigrationName} created successfully.",
+          migration.name
+        )
+
+        0
+      with
+      | :? IOException as e ->
+        logger.LogError(
+          "There was a problem when writing the migration file: '{Message}'",
+          e.Message
+        )
+
+        1
+      | :? SecurityException as e ->
+        logger.LogError(
+          "The user does not have permissions on this directory/file, please check the permissions and try again.\n{Message}",
+          e.Message
+        )
+
+        1
 
   let runUp(amount: int option, logger: ILogger, migrondi: IMigrondi) =
 

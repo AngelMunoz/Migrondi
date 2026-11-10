@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Migrondi:** `new` accepts `--up`/`--down` inline SQL and `--up-file`/`--down-file` to read a section from a file (or stdin with `-`), so a migration can be created with its content in one call instead of creating an empty file and editing it afterwards.
+
 ### Changed
 
 - **Project:** Migrated all projects to central package management via `src/Directory.Packages.props`, removing per-project package versions and consolidating dependency versions in one place.

@@ -26,6 +26,27 @@ module Init =
       "With --force, adopt values from an existing migrondi.json instead of overwriting with defaults"
 
 [<RequireQualifiedAccess>]
+module NewArgs =
+
+  let up =
+    Input.optionMaybe<string> "--up"
+    |> Input.desc "SQL for the up section of the new migration"
+
+  let down =
+    Input.optionMaybe<string> "--down"
+    |> Input.desc "SQL for the down section of the new migration"
+
+  let upFile =
+    Input.optionMaybe<string> "--up-file"
+    |> Input.desc
+      "File with the SQL for the up section of the new migration ('-' reads stdin)"
+
+  let downFile =
+    Input.optionMaybe<string> "--down-file"
+    |> Input.desc
+      "File with the SQL for the down section of the new migration ('-' reads stdin)"
+
+[<RequireQualifiedAccess>]
 module SharedArguments =
 
   let name description =
