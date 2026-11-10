@@ -21,6 +21,7 @@
     <Compile Include="Results.fs" />
     <Compile Include="Tools.fs" />
     <Compile Include="HttpServer.fs" />
+    <Compile Include="Server.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="IcedTasks" />
