@@ -6,6 +6,7 @@
 
 - **Migrondi:** `new` accepts `--up`/`--down` inline SQL and `--up-file`/`--down-file` to read a section from a file (or stdin with `-`), so a migration can be created with its content in one call instead of creating an empty file and editing it afterwards.
 - **Migrondi:** `list` accepts `--pending`/`--applied`, `--limit`/`--last`, `--search <text>`, and `--show-path`/`--show-content` to filter and inspect migrations without scanning the migrations folder by hand.
+- **Migrondi:** `up` and `down` accept `--to <name>` to apply up to, or roll back to, a named migration (name, filename, or timestamp) instead of counting migrations; the positional amount stays optional and cannot be combined with `--to`.
 
 ### Changed
 
@@ -20,6 +21,7 @@
 
 ### Fixed
 
+- **Migrondi:** `status` now returns a non-zero exit code when no migration matches the given name, instead of reporting `NotFound` with a success exit code.
 - **Project:** Addressed the high-severity `SQLitePCLRaw.lib.e_sqlite3` vulnerability (GHSA-2m69-gcr7-jv3q) by overriding `SQLitePCLRaw.bundle_e_sqlite3` to `3.0.5` in central package management.
 - **Project:** Addressed the high-severity `System.Security.Cryptography.Pkcs` vulnerabilities (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7) that Microsoft.Data.SqlClient pulled in, by overriding that package to `10.0.14` in central package management. No project reports a vulnerable package now.
 

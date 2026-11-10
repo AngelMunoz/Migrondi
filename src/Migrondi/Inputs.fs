@@ -63,6 +63,11 @@ module SharedArguments =
     |> Input.desc
       "Signals migrondi to not run against the database and prints the migrations that would be run into the screen"
 
+  let toTarget =
+    Input.optionMaybe<string> "--to"
+    |> Input.desc
+      "Name of the migration to apply up to, or roll back to, instead of an amount"
+
   let manualTransaction =
     Input.optionMaybe<bool> "--manual-transaction"
     |> Input.alias "-m"
