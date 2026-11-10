@@ -65,6 +65,7 @@
     <PackageReference Include="FsToolkit.ErrorHandling" />
 
     <PackageReference Include="JDeck" />
+    <PackageReference Include="FSharp.Data.Adaptive" />
     <PackageReference Include="Navs.Avalonia" />
 
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />

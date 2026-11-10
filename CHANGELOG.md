@@ -10,10 +10,12 @@
 - **MigrondiUI:** Updated Avalonia-related dependencies (AvaloniaEdit, TextMate, SukiUI, NXUI) to their Avalonia 12-compatible versions.
 - **Migrondi.Tests:** Migrated to `MSTest.Sdk/4.2.3`.
 - **MigrondiUI.Tests:** Migrated to the Microsoft Testing Platform with the xUnit v3 runner, targeting `net10.0` only.
+- **Project:** Updated all package dependencies to their latest stable versions, including Avalonia 12.1.6, ModelContextProtocol 2.4.0, MSTest 4.5.2, Serilog 4.4.0, and the database drivers, and updated the local Fantomas and FsDocs tools.
 
 ### Fixed
 
-- **Project:** Addressed the high-severity `SQLitePCLRaw.lib.e_sqlite3` vulnerability (GHSA-2m69-gcr7-jv3q) by overriding `SQLitePCLRaw.bundle_e_sqlite3` to `3.0.3` in central package management.
+- **Project:** Addressed the high-severity `SQLitePCLRaw.lib.e_sqlite3` vulnerability (GHSA-2m69-gcr7-jv3q) by overriding `SQLitePCLRaw.bundle_e_sqlite3` to `3.0.5` in central package management.
+- **Project:** Addressed the high-severity `System.Security.Cryptography.Pkcs` vulnerabilities (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7) that Microsoft.Data.SqlClient pulled in, by overriding that package to `10.0.14` in central package management. No project reports a vulnerable package now.
 
 ## [1.3.0] - 2026-06-27
 
