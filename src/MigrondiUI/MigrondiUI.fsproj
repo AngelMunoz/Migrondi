@@ -8,7 +8,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Extensions.fs" />
-    <Compile Include="Types.fs" />
     <Compile Include="Database.fs" />
     <Compile Include="VirtualFs.fs" />
     <Compile Include="Services.fs" />
@@ -69,5 +68,6 @@
     <PackageReference Include="Navs.Avalonia" />
 
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
+    <ProjectReference Include="..\Migrondi.Mcp\Migrondi.Mcp.fsproj" />
   </ItemGroup>
 </Project>
