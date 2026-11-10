@@ -43,9 +43,27 @@ module internal ArgumentMapper =
 
   let inline New
     (appEnv: AppEnv)
-    (name: string, manualTransaction: bool option)
-    =
-    name, manualTransaction, appEnv.Logger, appEnv.Migrondi
+    (
+      name: string,
+      manualTransaction: bool option,
+      up: string option,
+      down: string option,
+      upFile: string option,
+      downFile: string option
+    ) =
+    let args: Migrations.NewMigrationArgs = {
+      Name = name
+      ManualTransaction = manualTransaction
+      Content = {
+        Up = up
+        Down = down
+        UpFile = upFile
+        DownFile = downFile
+      }
+      Stdin = System.Console.In
+    }
+
+    appEnv.Logger, appEnv.Migrondi, args
 
   let inline List (appEnv: AppEnv) (kind: MigrationType option) =
     appEnv.JsonOutput, appEnv.Logger, kind, appEnv.Migrondi
@@ -87,7 +105,15 @@ module internal Commands =
 
     addAlias "create"
 
-    inputs(SharedArguments.name None, SharedArguments.manualTransaction)
+    inputs(
+      SharedArguments.name None,
+      SharedArguments.manualTransaction,
+      NewArgs.up,
+      NewArgs.down,
+      NewArgs.upFile,
+      NewArgs.downFile
+    )
+
     setAction(ArgumentMapper.New appEnv >> Migrations.newMigration)
   }
 
