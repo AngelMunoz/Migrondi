@@ -37,6 +37,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MigrondiUI\MigrondiUI.fsproj" />
+    <ProjectReference Include="..\Migrondi.Mcp\Migrondi.Mcp.fsproj" />
   </ItemGroup>
 
 </Project>

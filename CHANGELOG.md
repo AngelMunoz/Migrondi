@@ -11,6 +11,7 @@
 - **Migrondi.Tests:** Migrated to `MSTest.Sdk/4.2.3`.
 - **MigrondiUI.Tests:** Migrated to the Microsoft Testing Platform with the xUnit v3 runner, targeting `net10.0` only.
 - **Project:** Updated all package dependencies to their latest stable versions, including Avalonia 12.1.6, ModelContextProtocol 2.4.0, MSTest 4.5.2, Serilog 4.4.0, and the database drivers, and updated the local Fantomas and FsDocs tools.
+- **Project:** Moved the MCP tooling into a new shared `Migrondi.Mcp` project that holds the tool definitions, service contracts, result encoders, and both transports. MigrondiUI now keeps only the host code that builds its project collection and starts the server, so the CLI can host the same MCP tools against a single project in a later phase.
 
 ### Fixed
 

@@ -21,6 +21,8 @@ Make the CLI the primary agent-facing surface, with MCP served per project from 
 
 ## Phase 1 — Extract the MCP tooling to a shared project
 
+Status: done. The shared project is `src/Migrondi.Mcp`; MigrondiUI keeps only the host file `src/MigrondiUI/Mcp/Server.fs`. The 37 MCP tests pass unchanged, and the GUI MCP mode answers `initialize`, lists the same 16 tools, and answers `list_projects` from a real client.
+
 Current state, verified in the code: MCP lives in `src/MigrondiUI/Mcp` (`Server.fs`, `Tools.fs`, `Results.fs`, `Types.fs`, `HttpServer.fs`). The tools sit on `IProjectCollection` and `IMigrationOperationsFactory` in `src/MigrondiUI/Services.fs`, backed by `Database.fs` and `VirtualFs.fs`. MigrondiUI's entry point already runs MCP headless with `--stdio` or `--http` and opens no window in that mode.
 
 Steps:
