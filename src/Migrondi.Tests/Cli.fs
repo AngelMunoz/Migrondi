@@ -9,6 +9,11 @@ open Microsoft.Extensions.Logging.Abstractions
 open Microsoft.VisualStudio.TestTools.UnitTesting
 
 open Migrondi.Core
+open Migrondi.Core.Database
+open Migrondi.Core.FileSystem
+open Migrondi.Core.Serialization
+open Migrondi.Commands
+open Migrondi.Env
 open Migrondi.Handlers
 
 /// Arguments recorded from a RunNew call on the fake below.
@@ -214,6 +219,25 @@ type NewContentTests() =
 
     match result with
     | Ok _ -> Assert.Fail("expected a stdin reuse error")
+    | Error _ -> ()
+
+  [<TestMethod>]
+  member _.``resolveNewContent returns Error for an unreadable file``() =
+    let missing = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.sql")
+
+    let result =
+      Migrations.resolveNewContent(
+        TextReader.Null,
+        {
+          Up = None
+          Down = None
+          UpFile = Some missing
+          DownFile = None
+        }
+      )
+
+    match result with
+    | Ok _ -> Assert.Fail("expected a read error")
     | Error _ -> ()
 
   [<TestMethod>]
@@ -567,6 +591,80 @@ type TargetTests() =
     Assert.AreEqual(1, exitCode)
     Assert.IsTrue(fake.RunUpAmounts.IsEmpty)
 
+  [<TestMethod>]
+  member _.``upTargetAmount counts from the oldest pending migration``() =
+    let pending = [ a; b; c ]
+
+    match Migrations.upTargetAmount(Pending a, pending) with
+    | Ok amount -> Assert.AreEqual(1, amount)
+    | Error message -> Assert.Fail(message)
+
+    match Migrations.upTargetAmount(Pending c, pending) with
+    | Ok amount -> Assert.AreEqual(3, amount)
+    | Error message -> Assert.Fail(message)
+
+  [<TestMethod>]
+  member _.``downTargetAmount rolls back everything newer than the target``() =
+    let applied = [ c; b; a ]
+
+    match Migrations.downTargetAmount(Applied a, applied) with
+    | Ok amount -> Assert.AreEqual(2, amount)
+    | Error message -> Assert.Fail(message)
+
+  [<TestMethod>]
+  member _.``runTargetDown rolls back through the target``() =
+    let fake =
+      FakeMigrondi(
+        statuses = [ Applied c; Applied b; Applied a ],
+        dryDown = [ c; b; a ]
+      )
+
+    let exitCode =
+      Migrations.runTargetDown(
+        logger,
+        fake :> IMigrondi,
+        { Target = "b"; DryRun = false }
+      )
+
+    Assert.AreEqual(0, exitCode)
+    Assert.AreEqual<int option list>([ Some 1 ], fake.RunDownAmounts)
+
+  [<TestMethod>]
+  member _.``runTargetUp dry run selects without applying``() =
+    let fake =
+      FakeMigrondi(
+        statuses = [ Pending c; Pending b; Pending a ],
+        dryUp = [ a; b; c ]
+      )
+
+    let exitCode =
+      Migrations.runTargetUp(
+        logger,
+        fake :> IMigrondi,
+        { Target = "b"; DryRun = true }
+      )
+
+    Assert.AreEqual(0, exitCode)
+    Assert.IsTrue(fake.RunUpAmounts.IsEmpty)
+
+  [<TestMethod>]
+  member _.``runTargetDown dry run selects without rolling back``() =
+    let fake =
+      FakeMigrondi(
+        statuses = [ Applied c; Applied b; Applied a ],
+        dryDown = [ c; b; a ]
+      )
+
+    let exitCode =
+      Migrations.runTargetDown(
+        logger,
+        fake :> IMigrondi,
+        { Target = "b"; DryRun = true }
+      )
+
+    Assert.AreEqual(0, exitCode)
+    Assert.IsTrue(fake.RunDownAmounts.IsEmpty)
+
 
 [<TestClass>]
 type StatusExitTests() =
@@ -599,3 +697,55 @@ type StatusExitTests() =
       1,
       Migrations.migrationStatus("missing", logger, fake :> IMigrondi)
     )
+
+
+[<TestClass>]
+type ArgumentMapperTests() =
+
+  let logger = NullLogger.Instance :> Microsoft.Extensions.Logging.ILogger
+
+  let buildEnv(fake: FakeMigrondi) =
+    let serializer = MigrondiSerializer()
+    let config = MigrondiConfig.Default
+
+    let fileSystem =
+      MiFileSystem(
+        logger,
+        serializer,
+        serializer,
+        Uri(Path.GetTempPath(), UriKind.Absolute),
+        Uri("migrations/", UriKind.Relative)
+      )
+
+    let database = MiDatabaseHandler(logger, config)
+
+    AppEnv(
+      logger,
+      serializer :> IMiConfigurationSerializer,
+      serializer :> IMiMigrationSerializer,
+      fileSystem :> IMiFileSystem,
+      database :> IMiDatabaseHandler,
+      fake :> IMigrondi,
+      false,
+      config
+    )
+
+  [<TestMethod>]
+  member _.``up rejects amount together with to``() =
+    let fake = FakeMigrondi()
+    let appEnv = buildEnv fake
+
+    let exitCode = ArgumentMapper.Up appEnv (Some 1, None, Some "200_b")
+
+    Assert.AreEqual(1, exitCode)
+    Assert.IsTrue(fake.RunUpAmounts.IsEmpty)
+
+  [<TestMethod>]
+  member _.``down rejects amount together with to``() =
+    let fake = FakeMigrondi()
+    let appEnv = buildEnv fake
+
+    let exitCode = ArgumentMapper.Down appEnv (Some 1, None, Some "200_b")
+
+    Assert.AreEqual(1, exitCode)
+    Assert.IsTrue(fake.RunDownAmounts.IsEmpty)
