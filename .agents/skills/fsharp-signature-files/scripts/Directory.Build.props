@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <ProofRoot>$(FSHARP_SIGNATURE_PROOF_ROOT)</ProofRoot>
+    <ProofRoot Condition="'$(ProofRoot)' == ''">$([System.IO.Path]::Combine($([System.IO.Path]::GetTempPath()), 'fsharp-signature-files-proof'))</ProofRoot>
+    <ProofArtifacts>$([System.IO.Path]::Combine('$(ProofRoot)', '$(MSBuildProjectName)'))</ProofArtifacts>
+    <BaseIntermediateOutputPath>$(ProofArtifacts)/obj/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(ProofArtifacts)/bin/</BaseOutputPath>
+  </PropertyGroup>
+</Project>

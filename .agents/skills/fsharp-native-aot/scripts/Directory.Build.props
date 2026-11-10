@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <ProofArtifacts>$([System.IO.Path]::Combine($([System.IO.Path]::GetTempPath()), 'fsharp-native-aot-proof', '$(MSBuildProjectName)'))</ProofArtifacts>
+    <BaseIntermediateOutputPath>$(ProofArtifacts)/obj/</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(ProofArtifacts)/bin/</BaseOutputPath>
+  </PropertyGroup>
+</Project>
