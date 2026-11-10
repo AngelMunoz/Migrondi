@@ -20,10 +20,20 @@ type RecordedRunNew = {
 }
 
 /// Records the arguments the CLI handlers pass to the core service.
-type FakeMigrondi(?statuses: MigrationStatus list) =
+type FakeMigrondi
+  (
+    ?statuses: MigrationStatus list,
+    ?dryUp: Migration list,
+    ?dryDown: Migration list,
+    ?statusFor: MigrationStatus
+  ) =
   let mutable runNewArgs: RecordedRunNew option = None
+  let mutable runUpAmounts: int option list = []
+  let mutable runDownAmounts: int option list = []
 
   member _.RunNewArgs = runNewArgs
+  member _.RunUpAmounts = runUpAmounts
+  member _.RunDownAmounts = runDownAmounts
 
   interface IMigrondi with
     member _.Initialize() = ()
@@ -65,18 +75,26 @@ type FakeMigrondi(?statuses: MigrationStatus list) =
       }
 
     member _.RunUp(?amount) =
+      runUpAmounts <- runUpAmounts @ [ amount ]
       List<MigrationRecord>() :> IReadOnlyList<_>
 
     member _.RunDown(?amount) =
+      runDownAmounts <- runDownAmounts @ [ amount ]
       List<MigrationRecord>() :> IReadOnlyList<_>
 
-    member _.DryRunUp(?amount) = List<Migration>() :> IReadOnlyList<_>
-    member _.DryRunDown(?amount) = List<Migration>() :> IReadOnlyList<_>
+    member _.DryRunUp(?amount) =
+      List<Migration>(defaultArg dryUp []) :> IReadOnlyList<_>
+
+    member _.DryRunDown(?amount) =
+      List<Migration>(defaultArg dryDown []) :> IReadOnlyList<_>
 
     member _.MigrationsList() =
       List<MigrationStatus>(defaultArg statuses []) :> IReadOnlyList<_>
 
-    member _.ScriptStatus(_migrationPath) = failwith "not used"
+    member _.ScriptStatus(_migrationPath) =
+      match statusFor with
+      | Some status -> status
+      | None -> raise(SourceNotFound("path", "name"))
 
     member _.RunUpAsync(?amount, ?cancellationToken) =
       Task.FromResult(List<MigrationRecord>() :> IReadOnlyList<_>)
@@ -454,4 +472,130 @@ type ListFilterTests() =
           statuses
         )
       )
+    )
+
+
+[<TestClass>]
+type TargetTests() =
+
+  let logger = NullLogger.Instance :> Microsoft.Extensions.Logging.ILogger
+
+  let migration(name: string, timestamp: int64) : Migration = {
+    name = name
+    timestamp = timestamp
+    upContent = "SELECT 1;"
+    downContent = "SELECT 0;"
+    manualTransaction = false
+  }
+
+  let a = migration("100_a.sql", 100L)
+  let b = migration("200_b.sql", 200L)
+  let c = migration("300_c.sql", 300L)
+
+  [<TestMethod>]
+  member _.``resolveTarget matches name filename and timestamp``() =
+    let statuses = [ Pending c; Pending b; Pending a ]
+
+    for target in [ "b"; "200_b"; "200_b.sql"; "200" ] do
+      match Migrations.resolveTarget(statuses, target) with
+      | Ok(Pending found) ->
+        Assert.AreEqual(200L, found.timestamp, $"target: {target}")
+      | Ok(Applied _) -> Assert.Fail($"expected pending for {target}")
+      | Error message -> Assert.Fail(message)
+
+    match Migrations.resolveTarget(statuses, "missing") with
+    | Ok _ -> Assert.Fail("expected an unknown target error")
+    | Error _ -> ()
+
+  [<TestMethod>]
+  member _.``upTargetAmount includes the target and stops there``() =
+    let pending = [ a; b; c ]
+
+    match Migrations.upTargetAmount(Pending b, pending) with
+    | Ok amount -> Assert.AreEqual(2, amount)
+    | Error message -> Assert.Fail(message)
+
+    match Migrations.upTargetAmount(Applied b, pending) with
+    | Ok amount -> Assert.AreEqual(0, amount)
+    | Error message -> Assert.Fail(message)
+
+  [<TestMethod>]
+  member _.``downTargetAmount leaves the target applied``() =
+    let applied = [ c; b; a ]
+
+    match Migrations.downTargetAmount(Applied b, applied) with
+    | Ok amount -> Assert.AreEqual(1, amount)
+    | Error message -> Assert.Fail(message)
+
+    match Migrations.downTargetAmount(Applied c, applied) with
+    | Ok amount -> Assert.AreEqual(0, amount)
+    | Error message -> Assert.Fail(message)
+
+    match Migrations.downTargetAmount(Pending b, applied) with
+    | Ok _ -> Assert.Fail("expected a not-applied error")
+    | Error _ -> ()
+
+  [<TestMethod>]
+  member _.``runTargetUp runs the derived amount``() =
+    let fake =
+      FakeMigrondi(
+        statuses = [ Pending c; Pending b; Pending a ],
+        dryUp = [ a; b; c ]
+      )
+
+    let exitCode =
+      Migrations.runTargetUp(
+        logger,
+        fake :> IMigrondi,
+        { Target = "b"; DryRun = false }
+      )
+
+    Assert.AreEqual(0, exitCode)
+    Assert.AreEqual<int option list>([ Some 2 ], fake.RunUpAmounts)
+
+  [<TestMethod>]
+  member _.``runTargetUp unknown target fails without running``() =
+    let fake = FakeMigrondi(statuses = [ Pending a ], dryUp = [ a ])
+
+    let exitCode =
+      Migrations.runTargetUp(
+        logger,
+        fake :> IMigrondi,
+        { Target = "missing"; DryRun = false }
+      )
+
+    Assert.AreEqual(1, exitCode)
+    Assert.IsTrue(fake.RunUpAmounts.IsEmpty)
+
+
+[<TestClass>]
+type StatusExitTests() =
+
+  let logger = NullLogger.Instance :> Microsoft.Extensions.Logging.ILogger
+
+  let pending: MigrationStatus =
+    Pending {
+      name = "100_a.sql"
+      timestamp = 100L
+      upContent = "SELECT 1;"
+      downContent = "SELECT 0;"
+      manualTransaction = false
+    }
+
+  [<TestMethod>]
+  member _.``migrationStatus returns 0 for a known migration``() =
+    let fake = FakeMigrondi(statusFor = pending)
+
+    Assert.AreEqual(
+      0,
+      Migrations.migrationStatus("a", logger, fake :> IMigrondi)
+    )
+
+  [<TestMethod>]
+  member _.``migrationStatus returns 1 for an unknown migration``() =
+    let fake = FakeMigrondi()
+
+    Assert.AreEqual(
+      1,
+      Migrations.migrationStatus("missing", logger, fake :> IMigrondi)
     )

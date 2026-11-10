@@ -11,6 +11,7 @@ open Migrondi.Handlers
 
 [<RequireQualifiedAccess>]
 module internal ArgumentMapper =
+  open Microsoft.Extensions.Logging
 
 
   let Init
@@ -29,17 +30,49 @@ module internal ArgumentMapper =
     force,
     merge
 
-  let Up (appEnv: AppEnv) (amount: int option, isDry: bool option) =
-    match isDry with
-    | Some true -> Migrations.runDryUp(amount, appEnv.Logger, appEnv.Migrondi)
-    | Some false
-    | None -> Migrations.runUp(amount, appEnv.Logger, appEnv.Migrondi)
+  let Up
+    (appEnv: AppEnv)
+    (amount: int option, isDry: bool option, toTarget: string option)
+    =
+    let dryRun = defaultArg isDry false
 
-  let Down (appEnv: AppEnv) (amount: int option, isDry: bool option) =
-    match isDry with
-    | Some true -> Migrations.runDryDown(amount, appEnv.Logger, appEnv.Migrondi)
-    | Some false
-    | None -> Migrations.runDown(amount, appEnv.Logger, appEnv.Migrondi)
+    match amount, toTarget with
+    | Some _, Some _ ->
+      appEnv.Logger.LogError("--to cannot be used together with an amount.")
+      1
+    | None, Some target ->
+      Migrations.runTargetUp(
+        appEnv.Logger,
+        appEnv.Migrondi,
+        { Target = target; DryRun = dryRun }
+      )
+    | _, None ->
+      if dryRun then
+        Migrations.runDryUp(amount, appEnv.Logger, appEnv.Migrondi)
+      else
+        Migrations.runUp(amount, appEnv.Logger, appEnv.Migrondi)
+
+  let Down
+    (appEnv: AppEnv)
+    (amount: int option, isDry: bool option, toTarget: string option)
+    =
+    let dryRun = defaultArg isDry false
+
+    match amount, toTarget with
+    | Some _, Some _ ->
+      appEnv.Logger.LogError("--to cannot be used together with an amount.")
+      1
+    | None, Some target ->
+      Migrations.runTargetDown(
+        appEnv.Logger,
+        appEnv.Migrondi,
+        { Target = target; DryRun = dryRun }
+      )
+    | _, None ->
+      if dryRun then
+        Migrations.runDryDown(amount, appEnv.Logger, appEnv.Migrondi)
+      else
+        Migrations.runDown(amount, appEnv.Logger, appEnv.Migrondi)
 
   let inline New
     (appEnv: AppEnv)
@@ -147,7 +180,11 @@ module internal Commands =
     description "Runs migrations against the configured database"
     addAlias "apply"
 
-    inputs(SharedArguments.amount, SharedArguments.isDry)
+    inputs(
+      SharedArguments.amount,
+      SharedArguments.isDry,
+      SharedArguments.toTarget
+    )
 
     setAction(withSetup appEnv (ArgumentMapper.Up appEnv))
   }
@@ -156,7 +193,11 @@ module internal Commands =
     description "Runs migrations against the configured database"
     addAlias "rollback"
 
-    inputs(SharedArguments.amount, SharedArguments.isDry)
+    inputs(
+      SharedArguments.amount,
+      SharedArguments.isDry,
+      SharedArguments.toTarget
+    )
 
     setAction(withSetup appEnv (ArgumentMapper.Down appEnv))
   }

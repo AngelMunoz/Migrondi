@@ -536,6 +536,124 @@ module internal Migrations =
     | _ when name.EndsWith($"_{timestamp}") -> $"{name}.sql"
     | _ -> $"{timestamp}_{name}.sql"
 
+  type TargetRunArgs = { Target: string; DryRun: bool }
+
+  /// Resolves a `--to` target against the known migrations. The target
+  /// may be the friendly name, the file name with or without `.sql`, or
+  /// the timestamp, matching how agents identify a migration from
+  /// `list` output.
+  let resolveTarget(migrations: MigrationStatus seq, target: string) =
+    let normalized =
+      if target.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) then
+        target.Substring(0, target.Length - 4)
+      else
+        target
+
+    let targetKeys(status: MigrationStatus) =
+      let migration = status.Value
+      let fileName = migrationFileName migration
+
+      let stem = fileName.Substring(0, fileName.Length - 4)
+
+      let friendly =
+        match Migration.ExtractFromFilename fileName with
+        | Ok(name, _) -> name
+        | Error _ -> migration.name
+
+      [
+        migration.name
+        fileName
+        stem
+        friendly
+        migration.timestamp.ToString()
+      ]
+
+    let matches =
+      migrations
+      |> Seq.filter(fun status -> targetKeys status |> List.contains normalized)
+      |> List.ofSeq
+
+    match matches with
+    | [] -> Error $"No migration found matching '{target}'."
+    | [ status ] -> Ok status
+    | _ ->
+      let names =
+        matches
+        |> List.map(fun status -> status.Value.name)
+        |> String.concat ", "
+
+      Error $"Target '{target}' matches more than one migration: {names}."
+
+  /// Amount for `up --to`: pending migrations are applied oldest first,
+  /// so the amount runs through the target, inclusive. An applied target
+  /// is already reached and runs nothing.
+  let upTargetAmount(target: MigrationStatus, pending: Migration seq) =
+    match target with
+    | Applied _ -> Ok 0
+    | Pending migration ->
+      match
+        pending
+        |> Seq.tryFindIndex(fun candidate ->
+          candidate.timestamp = migration.timestamp
+          && candidate.name = migration.name)
+      with
+      | Some index -> Ok(index + 1)
+      | None ->
+        Error
+          $"Migration '{migration.name}' is not pending, cannot apply to it."
+
+  /// Amount for `down --to`: applied migrations roll back newest first,
+  /// so the amount rolls back everything newer than the target, leaving
+  /// the target applied. A pending target cannot be rolled back to.
+  let downTargetAmount(target: MigrationStatus, applied: Migration seq) =
+    match target with
+    | Pending migration ->
+      Error
+        $"Migration '{migration.name}' is not applied, cannot roll back to it."
+    | Applied migration ->
+      match
+        applied
+        |> Seq.tryFindIndex(fun candidate ->
+          candidate.timestamp = migration.timestamp
+          && candidate.name = migration.name)
+      with
+      | Some index -> Ok index
+      | None ->
+        Error
+          $"Migration '{migration.name}' is not applied, cannot roll back to it."
+
+  let runTargetUp(logger: ILogger, migrondi: IMigrondi, args: TargetRunArgs) =
+    match resolveTarget(migrondi.MigrationsList(), args.Target) with
+    | Error message ->
+      logger.LogError("{Message}", message)
+      1
+    | Ok target ->
+      match upTargetAmount(target, migrondi.DryRunUp()) with
+      | Error message ->
+        logger.LogError("{Message}", message)
+        1
+      | Ok amount ->
+        if args.DryRun then
+          runDryUp(Some amount, logger, migrondi)
+        else
+          runUp(Some amount, logger, migrondi)
+
+  let runTargetDown(logger: ILogger, migrondi: IMigrondi, args: TargetRunArgs) =
+    match resolveTarget(migrondi.MigrationsList(), args.Target) with
+    | Error message ->
+      logger.LogError("{Message}", message)
+      1
+    | Ok target ->
+      match downTargetAmount(target, migrondi.DryRunDown()) with
+      | Error message ->
+        logger.LogError("{Message}", message)
+        1
+      | Ok amount ->
+        if args.DryRun then
+          runDryDown(Some amount, logger, migrondi)
+        else
+          runDown(Some amount, logger, migrondi)
+
   let listMigrations(logger: ILogger, migrondi: IMigrondi, args: ListArgs) =
 
     let printMigrationsTable(table: Table, migrations: Migration seq) =
@@ -720,4 +838,4 @@ module internal Migrations =
         "NotFound"
       )
 
-      0
+      1
