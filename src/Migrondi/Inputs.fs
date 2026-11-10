@@ -71,6 +71,34 @@ module SharedArguments =
 
 [<RequireQualifiedAccess>]
 module ListArgs =
+  let pending =
+    Input.optionMaybe<bool> "--pending"
+    |> Input.desc "Only list pending migrations"
+
+  let applied =
+    Input.optionMaybe<bool> "--applied"
+    |> Input.desc "Only list applied migrations"
+
+  let limit =
+    Input.optionMaybe<int> "--limit"
+    |> Input.desc "List at most this many migrations, newest first"
+
+  let last =
+    Input.optionMaybe<int> "--last"
+    |> Input.desc "List the last migrations in listing order"
+
+  let search =
+    Input.optionMaybe<string> "--search"
+    |> Input.desc "Only list migrations whose name or SQL contains this text"
+
+  let showPath =
+    Input.optionMaybe<bool> "--show-path"
+    |> Input.desc "Also print the file path of each listed migration"
+
+  let showContent =
+    Input.optionMaybe<bool> "--show-content"
+    |> Input.desc "Also print the up and down SQL of each listed migration"
+
   let MigrationKind =
     let op =
       let parseArgument(result: ArgumentResult) =

@@ -20,7 +20,7 @@ type RecordedRunNew = {
 }
 
 /// Records the arguments the CLI handlers pass to the core service.
-type FakeMigrondi() =
+type FakeMigrondi(?statuses: MigrationStatus list) =
   let mutable runNewArgs: RecordedRunNew option = None
 
   member _.RunNewArgs = runNewArgs
@@ -74,7 +74,7 @@ type FakeMigrondi() =
     member _.DryRunDown(?amount) = List<Migration>() :> IReadOnlyList<_>
 
     member _.MigrationsList() =
-      List<MigrationStatus>() :> IReadOnlyList<_>
+      List<MigrationStatus>(defaultArg statuses []) :> IReadOnlyList<_>
 
     member _.ScriptStatus(_migrationPath) = failwith "not used"
 
@@ -91,7 +91,9 @@ type FakeMigrondi() =
       Task.FromResult(List<Migration>() :> IReadOnlyList<_>)
 
     member _.MigrationsListAsync(?cancellationToken) =
-      Task.FromResult(List<MigrationStatus>() :> IReadOnlyList<_>)
+      Task.FromResult(
+        List<MigrationStatus>(defaultArg statuses []) :> IReadOnlyList<_>
+      )
 
     member _.ScriptStatusAsync(_migrationPath, ?cancellationToken) =
       failwith "not used"
@@ -257,3 +259,199 @@ type NewContentTests() =
 
     Assert.AreEqual(1, exitCode)
     Assert.IsTrue(fake.RunNewArgs.IsNone)
+
+
+[<TestClass>]
+type ListFilterTests() =
+
+  let migration(name: string, timestamp: int64, up: string, applied: bool) =
+    let migration: Migration = {
+      name = name
+      timestamp = timestamp
+      upContent = up
+      downContent = $"DROP {name};"
+      manualTransaction = false
+    }
+
+    if applied then Applied migration else Pending migration
+
+  // newest first, as MigrationsList returns them
+  let statuses = [
+    migration("300_c.sql", 300L, "CREATE TABLE c (id INT);", true)
+    migration("200_b.sql", 200L, "CREATE TABLE b (id INT);", false)
+    migration("100_a.sql", 100L, "ALTER TABLE users ADD email TEXT;", false)
+  ]
+
+  let filters: Migrations.ListFilters = {
+    Kind = None
+    Pending = None
+    Applied = None
+    Limit = None
+    Last = None
+    Search = None
+    ShowPath = false
+    ShowContent = false
+  }
+
+  let names(result: Result<MigrationStatus list, string>) =
+    match result with
+    | Ok selected -> selected |> List.map(fun status -> status.Value.name)
+    | Error message ->
+      Assert.Fail(message)
+      []
+
+  [<TestMethod>]
+  member _.``filterMigrations pending and applied select by status``() =
+    Assert.AreEqual<string list>(
+      [ "200_b.sql"; "100_a.sql" ],
+      names(
+        Migrations.filterMigrations(
+          { filters with Pending = Some true },
+          statuses
+        )
+      )
+    )
+
+    Assert.AreEqual<string list>(
+      [ "300_c.sql" ],
+      names(
+        Migrations.filterMigrations(
+          { filters with Applied = Some true },
+          statuses
+        )
+      )
+    )
+
+  [<TestMethod>]
+  member _.``filterMigrations rejects contradictory status flags``() =
+    match
+      Migrations.filterMigrations(
+        {
+          filters with
+              Pending = Some true
+              Applied = Some true
+        },
+        statuses
+      )
+    with
+    | Ok _ -> Assert.Fail("expected a conflict error")
+    | Error _ -> ()
+
+    match
+      Migrations.filterMigrations(
+        {
+          filters with
+              Kind = Some MigrationType.Up
+              Pending = Some true
+        },
+        statuses
+      )
+    with
+    | Ok _ -> Assert.Fail("expected a conflict error")
+    | Error _ -> ()
+
+  [<TestMethod>]
+  member _.``filterMigrations search matches name and content ignoring case``
+    ()
+    =
+    Assert.AreEqual<string list>(
+      [ "100_a.sql" ],
+      names(
+        Migrations.filterMigrations(
+          {
+            filters with
+                Search = Some "add email"
+          },
+          statuses
+        )
+      )
+    )
+
+    Assert.AreEqual<string list>(
+      [ "200_b.sql" ],
+      names(
+        Migrations.filterMigrations(
+          { filters with Search = Some "200_B" },
+          statuses
+        )
+      )
+    )
+
+  [<TestMethod>]
+  member _.``filterMigrations limit takes newest and last takes oldest``() =
+    Assert.AreEqual<string list>(
+      [ "300_c.sql" ],
+      names(
+        Migrations.filterMigrations({ filters with Limit = Some 1 }, statuses)
+      )
+    )
+
+    Assert.AreEqual<string list>(
+      [ "100_a.sql" ],
+      names(
+        Migrations.filterMigrations({ filters with Last = Some 1 }, statuses)
+      )
+    )
+
+  [<TestMethod>]
+  member _.``filterMigrations rejects limit with last and non-positive counts``
+    ()
+    =
+    for filters in
+      [
+        {
+          filters with
+              Limit = Some 1
+              Last = Some 1
+        }
+        { filters with Limit = Some 0 }
+        { filters with Last = Some -2 }
+      ] do
+      match Migrations.filterMigrations(filters, statuses) with
+      | Ok _ -> Assert.Fail("expected an error")
+      | Error _ -> ()
+
+  [<TestMethod>]
+  member _.``migrationFileName reconstructs V1 and V0 file names``() =
+    let v1Applied = statuses |> List.head
+
+    let v0: Migration = {
+      name = "a_100"
+      timestamp = 100L
+      upContent = ""
+      downContent = ""
+      manualTransaction = false
+    }
+
+    match v1Applied with
+    | Applied migration ->
+      Assert.AreEqual("300_c.sql", Migrations.migrationFileName migration)
+    | Pending _ -> Assert.Fail("expected an applied migration")
+
+    Assert.AreEqual("a_100.sql", Migrations.migrationFileName v0)
+
+    Assert.AreEqual(
+      "300_c.sql",
+      Migrations.migrationFileName {
+        v0 with
+            name = "300_c"
+            timestamp = 300L
+      }
+    )
+
+  [<TestMethod>]
+  member _.``filterMigrations combines status search and limit``() =
+    Assert.AreEqual<string list>(
+      [ "200_b.sql" ],
+      names(
+        Migrations.filterMigrations(
+          {
+            filters with
+                Pending = Some true
+                Search = Some "create table"
+                Limit = Some 1
+          },
+          statuses
+        )
+      )
+    )
