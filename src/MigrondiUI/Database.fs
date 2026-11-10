@@ -239,15 +239,6 @@ module Database =
   }
 
   [<Struct>]
-  type InsertVirtualProjectArgs = {
-    name: string
-    description: string option
-    connection: string
-    tableName: string
-    driver: string
-  }
-
-  [<Struct>]
   type UpdateVirtualProjectArgs = {
     id: Guid
     connection: string
@@ -417,7 +408,7 @@ module Database =
     }
 
   let InsertVirtualProject(createDbConnection: unit -> IDbConnection) =
-    fun (args: InsertVirtualProjectArgs) -> cancellableTask {
+    fun (args: MigrondiUI.Database.InsertVirtualProjectArgs) -> cancellableTask {
       let! ct = CancellableTask.getCancellationToken()
       use connection = createDbConnection()
 

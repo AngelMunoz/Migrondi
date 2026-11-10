@@ -16,7 +16,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
+    <Compile Include="ServiceContracts.fs" />
+    <Compile Include="McpTypes.fs" />
     <Compile Include="Results.fs" />
+    <Compile Include="Tools.fs" />
     <Compile Include="HttpServer.fs" />
   </ItemGroup>
   <ItemGroup>
