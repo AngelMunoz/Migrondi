@@ -15,18 +15,30 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Types.fsi" />
     <Compile Include="Types.fs" />
+    <Compile Include="ServiceContracts.fsi" />
     <Compile Include="ServiceContracts.fs" />
+    <Compile Include="McpTypes.fsi" />
     <Compile Include="McpTypes.fs" />
+    <Compile Include="Logging.fsi" />
+    <Compile Include="Logging.fs" />
+    <Compile Include="Results.fsi" />
     <Compile Include="Results.fs" />
+    <Compile Include="Tools.fsi" />
     <Compile Include="Tools.fs" />
+    <Compile Include="HttpServer.fsi" />
     <Compile Include="HttpServer.fs" />
+    <Compile Include="Server.fsi" />
     <Compile Include="Server.fs" />
+    <Compile Include="SingleProject.fsi" />
+    <Compile Include="SingleProject.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="IcedTasks" />
     <PackageReference Include="JDeck" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <PackageReference Include="ModelContextProtocol" />
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
   </ItemGroup>

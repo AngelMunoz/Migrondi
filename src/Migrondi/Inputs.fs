@@ -75,6 +75,45 @@ module SharedArguments =
       "Signals migrondi to create a migration that will not be wrapped in a transaction when executed"
 
 [<RequireQualifiedAccess>]
+module Mcp =
+  let config =
+    Input.optionMaybe<string> "--config"
+    |> Input.desc
+      "Path to a migrondi.json; its directory becomes the project root"
+
+  let stdio =
+    Input.optionMaybe<bool> "--stdio"
+    |> Input.desc
+      "Serve MCP over stdio (default; the only transport in the CLI today)"
+
+  let http =
+    Input.optionMaybe<bool> "--http"
+    |> Input.desc "Not supported by the CLI MCP server yet"
+
+  let readonly_ =
+    Input.optionMaybe<bool> "--readonly" |> Input.desc "Serve only read tools"
+
+  let connection =
+    Input.optionMaybe<string> "--connection"
+    |> Input.aliases [ "-c" ]
+    |> Input.desc "The connection string to the database."
+
+  let migrations =
+    Input.optionMaybe<string> "--migrations"
+    |> Input.aliases [ "-m" ]
+    |> Input.desc "The path to the migrations directory."
+
+  let tableName =
+    Input.optionMaybe<string> "--table-name"
+    |> Input.aliases [ "-t" ]
+    |> Input.desc "The name of the table that will store the migrations."
+
+  let driver =
+    Input.optionMaybe<string> "--driver"
+    |> Input.aliases [ "-d" ]
+    |> Input.desc "The driver that will be used to connect to the database."
+
+[<RequireQualifiedAccess>]
 module ListArgs =
   let pending =
     Input.optionMaybe<bool> "--pending"

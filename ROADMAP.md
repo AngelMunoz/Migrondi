@@ -17,6 +17,7 @@ Make the CLI the primary agent-facing surface, with MCP served per project from 
 - **Tools split from binding:** the tool layer works on one or more `IMigrondi` instances and knows nothing about folders. A binding layer answers how the tool layer gets its projects. The CLI binding is one project from a config path. The GUI binding is the project collection. This split is what phases 1, 3, and 5 share.
 - **Project binding order for CLI MCP:** `--config <path>` first, then `MIGRONDI_*` env vars, then `cwd/migrondi.json` as the last fallback. Cwd alone is not the contract, because harnesses launch stdio servers from their own working directory. When `--config` is given, its containing directory becomes the project root, so the migrations folder and a relative SQLite path resolve against that directory, not the server's working directory. That anchoring is an MCP-binding decision in phase 3; the plain CLI keeps its current model, where the project root is the invocation directory and the config is always `<cwd>/migrondi.json`.
 - **Multi-project stays a GUI concern:** the CLI server serves one project per process. The shared tool layer must not hard-code that limit, so the GUI binding can serve many projects later without a tool rewrite.
+- **Spec target:** the MCP surfaces target spec revision 2026-07-28 through the official C# SDK (`ModelContextProtocol` 2.x; 2.4.0 as of this writing). Era negotiation (`server/discover` with the legacy `initialize` fallback) and per-request `_meta` belong to the SDK; the shared layer never hand-rolls handshake or versioning logic. Roots, Sampling, and the Logging capability are deprecated by that revision (SDK warning MCP9005) and stay out of the shared layer.
 - **CLI commands stay single-purpose:** each command does one thing and agents orchestrate the sequence of calls. Fused workflows (create-and-apply, create-and-preview, and similar) belong to the MCP tools, not to new CLI flags such as `new --apply`.
 - **Compatibility:** the `[mi-json]` and `[mi-debug]` tokens keep working with their current output shapes; phase 2 does not change CLI output formats. Tool names in the CLI server match the current MCP tool names where the shape fits.
 
@@ -39,6 +40,8 @@ Done when: `MigrondiUI --stdio` answers `initialize`, lists the same 16 tools, a
 
 ## Phase 2 — Agent-facing flags for the existing CLI commands
 
+Status: done. `new --up/--down/--up-file/--down-file`, the `list` discovery filters, `up`/`down --to`, and the non-zero `status` exit code landed with command-level tests (#58-#61), and the `migrondi-cli` and `migrondi-library` skills live under `.agents/skills/`.
+
 Goal: let an agent manipulate migrations through the existing commands, each of which keeps doing exactly one thing. The agent orchestrates the sequence (`new`, then `up --dry`, then `up`, then `status`); fused workflows such as `new --apply` are not CLI flags and belong to the MCP tools instead. Output formats do not change in this phase — plain logs and tables stay as they are, `[mi-json]` and `[mi-debug]` keep their current shapes, and structured results remain the MCP layer's job.
 
 Current state, verified in the code: the CLI handler for `new` passes only the name and `--manual-transaction` to `IMigrondi.RunNew`, even though the core already accepts optional up and down content, so an agent must create an empty file and then find and edit the timestamped file itself. `list` accepts only `--kind up|down` (meaning applied and pending) with no limit, search, or path/content display. `up` and `down` take an optional positional amount and `--dry`, but no named target, so an agent must list, count, and pass a number. `status` logs `NotFound` but still returns exit code 0. The project root is the invocation directory: the config is read from `<cwd>/migrondi.json`, and the migrations folder and a relative SQLite path resolve against that directory. This phase adds no `--config` flag to the plain CLI and does not change that anchoring.
@@ -55,13 +58,34 @@ Steps:
 
 Done when: in a temp folder with a SQLite database, an agent using only separate invocations can run `init`, create two migrations with `new --up ... --down ...`, see them with `list --pending`, preview with `up --dry`, apply only the first with `up --to <name>`, apply the rest with `up`, roll back to the first with `down --to <name>`, confirm each state with `status` (and a non-zero exit for an unknown name), and finish with `down`. Both skills validate cleanly.
 
+## Phase 2.5 — Harden the shared MCP layer for both bindings
+
+Goal: make `src/Migrondi.Mcp` correct against the current spec revision (2026-07-28) and equally solid for the two bindings that sit on it — the CLI single-project server (phase 3) and the multi-project server (phase 5). This is shared-layer work only: `src/Migrondi.Mcp` and its tests. No GUI app code changes; the multi-project binding is exercised through the test host.
+
+Current state, verified in the code and against SDK 2.4.0: the SDK is current and already speaks the 2026-07-28 revision, so era negotiation comes from the SDK, not from Migrondi code. Four things lag behind it:
+
+- Clean stdout is a host's responsibility, and hosts can get it wrong: the GUI entry wires Serilog's console sink to stdout and logs preview notices before the server starts. That host defect is deferred to the GUI rework and is out of scope here; the shared layer's job is to make the correct wiring a contract hosts consume rather than re-invent.
+- Tool annotations are partial: `ReadOnly` and `Destructive` are set; `Idempotent` and `OpenWorld` are never set (both are settable on `McpServerToolCreateOptions`).
+- The server identity hardcodes `Version = "1.2.0"` while the real version is derived from `CHANGELOG.md` at pack time.
+- The HTTP session layer predates the SDK's stateless serving: `StreamableHttpServerTransport` now has a `Stateless` init property, and the hand-rolled session store re-sends the `Mcp-Session-Id` header on every POST instead of only on the response that creates the session.
+
+Steps:
+
+1. Make clean stdout a shared-layer contract. The shared project provides the MCP-mode logging setup that writes every console line to stderr, and the phase 3 CLI host consumes it instead of wiring its own. The subprocess proof stays with phase 3's spike; here the contract is that hosts cannot inherit a stdout logger from the shared layer.
+2. Complete the tool annotations in the shared layer: `OpenWorld = false` on every tool (they touch local files and databases only), `Idempotent = true` on the pure reads, keep `ReadOnly`/`Destructive` as set. Define the annotation matrix once in the shared layer so the phase 3 single-project tools inherit it.
+3. Report the real version: derive the server `Implementation` version from assembly metadata (the pack-time version from `CHANGELOG.md`) and delete the `"1.2.0"` literal.
+4. Bring HTTP serving up to the SDK's model. Set `Stateless` on the transport if stateless serving covers the multi-project HTTP use case, and delete the hand-rolled session store; otherwise keep stateful sessions and record why. Scope the `Mcp-Session-Id` response header to the response that creates the session. Reject requests whose `Origin` header is present and not a localhost origin (a spec MUST for Streamable HTTP; the listener binds localhost).
+5. Guard the layer: the 37 MCP tests pass unchanged, tool call result shapes do not change (annotations are `tools/list` metadata, not call results), and the build stays at 0 warnings — an MCP9005 deprecation warning would mean Roots, Sampling, or the Logging capability entered the shared layer; they stay out.
+
+Done when: in the test host, the shared server's `tools/list` reports `idempotentHint` on the read tools and `openWorldHint: false` everywhere; the reported server version equals the package version; the shared HTTP server, driven by a real MCP client over HTTP, completes `initialize`, `tools/list`, a dry run, an apply, and a rollback, issues `Mcp-Session-Id` only on the response that creates the session, and rejects a non-localhost `Origin`; and the 37 MCP tests pass unchanged.
+
 ## Phase 3 — Add single-project MCP support to the CLI
 
 Current state, verified in the code: `Env.BuildDefault` builds one config from `cwd/migrondi.json`, env vars, and CLI overrides, and one `IMigrondi` from `MigrondiFactory`. That is the whole binding the CLI server needs.
 
 Steps:
 
-1. Prove clean stdout with a spike first. The current GUI server writes log lines to stdout before the first MCP message, and a strict client fails on the first line. Build the smallest `mcp` stub that answers `initialize` with all logs on stderr, and pass a strict client against it before any tool work starts.
+1. Prove clean stdout with a spike first. The GUI host has this defect today (deferred to the GUI rework, out of scope here); the CLI host must not copy it. Build the smallest `mcp` stub that answers `initialize` with all logs on stderr, and pass a strict client against it before any tool work starts.
 2. Add an `mcp` command to the CLI with `--stdio` as the first transport. Accept `--config <path>`, `--readonly`, and the existing config overrides (`--connection`, `--migrations`, `--table-name`, `--driver`).
 3. Build the server from the shared project with a single-project binding: resolve the config by the binding order in Key Decisions, build one `IMigrondi`, and serve the read tools first — `list_migrations`, `dry_run_migrations`, `dry_run_rollback`, plus one tool that reports the resolved config path, driver, and migrations folder, and never the connection string.
 4. Add the write tools after the read tools pass: `create_migration`, `run_migrations`, `run_rollback`. Match the current tool names and mark read-only and destructive tools with the same annotations the current server uses.
@@ -105,6 +129,7 @@ Done when: one agent client can run the same migration flow against both hosts, 
 - After each phase: `dotnet build Migrondi.slnx --configuration Release` gives 0 warnings and 0 errors, and `dotnet test Migrondi.slnx --configuration Release` gives all tests green.
 - Phase 1 and 5 runtime check: script an MCP client that fails on any non-JSON stdout line. Run `initialize`, `tools/list`, and one read tool and one write tool against each host.
 - Phase 2 runtime check: in a temp folder with a SQLite database, run the phase 2 Done-when sequence as separate CLI invocations (`init`, `new --up/--down` twice, `list --pending`, `up --dry`, `up --to`, `up`, `down --to`, `status`, `down`) and assert the applied state after each step, including the non-zero `status` exit for an unknown name. Then run `muse skills validate` on both new skills.
+- Phase 2.5 runtime check: in the test host, drive the shared HTTP server with a real MCP client through `initialize`, `tools/list`, a dry run, an apply, and a rollback; confirm `Mcp-Session-Id` is issued only on the session-creating response and a non-localhost `Origin` is rejected. Diff `tools/list` against the previous run: only `idempotentHint`/`openWorldHint` may differ.
 - Phase 3 runtime check: start `migrondi mcp` from a folder that is not the project folder, with only `--config` in the client entry. Complete one apply and one rollback.
 - Phase 4 runtime check: open the GUI on a real display and run the project flow by hand. A build and the headless suite do not count as proof for this phase.
 - Phase 5 runtime check: run the same client script against the CLI host and the GUI host and compare the tool results.
@@ -116,4 +141,5 @@ Done when: one agent client can run the same migration flow against both hosts, 
 - Tool result shapes may change only in phase 1 if a shape names a GUI type. Any other shape change needs a note in the changelog under `Unreleased`.
 - No new GUI features in these phases. GUI work here is extraction and segmentation only.
 - No multi-project CLI server in these phases. One agent client starts one CLI server per project.
+- Phase 2.5 changes only `src/Migrondi.Mcp` and its tests. No GUI app code changes; the GUI host's stdout logging defect is fixed when the GUI is reworked, and until then the multi-project server is exercised through the test host.
 - No fused CLI workflows in phase 2. Flags make each existing command complete on its own; sequencing stays with the agent, and multi-step operations stay with the MCP tools.

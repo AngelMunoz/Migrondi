@@ -1,7 +1,10 @@
-namespace MigrondiUI.Mcp
+namespace Migrondi.Mcp
 
 open System
 open System.Threading
+open System.Threading.Tasks
+
+open ModelContextProtocol.Protocol
 
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
@@ -13,11 +16,92 @@ open Migrondi.Core
 
 open IcedTasks
 
+// Strongly-typed delegates for the multi-project tools; constructed
+// directly from the F# wrapper functions below.
+type ListProjectsDelegate =
+  delegate of ct: CancellationToken -> Task<CallToolResult>
+
+type GetProjectDelegate =
+  delegate of projectId: string * ct: CancellationToken -> Task<CallToolResult>
+
+type ListMigrationsDelegate =
+  delegate of projectId: string * ct: CancellationToken -> Task<CallToolResult>
+
+type GetMigrationDelegate =
+  delegate of
+    projectId: string * migrationName: string * ct: CancellationToken ->
+      Task<CallToolResult>
+
+type DryRunMigrationsDelegate =
+  delegate of
+    projectId: string * amount: int option * ct: CancellationToken ->
+      Task<CallToolResult>
+
+type RunMigrationsDelegate =
+  delegate of
+    projectId: string * amount: int option * ct: CancellationToken ->
+      Task<CallToolResult>
+
+type CreateMigrationDelegate =
+  delegate of
+    projectId: string *
+    name: string *
+    upContent: string option *
+    downContent: string option *
+    ct: CancellationToken ->
+      Task<CallToolResult>
+
+type UpdateMigrationDelegate =
+  delegate of
+    projectId: string *
+    name: string *
+    upContent: string *
+    downContent: string *
+    ct: CancellationToken ->
+      Task<CallToolResult>
+
+type DeleteMigrationDelegate =
+  delegate of
+    projectId: string * name: string * ct: CancellationToken ->
+      Task<CallToolResult>
+
+type CreateVirtualProjectDelegate =
+  delegate of
+    name: string *
+    connection: string *
+    driver: string *
+    description: string option *
+    tableName: string option *
+    ct: CancellationToken ->
+      Task<CallToolResult>
+
+type UpdateVirtualProjectDelegate =
+  delegate of
+    projectId: string *
+    name: string option *
+    connection: string option *
+    tableName: string option *
+    driver: string option *
+    ct: CancellationToken ->
+      Task<CallToolResult>
+
+type DeleteProjectDelegate =
+  delegate of projectId: string * ct: CancellationToken -> Task<CallToolResult>
+
+type ExportVirtualProjectDelegate =
+  delegate of
+    projectId: string * exportPath: string * ct: CancellationToken ->
+      Task<CallToolResult>
+
+type ImportFromLocalDelegate =
+  delegate of configPath: string * ct: CancellationToken -> Task<CallToolResult>
+
+
 module ServerBuilder =
 
-  module private ReadTools =
-    let listProjectsFn env ct = task {
-      let! projects = McpTools.listProjects env ct
+  module ReadTools =
+    let listProjectsFn env = cancellableTask {
+      let! projects = McpTools.listProjects env
 
       let result: McpResults.ListProjectsResult = {
         local =
@@ -38,7 +122,7 @@ module ServerBuilder =
         |> McpResultMapper.fromEncoder McpResults.ListProjectsResult.Encoder
     }
 
-    let getProjectFn env (pid: string) ct = task {
+    let getProjectFn env (pid: string) = cancellableTask {
       match Guid.TryParse pid with
       | false, _ ->
         return
@@ -46,7 +130,7 @@ module ServerBuilder =
             $"Invalid project ID: {pid}"
           |> McpResultMapper.fromEncoder McpResults.GetProjectResult.Encoder
       | true, guid ->
-        let! project = McpTools.getProject env guid ct
+        let! project = McpTools.getProject env guid
 
         match project with
         | Some(Local p) ->
@@ -66,14 +150,14 @@ module ServerBuilder =
             |> McpResultMapper.fromEncoder McpResults.GetProjectResult.Encoder
     }
 
-    let listMigrationsFn env (pid: string) ct = task {
+    let listMigrationsFn env (pid: string) = cancellableTask {
       match Guid.TryParse pid with
       | false, _ ->
         return
           McpResults.ListMigrationsResult.Empty
           |> McpResultMapper.fromEncoder McpResults.ListMigrationsResult.Encoder
       | true, guid ->
-        let! migrations = McpTools.listMigrations env guid ct
+        let! migrations = McpTools.listMigrations env guid
 
         let result = {
           McpResults.ListMigrationsResult.migrations =
@@ -87,14 +171,14 @@ module ServerBuilder =
           |> McpResultMapper.fromEncoder McpResults.ListMigrationsResult.Encoder
     }
 
-    let getMigrationFn env (guid: string) name ct = task {
+    let getMigrationFn env (guid: string) name = cancellableTask {
       match Guid.TryParse guid with
       | false, _ ->
         return
           McpResults.GetMigrationResult.MigrationNotFound "Invalid project ID"
           |> McpResultMapper.fromEncoder McpResults.GetMigrationResult.Encoder
       | true, projectId ->
-        let! result = McpTools.getMigration env projectId name ct
+        let! result = McpTools.getMigration env projectId name
 
         match result with
         | Error McpTools.GetMigrationError.ProjectNotFound ->
@@ -120,14 +204,14 @@ module ServerBuilder =
             |> McpResultMapper.fromEncoder McpResults.GetMigrationResult.Encoder
     }
 
-    let dryRunMigrationsFn env (pid: string) amount ct = task {
+    let dryRunMigrationsFn env (pid: string) amount = cancellableTask {
       match Guid.TryParse pid with
       | false, _ ->
         return
           McpResults.DryRunResult.Empty
           |> McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder
       | true, guid ->
-        let! migrations = McpTools.dryRunMigrations env guid amount ct
+        let! migrations = McpTools.dryRunMigrations env guid amount
 
         let result =
           if migrations.IsEmpty then
@@ -145,14 +229,14 @@ module ServerBuilder =
           result |> McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder
     }
 
-    let dryRunRollbackFn env (pid: string) amount ct = task {
+    let dryRunRollbackFn env (pid: string) amount = cancellableTask {
       match Guid.TryParse pid with
       | false, _ ->
         return
           McpResults.DryRunResult.Empty
           |> McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder
       | true, guid ->
-        let! migrations = McpTools.dryRunRollback env guid amount ct
+        let! migrations = McpTools.dryRunRollback env guid amount
 
         let result =
           if migrations.IsEmpty then
@@ -170,15 +254,15 @@ module ServerBuilder =
           result |> McpResultMapper.fromEncoder McpResults.DryRunResult.Encoder
     }
 
-  module private WriteTools =
-    let runMigrationsFn env (pid: string) amount ct = task {
+  module WriteTools =
+    let runMigrationsFn env (pid: string) amount = cancellableTask {
       match Guid.TryParse pid with
       | false, _ ->
         return
           McpResults.MigrationsResult.Error "projectId must be a valid GUID"
           |> McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder
       | true, guid ->
-        let! result = McpTools.runMigrations env guid amount ct
+        let! result = McpTools.runMigrations env guid amount
 
         match result with
         | Error McpTools.RunMigrationsError.ProjectNotFound ->
@@ -197,14 +281,14 @@ module ServerBuilder =
             |> McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder
     }
 
-    let runRollbackFn env (pid: string) amount ct = task {
+    let runRollbackFn env (pid: string) amount = cancellableTask {
       match Guid.TryParse pid with
       | false, _ ->
         return
           McpResults.MigrationsResult.Error "projectId must be a valid GUID"
           |> McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder
       | true, guid ->
-        let! result = McpTools.runRollback env guid amount ct
+        let! result = McpTools.runRollback env guid amount
 
         match result with
         | Error McpTools.RunRollbackError.ProjectNotFound ->
@@ -223,7 +307,7 @@ module ServerBuilder =
             |> McpResultMapper.fromEncoder McpResults.MigrationsResult.Encoder
     }
 
-    let createMigrationFn env (pid: string) name up down ct = task {
+    let createMigrationFn env (pid: string) name up down = cancellableTask {
       match Guid.TryParse pid with
       | false, _ ->
         return
@@ -232,7 +316,7 @@ module ServerBuilder =
           |> McpResultMapper.fromEncoder
             McpResults.CreateMigrationResult.Encoder
       | true, guid ->
-        let! result = McpTools.createMigration env guid name up down ct
+        let! result = McpTools.createMigration env guid name up down
 
         match result with
         | Error McpTools.CreateMigrationError.ProjectNotFound ->
@@ -264,14 +348,14 @@ module ServerBuilder =
               McpResults.CreateMigrationResult.Encoder
     }
 
-    let updateMigrationFn env (projectId: string) name up down ct = task {
+    let updateMigrationFn env (projectId: string) name up down = cancellableTask {
       match Guid.TryParse projectId with
       | false, _ ->
         return
           McpResults.SuccessResult.Error "projectId must be a valid GUID"
           |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
       | true, guid ->
-        let! result = McpTools.updateMigration env guid name up down ct
+        let! result = McpTools.updateMigration env guid name up down
 
         match result with
         | Error McpTools.UpdateMigrationError.ProjectNotFound ->
@@ -298,14 +382,14 @@ module ServerBuilder =
             |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
     }
 
-    let deleteMigrationFn env (projectId: string) name ct = task {
+    let deleteMigrationFn env (projectId: string) name = cancellableTask {
       match Guid.TryParse projectId with
       | false, _ ->
         return
           McpResults.SuccessResult.Error "projectId must be a valid GUID"
           |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
       | true, guid ->
-        let! result = McpTools.deleteMigration env guid name ct
+        let! result = McpTools.deleteMigration env guid name
 
         match result with
         | Error McpTools.DeleteMigrationError.ProjectNotFound ->
@@ -332,7 +416,7 @@ module ServerBuilder =
             |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
     }
 
-    let createVirtualProjectFn env name conn driver desc tbl ct = task {
+    let createVirtualProjectFn env name conn driver desc tbl = cancellableTask {
       let driverValue =
         try
           MigrondiDriver.FromString driver |> Some
@@ -347,7 +431,7 @@ module ServerBuilder =
           |> McpResultMapper.fromEncoder McpResults.CreateProjectResult.Encoder
       | Some driver ->
         let! result =
-          McpTools.createVirtualProject env name conn driver desc tbl ct
+          McpTools.createVirtualProject env name conn driver desc tbl
 
         match result with
         | Error(McpTools.CreateProjectError.CreationFailed msg) ->
@@ -370,55 +454,56 @@ module ServerBuilder =
               McpResults.CreateProjectResult.Encoder
     }
 
-    let updateVirtualProjectFn env (pid: string) name conn tbl driver ct = task {
-      match Guid.TryParse pid with
-      | false, _ ->
-        return
-          McpResults.SuccessResult.Error "projectId must be a valid GUID"
-          |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
-      | true, guid ->
-        let driverValue =
-          driver
-          |> Option.bind(fun d ->
-            try
-              MigrondiDriver.FromString d |> Some
-            with _ ->
-              None)
-
-        let! result =
-          McpTools.updateVirtualProject env guid name conn tbl driverValue ct
-
-        match result with
-        | Error McpTools.UpdateProjectError.ProjectNotFound ->
+    let updateVirtualProjectFn env (pid: string) name conn tbl driver =
+      cancellableTask {
+        match Guid.TryParse pid with
+        | false, _ ->
           return
-            McpResults.SuccessResult.Error $"Project {pid} not found"
+            McpResults.SuccessResult.Error "projectId must be a valid GUID"
             |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
-        | Error McpTools.UpdateProjectError.LocalProjectsNotSupported ->
-          return
-            McpResults.SuccessResult.Error
-              "Cannot update local projects via MCP"
-            |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
-        | Error(McpTools.UpdateProjectError.UpdateFailed msg) ->
-          return
-            McpResults.SuccessResult.Error $"Failed to update project: {msg}"
-            |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
-        | Ok _ ->
-          let projectName = defaultArg name "Project"
+        | true, guid ->
+          let driverValue =
+            driver
+            |> Option.bind(fun d ->
+              try
+                MigrondiDriver.FromString d |> Some
+              with _ ->
+                None)
 
-          return
-            McpResults.SuccessResult.Ok
-              $"Project '{projectName}' updated successfully"
-            |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
-    }
+          let! result =
+            McpTools.updateVirtualProject env guid name conn tbl driverValue
 
-    let deleteProjectFn env (pid: string) ct = task {
+          match result with
+          | Error McpTools.UpdateProjectError.ProjectNotFound ->
+            return
+              McpResults.SuccessResult.Error $"Project {pid} not found"
+              |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
+          | Error McpTools.UpdateProjectError.LocalProjectsNotSupported ->
+            return
+              McpResults.SuccessResult.Error
+                "Cannot update local projects via MCP"
+              |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
+          | Error(McpTools.UpdateProjectError.UpdateFailed msg) ->
+            return
+              McpResults.SuccessResult.Error $"Failed to update project: {msg}"
+              |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
+          | Ok _ ->
+            let projectName = defaultArg name "Project"
+
+            return
+              McpResults.SuccessResult.Ok
+                $"Project '{projectName}' updated successfully"
+              |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
+      }
+
+    let deleteProjectFn env (pid: string) = cancellableTask {
       match Guid.TryParse pid with
       | false, _ ->
         return
           McpResults.ErrorResult.Create "projectId must be a valid GUID"
           |> McpResultMapper.fromEncoder McpResults.ErrorResult.Encoder
       | true, guid ->
-        let! result = McpTools.deleteProject env guid ct
+        let! result = McpTools.deleteProject env guid
 
         match result with
         | Error McpTools.DeleteProjectError.ProjectNotFound ->
@@ -436,14 +521,14 @@ module ServerBuilder =
             |> McpResultMapper.fromEncoder McpResults.SuccessResult.Encoder
     }
 
-    let exportVirtualProjectFn env (pid: string) path ct = task {
+    let exportVirtualProjectFn env (pid: string) path = cancellableTask {
       match Guid.TryParse pid with
       | false, _ ->
         return
           McpResults.ExportResult.ExportError "projectId must be a valid GUID"
           |> McpResultMapper.fromEncoder McpResults.ExportResult.Encoder
       | true, guid ->
-        let! result = McpTools.exportVirtualProject env guid path ct
+        let! result = McpTools.exportVirtualProject env guid path
 
         match result with
         | Error McpTools.ExportProjectError.ProjectNotFound ->
@@ -465,8 +550,8 @@ module ServerBuilder =
             |> McpResultMapper.fromEncoder McpResults.ExportResult.Encoder
     }
 
-    let importFromLocalFn env path ct = task {
-      let! result = McpTools.importFromLocal env path ct
+    let importFromLocalFn env path = cancellableTask {
+      let! result = McpTools.importFromLocal env path
 
       match result with
       | Error(McpTools.ImportProjectError.ImportFailed msg) ->
@@ -515,10 +600,7 @@ module ServerBuilder =
 
   let createTool
     (serviceProvider: IServiceProvider)
-    name
-    title
-    (readOnly: bool)
-    (destructive: bool)
+    (spec: ToolSpec)
     (del: Delegate)
     : McpServerTool =
 
@@ -526,12 +608,32 @@ module ServerBuilder =
       del,
       McpServerToolCreateOptions(
         Services = serviceProvider,
-        Name = name,
-        Title = title,
-        ReadOnly = readOnly,
-        Destructive = destructive
+        Name = spec.Name,
+        Title = spec.Title,
+        ReadOnly = spec.ReadOnly,
+        Destructive = spec.Destructive,
+        Idempotent = spec.Idempotent,
+        OpenWorld = spec.OpenWorld
       )
     )
+
+  let readSpec name title = {
+    Name = name
+    Title = title
+    ReadOnly = true
+    Destructive = false
+    Idempotent = true
+    OpenWorld = false
+  }
+
+  let writeSpec name title destructive = {
+    Name = name
+    Title = title
+    ReadOnly = false
+    Destructive = destructive
+    Idempotent = false
+    OpenWorld = false
+  }
 
   let createReadTools
     (env: McpEnvironment)
@@ -539,46 +641,33 @@ module ServerBuilder =
     : McpServerTool list = [
     createTool
       serviceProvider
-      "list_projects"
-      "List Projects"
-      true
-      false
-      (ListProjectsDelegate(ReadTools.listProjectsFn env))
+      (readSpec "list_projects" "List Projects")
+      (ListProjectsDelegate(fun ct -> ReadTools.listProjectsFn env ct))
     createTool
       serviceProvider
-      "get_project"
-      "Get Project"
-      true
-      false
-      (GetProjectDelegate(ReadTools.getProjectFn env))
+      (readSpec "get_project" "Get Project")
+      (GetProjectDelegate(fun projectId ct ->
+        ReadTools.getProjectFn env projectId ct))
     createTool
       serviceProvider
-      "list_migrations"
-      "List Migrations"
-      true
-      false
-      (ListMigrationsDelegate(ReadTools.listMigrationsFn env))
+      (readSpec "list_migrations" "List Migrations")
+      (ListMigrationsDelegate(fun projectId ct ->
+        ReadTools.listMigrationsFn env projectId ct))
     createTool
       serviceProvider
-      "get_migration"
-      "Get Migration"
-      true
-      false
-      (GetMigrationDelegate(ReadTools.getMigrationFn env))
+      (readSpec "get_migration" "Get Migration")
+      (GetMigrationDelegate(fun projectId migrationName ct ->
+        ReadTools.getMigrationFn env projectId migrationName ct))
     createTool
       serviceProvider
-      "dry_run_migrations"
-      "Preview Migrations"
-      true
-      false
-      (DryRunMigrationsDelegate(ReadTools.dryRunMigrationsFn env))
+      (readSpec "dry_run_migrations" "Preview Migrations")
+      (DryRunMigrationsDelegate(fun projectId amount ct ->
+        ReadTools.dryRunMigrationsFn env projectId amount ct))
     createTool
       serviceProvider
-      "dry_run_rollback"
-      "Preview Rollback"
-      true
-      false
-      (DryRunMigrationsDelegate(ReadTools.dryRunRollbackFn env))
+      (readSpec "dry_run_rollback" "Preview Rollback")
+      (DryRunMigrationsDelegate(fun projectId amount ct ->
+        ReadTools.dryRunRollbackFn env projectId amount ct))
   ]
 
   let createWriteTools
@@ -587,74 +676,82 @@ module ServerBuilder =
     : McpServerTool list = [
     createTool
       serviceProvider
-      "run_migrations"
-      "Apply Migrations"
-      false
-      true
-      (RunMigrationsDelegate(WriteTools.runMigrationsFn env))
+      (writeSpec "run_migrations" "Apply Migrations" true)
+      (RunMigrationsDelegate(fun projectId amount ct ->
+        WriteTools.runMigrationsFn env projectId amount ct))
     createTool
       serviceProvider
-      "run_rollback"
-      "Rollback Migrations"
-      false
-      true
-      (RunMigrationsDelegate(WriteTools.runRollbackFn env))
+      (writeSpec "run_rollback" "Rollback Migrations" true)
+      (RunMigrationsDelegate(fun projectId amount ct ->
+        WriteTools.runRollbackFn env projectId amount ct))
     createTool
       serviceProvider
-      "create_migration"
-      "Create Migration"
-      false
-      false
-      (CreateMigrationDelegate(WriteTools.createMigrationFn env))
+      (writeSpec "create_migration" "Create Migration" false)
+      (CreateMigrationDelegate(fun projectId name upContent downContent ct ->
+        WriteTools.createMigrationFn
+          env
+          projectId
+          name
+          upContent
+          downContent
+          ct))
     createTool
       serviceProvider
-      "update_migration"
-      "Update Migration"
-      false
-      false
-      (UpdateMigrationDelegate(WriteTools.updateMigrationFn env))
+      (writeSpec "update_migration" "Update Migration" false)
+      (UpdateMigrationDelegate(fun projectId name upContent downContent ct ->
+        WriteTools.updateMigrationFn
+          env
+          projectId
+          name
+          upContent
+          downContent
+          ct))
     createTool
       serviceProvider
-      "delete_migration"
-      "Delete Migration"
-      false
-      true
-      (DeleteMigrationDelegate(WriteTools.deleteMigrationFn env))
+      (writeSpec "delete_migration" "Delete Migration" true)
+      (DeleteMigrationDelegate(fun projectId name ct ->
+        WriteTools.deleteMigrationFn env projectId name ct))
     createTool
       serviceProvider
-      "create_virtual_project"
-      "Create Virtual Project"
-      false
-      false
-      (CreateVirtualProjectDelegate(WriteTools.createVirtualProjectFn env))
+      (writeSpec "create_virtual_project" "Create Virtual Project" false)
+      (CreateVirtualProjectDelegate
+        (fun name connection driver description tableName ct ->
+          WriteTools.createVirtualProjectFn
+            env
+            name
+            connection
+            driver
+            description
+            tableName
+            ct))
     createTool
       serviceProvider
-      "update_virtual_project"
-      "Update Virtual Project"
-      false
-      false
-      (UpdateVirtualProjectDelegate(WriteTools.updateVirtualProjectFn env))
+      (writeSpec "update_virtual_project" "Update Virtual Project" false)
+      (UpdateVirtualProjectDelegate
+        (fun projectId name connection tableName driver ct ->
+          WriteTools.updateVirtualProjectFn
+            env
+            projectId
+            name
+            connection
+            tableName
+            driver
+            ct))
     createTool
       serviceProvider
-      "delete_project"
-      "Delete Project"
-      false
-      true
-      (DeleteProjectDelegate(WriteTools.deleteProjectFn env))
+      (writeSpec "delete_project" "Delete Project" true)
+      (DeleteProjectDelegate(fun projectId ct ->
+        WriteTools.deleteProjectFn env projectId ct))
     createTool
       serviceProvider
-      "export_virtual_project"
-      "Export Virtual Project"
-      false
-      false
-      (ExportVirtualProjectDelegate(WriteTools.exportVirtualProjectFn env))
+      (writeSpec "export_virtual_project" "Export Virtual Project" false)
+      (ExportVirtualProjectDelegate(fun projectId exportPath ct ->
+        WriteTools.exportVirtualProjectFn env projectId exportPath ct))
     createTool
       serviceProvider
-      "import_from_local"
-      "Import from Local"
-      false
-      false
-      (ImportFromLocalDelegate(WriteTools.importFromLocalFn env))
+      (writeSpec "import_from_local" "Import from Local" false)
+      (ImportFromLocalDelegate(fun configPath ct ->
+        WriteTools.importFromLocalFn env configPath ct))
   ]
 
   let buildToolCollection
@@ -681,25 +778,20 @@ module ServerBuilder =
     let options = McpServerOptions()
 
     options.ServerInfo <-
-      Implementation(Name = "migrondi-mcp", Version = "1.2.0")
+      Implementation(Name = "migrondi-mcp", Version = McpVersion.get())
 
     options.ToolCollection <- buildToolCollection env serviceProvider readOnly
     options
 
-  let run
-    (env: McpEnvironment)
-    (options: McpOptions)
+  /// Transport-running part shared by the multi-project server and the
+  /// single-project server: binds the mode's transport and runs the server.
+  let runTransport
+    (mode: McpMode)
+    (serverOptions: McpServerOptions)
     (loggerFactory: ILoggerFactory)
+    (serviceProvider: IServiceProvider)
     : Async<unit> = asyncEx {
-    let services = ServiceCollection()
-    services.AddSingleton<ILoggerFactory>(loggerFactory) |> ignore
-    services.AddSingleton<McpEnvironment>(env) |> ignore
-
-    let serviceProvider = services.BuildServiceProvider()
-
-    let serverOptions = createServerOptions env serviceProvider options.readOnly
-
-    match options.mode with
+    match mode with
     | Stdio ->
       let transport = StdioServerTransport("migrondi-mcp", loggerFactory)
 
@@ -720,4 +812,23 @@ module ServerBuilder =
           loggerFactory
           serviceProvider
           CancellationToken.None
+  }
+
+  let run
+    (env: McpEnvironment)
+    (options: McpOptions)
+    (loggerFactory: ILoggerFactory)
+    : Async<unit> = asyncEx {
+    let services = ServiceCollection()
+
+    services
+      .AddSingleton<ILoggerFactory>(loggerFactory)
+      .AddSingleton<McpEnvironment>(env)
+    |> ignore
+
+    let serviceProvider = services.BuildServiceProvider()
+
+    let serverOptions = createServerOptions env serviceProvider options.readOnly
+
+    do! runTransport options.mode serverOptions loggerFactory serviceProvider
   }

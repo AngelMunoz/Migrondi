@@ -1,4 +1,4 @@
-namespace MigrondiUI.Mcp
+namespace Migrondi.Mcp
 
 open Microsoft.Extensions.Logging
 

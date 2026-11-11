@@ -1,7 +1,6 @@
-namespace MigrondiUI.Mcp
+namespace Migrondi.Mcp
 
 open System
-open System.Collections.Concurrent
 open System.Threading
 open System.Threading.Tasks
 
@@ -13,64 +12,25 @@ open ModelContextProtocol.Server
 
 open IcedTasks
 
-type private McpHttpSession = {
-  id: string
-  transport: StreamableHttpServerTransport
-  server: McpServer
-  serverTask: Task
-}
-
 type IMcpHttpServer =
   abstract Run: CancellationToken -> Task<unit>
 
-module private HttpServerHelpers =
+module HttpServerHelpers =
 
-  let createSession
-    (serverOptions: McpServerOptions)
-    (loggerFactory: ILoggerFactory)
-    (serviceProvider: IServiceProvider)
-    (cts: CancellationTokenSource)
-    : McpHttpSession =
-    let sessionId = Guid.NewGuid().ToString("N")
+  /// The only origins a localhost-bound MCP server accepts from browsers.
+  /// `Uri.Host` reports IPv6 hosts without brackets, so both spellings are kept.
+  let allowedOriginHosts = [| "localhost"; "127.0.0.1"; "::1"; "[::1]" |]
 
-    let transport =
-      StreamableHttpServerTransport(loggerFactory, SessionId = sessionId)
-
-    let server =
-      McpServer.Create(transport, serverOptions, loggerFactory, serviceProvider)
-
-    let serverTask = server.RunAsync(cts.Token)
-
-    {
-      id = sessionId
-      transport = transport
-      server = server
-      serverTask = serverTask
-    }
-
-  let getSession
-    (sessions: ConcurrentDictionary<string, McpHttpSession>)
-    sessionId
-    =
-    match sessions.TryGetValue(sessionId) with
-    | true, s -> Some s
-    | false, _ -> None
-
-  let removeSession
-    (sessions: ConcurrentDictionary<string, McpHttpSession>)
-    sessionId
-    =
-    match sessions.TryGetValue(sessionId) with
-    | true, session ->
-      session.transport.DisposeAsync().AsTask() |> ignore
-      session.server.DisposeAsync().AsTask() |> ignore
-      sessions.TryRemove(sessionId) |> ignore
-    | false, _ -> ()
-
-  let cleanupSessions(sessions: ConcurrentDictionary<string, McpHttpSession>) =
-    for kvp in sessions do
-      kvp.Value.transport.DisposeAsync().AsTask() |> ignore
-      kvp.Value.server.DisposeAsync().AsTask() |> ignore
+  /// An absent or empty Origin is a non-browser client: allowed.
+  /// Only an explicit non-localhost origin is rejected.
+  let isDisallowedOrigin(origin: string | null) =
+    ValueOption.ofObj origin
+    |> ValueOption.filter(String.IsNullOrWhiteSpace >> not)
+    |> ValueOption.map(fun value ->
+      match Uri.TryCreate(value, UriKind.Absolute) with
+      | true, uri -> not(Array.contains uri.Host allowedOriginHosts)
+      | false, _ -> true)
+    |> ValueOption.defaultValue false
 
   let sendError
     (context: Net.HttpListenerContext)
@@ -87,36 +47,22 @@ module private HttpServerHelpers =
 
     context.Response.Close()
 
-  let getSessionId(context: Net.HttpListenerContext) =
-    match context.Request.Headers["Mcp-Session-Id"] with
-    | null -> None
-    | id -> Some(string id)
-
+  // Stateless serving (SDK 2.4 model): one transient transport + server per
+  // POST. `Stateless = true` makes the transport answer the single request
+  // inline, so no session store exists and `Mcp-Session-Id` is never emitted;
+  // the process keeps no cross-request state. Verified by the strict-client
+  // tests in src/MigrondiUI.Tests/HttpServerTests.fs.
   let handlePostRequest
     (context: Net.HttpListenerContext)
-    (sessions: ConcurrentDictionary<string, McpHttpSession>)
     (serverOptions: McpServerOptions)
     (loggerFactory: ILoggerFactory)
     (serviceProvider: IServiceProvider)
-    (cts: CancellationTokenSource)
-    : Task<unit> = task {
-    let sessionId = getSessionId context
-
+    : CancellableTask<unit> = cancellableTask {
     try
-      let session =
-        match sessionId with
-        | Some id ->
-          match getSession sessions id with
-          | Some s -> s
-          | None ->
-            createSession serverOptions loggerFactory serviceProvider cts
-        | None -> createSession serverOptions loggerFactory serviceProvider cts
-
-      sessions[session.id] <- session
-
       use stream = context.Request.InputStream
       use reader = new IO.StreamReader(stream)
-      let! body = reader.ReadToEndAsync(cts.Token)
+      let! ct = CancellableTask.getCancellationToken()
+      let! body = reader.ReadToEndAsync ct
 
       let message =
         System.Text.Json.JsonSerializer.Deserialize<JsonRpcMessage>(
@@ -127,69 +73,37 @@ module private HttpServerHelpers =
       match message with
       | null -> sendError context 400 "Invalid JSON-RPC message"
       | msg ->
-        context.Response.Headers.Add("Mcp-Session-Id", session.id)
-        use responseStream = context.Response.OutputStream
+        let transport =
+          StreamableHttpServerTransport(loggerFactory, Stateless = true)
 
-        let! wroteResponse =
-          session.transport.HandlePostRequestAsync(
-            msg,
-            responseStream,
-            cts.Token
+        let server =
+          McpServer.Create(
+            transport,
+            serverOptions,
+            loggerFactory,
+            serviceProvider
           )
 
-        if not wroteResponse then
-          context.Response.StatusCode <- 202
-          context.Response.Close()
+        let serverTask = server.RunAsync(ct)
+
+        try
+          use responseStream = context.Response.OutputStream
+
+          let! wroteResponse =
+            transport.HandlePostRequestAsync(msg, responseStream, ct)
+
+          if not wroteResponse then
+            context.Response.StatusCode <- 202
+        finally
+          // End the transient session; RunAsync completes once the
+          // transport closes. Fire-and-forget like the old session cleanup.
+          transport.DisposeAsync().AsTask() |> ignore
+          server.DisposeAsync().AsTask() |> ignore
+
+        do! serverTask
     with ex ->
       sendError context 500 $"Internal server error: {ex.Message}"
   }
-
-  let handleGetRequest
-    (context: Net.HttpListenerContext)
-    (sessions: ConcurrentDictionary<string, McpHttpSession>)
-    (cts: CancellationTokenSource)
-    : Task<unit> = task {
-    let sessionId = getSessionId context
-
-    match sessionId with
-    | None -> sendError context 400 "Mcp-Session-Id header is required"
-    | Some id ->
-      match getSession sessions id with
-      | None ->
-        context.Response.StatusCode <- 404
-        context.Response.Close()
-      | Some session ->
-        context.Response.Headers.Add("Mcp-Session-Id", session.id)
-        context.Response.ContentType <- "text/event-stream"
-        context.Response.Headers.Add("Cache-Control", "no-cache")
-
-        try
-          do!
-            session.transport.HandleGetRequestAsync(
-              context.Response.OutputStream,
-              cts.Token
-            )
-        with
-        | :? OperationCanceledException -> ()
-        | _ -> ()
-  }
-
-  let handleDeleteRequest
-    (context: Net.HttpListenerContext)
-    (sessions: ConcurrentDictionary<string, McpHttpSession>)
-    : unit =
-    let sessionId = getSessionId context
-
-    match sessionId with
-    | None -> sendError context 400 "Mcp-Session-Id header is required"
-    | Some id ->
-      removeSession sessions id
-      context.Response.StatusCode <- 200
-      context.Response.Close()
-
-  let handleUnknownMethod(context: Net.HttpListenerContext) : unit =
-    context.Response.StatusCode <- 405
-    context.Response.Close()
 
 module HttpServer =
 
@@ -202,29 +116,31 @@ module HttpServer =
     : Task<unit> =
 
     task {
-      let logger = loggerFactory.CreateLogger("MigrondiMcpHttpServer")
-      let sessions = ConcurrentDictionary<string, McpHttpSession>()
+      let logger = loggerFactory.CreateLogger "MigrondiMcpHttpServer"
       use listener = new Net.HttpListener()
-      listener.Prefixes.Add($"http://localhost:{port}/mcp/")
+      listener.Prefixes.Add $"http://localhost:{port}/mcp/"
       listener.Start()
 
       use linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct)
 
       let handleRequest(context: Net.HttpListenerContext) = task {
-        match context.Request.HttpMethod with
-        | "POST" ->
-          do!
-            HttpServerHelpers.handlePostRequest
-              context
-              sessions
-              serverOptions
-              loggerFactory
-              serviceProvider
-              linkedCts
-        | "GET" ->
-          do! HttpServerHelpers.handleGetRequest context sessions linkedCts
-        | "DELETE" -> HttpServerHelpers.handleDeleteRequest context sessions
-        | _ -> HttpServerHelpers.handleUnknownMethod context
+        if
+          HttpServerHelpers.isDisallowedOrigin context.Request.Headers["Origin"]
+        then
+          HttpServerHelpers.sendError context 403 "Origin not allowed"
+        else
+          match context.Request.HttpMethod with
+          | "POST" ->
+            do!
+              HttpServerHelpers.handlePostRequest
+                context
+                serverOptions
+                loggerFactory
+                serviceProvider
+                linkedCts.Token
+          // GET/DELETE return 405: this server offers no standalone SSE
+          // stream and keeps no sessions; clients must accept 405.
+          | _ -> HttpServerHelpers.sendError context 405 "Method Not Allowed"
       }
 
       let fireAndForgetRequest(context: Net.HttpListenerContext) =
@@ -270,8 +186,6 @@ module HttpServer =
           listener.Stop()
         with _ ->
           ()
-
-        HttpServerHelpers.cleanupSessions sessions
     }
 
   let create

@@ -4,12 +4,16 @@
 
 ### Added
 
+- **Migrondi:** New `mcp` command serves one project over stdio as an MCP server, so agents and harnesses can drive migrations as tools (`get_project`, `list_migrations`, dry runs, `create_migration`, `run_migrations`, `run_rollback`) instead of shell commands. `--config` selects the project, anchors its directory as the project root, and layers `MIGRONDI_*` variables and the config override flags on top; `--readonly` serves only the read tools. All server logs go to stderr, keeping stdout clean for strict MCP clients.
 - **Migrondi:** `new` accepts `--up`/`--down` inline SQL and `--up-file`/`--down-file` to read a section from a file (or stdin with `-`), so a migration can be created with its content in one call instead of creating an empty file and editing it afterwards.
 - **Migrondi:** `list` accepts `--pending`/`--applied`, `--limit`/`--last`, `--search <text>`, and `--show-path`/`--show-content` to filter and inspect migrations without scanning the migrations folder by hand.
 - **Migrondi:** `up` and `down` accept `--to <name>` to apply up to, or roll back to, a named migration (name, filename, or timestamp) instead of counting migrations; the positional amount stays optional and cannot be combined with `--to`.
 - **Project:** Added `migrondi-cli` and `migrondi-library` agent skills under `.agents/skills`, covering CLI usage for agents and `Migrondi.Core` embedding patterns such as custom migration sources.
 
 ### Changed
+
+- **Migrondi.Mcp:** The shared MCP layer now reports full tool annotations (`idempotentHint` on read tools, `openWorldHint: false` everywhere), the real package version in the `initialize` response instead of a hardcoded value, and serves HTTP statelessly — no session store, localhost-only `Origin` acceptance, and no redundant `Mcp-Session-Id` headers.
+- **Migrondi.Mcp:** MCP clients see the real parameter names (`amount`, `projectId`, ...) in tool schemas again instead of `delegateArg0`, which made those arguments impossible to pass; send `null` for an omitted "all migrations" value (e.g. `{"amount": null}`).
 
 - **Project:** Migrated all projects to central package management via `src/Directory.Packages.props`, removing per-project package versions and consolidating dependency versions in one place.
 - **Project:** Switched to the Microsoft Testing Platform (`global.json`) and bumped test-related packages to their latest stable versions.
@@ -22,6 +26,7 @@
 
 ### Fixed
 
+- **Migrondi.Mcp:** The `create_migration` tool result now reports the migration's name (e.g. `add_users`) and its real file name (e.g. `1794436380501_add_users.sql`). Previously the file name was reported as the name and the timestamp was recomposed onto it, producing a doubled file name like `1794436380501_1794436380501_add_users.sql`; for virtual projects the file name also lacked the `.sql` suffix.
 - **Migrondi:** `status` now returns a non-zero exit code when no migration matches the given name, instead of reporting `NotFound` with a success exit code.
 - **Project:** Addressed the high-severity `SQLitePCLRaw.lib.e_sqlite3` vulnerability (GHSA-2m69-gcr7-jv3q) by overriding `SQLitePCLRaw.bundle_e_sqlite3` to `3.0.5` in central package management.
 - **Project:** Addressed the high-severity `System.Security.Cryptography.Pkcs` vulnerabilities (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7) that Microsoft.Data.SqlClient pulled in, by overriding that package to `10.0.14` in central package management. No project reports a vulnerable package now.

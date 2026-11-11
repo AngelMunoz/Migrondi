@@ -11,6 +11,7 @@
     <Compile Include="Database.Async.fs" />
     <Compile Include="Migrondi.fs" />
     <Compile Include="Cli.fs" />
+    <Compile Include="McpCli.fs" />
     <Compile Include="Main.fs" />
   </ItemGroup>
   <ItemGroup>

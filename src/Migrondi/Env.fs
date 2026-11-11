@@ -183,6 +183,44 @@ module internal Configuration =
 
         None)
 
+  /// Why an explicit config path could not be read.
+  type ConfigReadError =
+    | NotFound of path: string
+    | Unreadable of path: string * reason: string
+    | Invalid of path: string * reason: string
+
+  /// Reads the configuration file at an explicit path, surfacing every
+  /// error to the caller instead of falling back to defaults. Unlike
+  /// `readLocalConfig`, this is for callers that must fail loudly
+  /// (the MCP `--config` binding), so it returns a result. The read is
+  /// attempted directly — no existence probe — and the failure mode names
+  /// itself.
+  let readConfigAt
+    (path: string, logger: ILogger, serializer: IMiConfigurationSerializer)
+    : Result<MigrondiConfig, ConfigReadError> =
+    let fullPath = Path.GetFullPath(path)
+
+    logger.LogInformation(
+      "Reading migrondi configuration from {ConfigPath}",
+      fullPath
+    )
+
+    let fileContent =
+      try
+        File.ReadAllText(fullPath) |> Ok
+      with
+      | :? FileNotFoundException -> Error(ConfigReadError.NotFound fullPath)
+      | :? DirectoryNotFoundException ->
+        Error(ConfigReadError.NotFound fullPath)
+      | ex -> Error(ConfigReadError.Unreadable(fullPath, ex.Message))
+
+    fileContent
+    |> Result.bind(fun content ->
+      try
+        Ok(serializer.Decode content)
+      with DeserializationFailed(_, reason) ->
+        Error(ConfigReadError.Invalid(fullPath, reason)))
+
 
 
 type internal AppEnv

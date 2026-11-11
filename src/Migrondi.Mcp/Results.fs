@@ -1,4 +1,4 @@
-namespace MigrondiUI.Mcp
+namespace Migrondi.Mcp
 
 #nowarn 3265
 
@@ -191,7 +191,8 @@ module McpResults =
         match result with
         | LocalProject p -> LocalProjectDetail.Encoder p
         | VirtualProject p -> VirtualProjectDetail.Encoder p
-        | ProjectNotFound err -> Json.object [ "error", Encode.string err ]
+        | ProjectNotFound err ->
+          Json.object(List.singleton("error", Encode.string err))
 
   type MigrationStatusOutput = {
     name: string
@@ -228,10 +229,12 @@ module McpResults =
 
     static member Encoder: Encoder<ListMigrationsResult> =
       fun r ->
-        Json.object [
-          "migrations",
-          Json.sequence(r.migrations, MigrationStatusOutput.Encoder)
-        ]
+        Json.object(
+          List.singleton(
+            "migrations",
+            Json.sequence(r.migrations, MigrationStatusOutput.Encoder)
+          )
+        )
 
     static member Empty = { migrations = Array.empty }
 
@@ -284,7 +287,8 @@ module McpResults =
       fun result ->
         match result with
         | MigrationFound m -> MigrationDetail.Encoder m
-        | MigrationNotFound err -> Json.object [ "error", Encode.string err ]
+        | MigrationNotFound err ->
+          Json.object(List.singleton("error", Encode.string err))
 
   type MigrationPreview = {
     name: string
@@ -425,7 +429,7 @@ module McpResults =
   } with
 
     static member Encoder: Encoder<ErrorResult> =
-      fun r -> Json.object [ "error", Encode.string r.error ]
+      fun r -> Json.object(List.singleton("error", Encode.string r.error))
 
     static member Create(error: string) = { error = error }
 
@@ -453,7 +457,8 @@ module McpResults =
               "fullName", Encode.string m.fullName
             ]
           ]
-        | CreateMigrationError err -> Json.object [ "error", Encode.string err ]
+        | CreateMigrationError err ->
+          Json.object(List.singleton("error", Encode.string err))
 
   type CreateProjectResult =
     | ProjectCreated of
@@ -479,7 +484,8 @@ module McpResults =
               "tableName", Encode.string p.tableName
             ]
           ]
-        | CreateProjectError err -> Json.object [ "error", Encode.string err ]
+        | CreateProjectError err ->
+          Json.object(List.singleton("error", Encode.string err))
 
   type ExportResult =
     | ExportSuccess of {| path: string |}
@@ -493,7 +499,8 @@ module McpResults =
             "success", Encode.boolean true
             "path", Encode.string p.path
           ]
-        | ExportError err -> Json.object [ "error", Encode.string err ]
+        | ExportError err ->
+          Json.object(List.singleton("error", Encode.string err))
 
   type ImportResult =
     | ImportSuccess of {| projectId: Guid |}
@@ -507,7 +514,29 @@ module McpResults =
             "success", Encode.boolean true
             "projectId", Encode.guid p.projectId
           ]
-        | ImportError err -> Json.object [ "error", Encode.string err ]
+        | ImportError err ->
+          Json.object(List.singleton("error", Encode.string err))
+
+  /// Shape of the single-project `get_project` tool. It carries no binding
+  /// knowledge: hosts fill the fields from their own resolved binding and
+  /// must never put the connection string in any of them.
+  type ProjectInfoResult = {
+    name: string
+    configPath: string
+    driver: string
+    migrationsFolder: string
+    tableName: string
+  } with
+
+    static member Encoder: Encoder<ProjectInfoResult> =
+      fun r ->
+        Json.object [
+          "name", Encode.string r.name
+          "configPath", Encode.string r.configPath
+          "driver", Encode.string r.driver
+          "migrationsFolder", Encode.string r.migrationsFolder
+          "tableName", Encode.string r.tableName
+        ]
 
 module McpResultMapper =
 

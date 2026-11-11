@@ -4,37 +4,49 @@ open System.IO
 open System.CommandLine
 open FSharp.SystemCommandLine
 
+open Microsoft.Extensions.Logging
+
 open Serilog
 open Serilog.Formatting.Compact
 open Serilog.Extensions.Logging
 
 open Migrondi.Commands
 open Migrondi.Env
+open Migrondi.Mcp
 
 [<EntryPoint>]
 let main argv =
+
+  // MCP mode is detected before any logger exists: the mcp command's host
+  // logger writes every console line to stderr so stdout carries only
+  // MCP protocol messages.
+  let isMcp = argv.Length > 0 && argv[0] = "mcp"
 
   let debug = argv |> Array.contains "[mi-debug]"
 
   let useJson = argv |> Array.contains "[mi-json]"
 
   // setup services
-  let logger =
-    let config = LoggerConfiguration().Enrich.FromLogContext()
-
-    if debug then
-      config.MinimumLevel.Debug() |> ignore
+  let loggerFactory: ILoggerFactory =
+    if isMcp then
+      McpLogging.createLoggerFactory LogLevel.Information
     else
-      config.MinimumLevel.Information() |> ignore
+      let logger =
+        let config = LoggerConfiguration().Enrich.FromLogContext()
 
-    if useJson then
-      config.WriteTo.Console(RenderedCompactJsonFormatter()) |> ignore
-    else
-      config.WriteTo.Console() |> ignore
+        if debug then
+          config.MinimumLevel.Debug() |> ignore
+        else
+          config.MinimumLevel.Information() |> ignore
 
-    config.CreateLogger()
+        if useJson then
+          config.WriteTo.Console(RenderedCompactJsonFormatter()) |> ignore
+        else
+          config.WriteTo.Console() |> ignore
 
-  let loggerFactory = new SerilogLoggerFactory(logger)
+        config.CreateLogger()
+
+      new SerilogLoggerFactory(logger)
 
   let logger = loggerFactory.CreateLogger("Migrondi")
 
@@ -54,6 +66,7 @@ let main argv =
       Commands.Down appEnv
       Commands.List appEnv
       Commands.Status appEnv
+      Commands.Mcp loggerFactory cwd
     ]
 
   }

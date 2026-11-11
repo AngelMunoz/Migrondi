@@ -1,4 +1,4 @@
-namespace MigrondiUI.Mcp
+namespace Migrondi.Mcp
 
 open System
 
@@ -175,11 +175,16 @@ module McpTools =
               cancellationToken = ct
             )
 
+          // Core's RunNew returns the FILENAME in `migration.name` for real
+          // projects (and the friendly name for virtual ones); the result
+          // envelope derives both fields from the validated input instead,
+          // so `name` is the friendly name and `fullName` is the real file
+          // name with a single timestamp.
           return
             Ok {|
-              name = migration.name
+              name = name
               timestamp = migration.timestamp
-              fullName = $"{migration.timestamp}_{migration.name}"
+              fullName = $"{migration.timestamp}_{name}.sql"
             |}
         with ex ->
           return Error(CreateMigrationError.CreationFailed ex.Message)

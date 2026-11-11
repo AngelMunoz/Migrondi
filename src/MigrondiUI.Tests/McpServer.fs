@@ -14,8 +14,8 @@ open Xunit
 open IcedTasks
 
 open MigrondiUI
-open MigrondiUI.Mcp
-open MigrondiUI.Mcp.McpResults
+open Migrondi.Mcp
+open Migrondi.Mcp.McpResults
 open MigrondiUI.Services
 open Migrondi.Core
 open Migrondi.Core.Serialization

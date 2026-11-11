@@ -9,17 +9,20 @@
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Handlers.fs" />
+    <InternalsVisibleTo Include="Migrondi.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="Inputs.fs" />
     <Compile Include="Env.fs" />
+    <Compile Include="McpBinding.fs" />
+    <Compile Include="McpTools.fs" />
+    <Compile Include="Handlers.fs" />
     <Compile Include="Commands.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Migrondi.Tests" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
+    <ProjectReference Include="..\Migrondi.Mcp\Migrondi.Mcp.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.SystemCommandLine" />

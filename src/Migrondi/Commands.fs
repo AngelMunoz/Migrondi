@@ -13,6 +13,36 @@ open Migrondi.Handlers
 module internal ArgumentMapper =
   open Microsoft.Extensions.Logging
 
+  let Mcp
+    (loggerFactory: ILoggerFactory)
+    (cwd: string)
+    (
+      config: string option,
+      stdio: bool option,
+      http: bool option,
+      readonly_: bool option,
+      connection: string option,
+      migrations: string option,
+      tableName: string option,
+      driver: string option
+    ) =
+    // Parse the transport flags at the boundary; the handler consumes a
+    // domain value and never re-checks the raw flags.
+    match Mcp.Transport.parse(http, stdio) with
+    | Error error -> loggerFactory, cwd, Error error
+    | Ok transport ->
+      let args: Mcp.McpArgs = {
+        Transport = transport
+        Config = config
+        Readonly = readonly_
+        Connection = connection
+        Migrations = migrations
+        TableName = tableName
+        Driver = driver
+      }
+
+      loggerFactory, cwd, Ok args
+
 
   let Init
     (appEnv: AppEnv)
@@ -236,5 +266,25 @@ module internal Commands =
       withSetup
         appEnv
         (ArgumentMapper.Status appEnv >> Migrations.migrationStatus)
+    )
+  }
+
+  let Mcp loggerFactory cwd = command "mcp" {
+    description
+      "Runs an MCP server over stdio for the migrondi project in the current directory or --config"
+
+    inputs(
+      Mcp.config,
+      Mcp.stdio,
+      Mcp.http,
+      Mcp.readonly_,
+      Mcp.connection,
+      Mcp.migrations,
+      Mcp.tableName,
+      Mcp.driver
+    )
+
+    setAction(
+      ArgumentMapper.Mcp loggerFactory cwd >> Migrondi.Handlers.Mcp.runServer
     )
   }

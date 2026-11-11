@@ -12,7 +12,7 @@ open Navs.Avalonia
 
 open MigrondiUI
 open Microsoft.Extensions.Logging
-open MigrondiUI.Mcp
+open Migrondi.Mcp
 
 open SukiUI
 open SukiUI.Controls

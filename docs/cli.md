@@ -211,3 +211,47 @@ That's the General Gist of how to use migrondi.
   - description: Checks whether the migration file has been applied or not to the database
   - arguments:
     - name: The name of the migration file
+
+## MCP Server
+
+`migrondi mcp` runs an MCP (Model Context Protocol) server over stdio for ONE migrondi project, so AI agents and harnesses can drive migrations as tools instead of shell commands.
+
+The server exposes seven tools:
+
+- `get_project` — reports the project name, config path, driver, migrations folder, and table name (never the connection string)
+- `list_migrations` — lists migrations with their applied/pending status
+- `dry_run_migrations` — previews the pending migrations that would be applied
+- `dry_run_rollback` — previews the applied migrations that would be reverted
+- `create_migration` — creates a new migration file, optionally with `upContent` and `downContent` SQL
+- `run_migrations` — applies pending migrations (optionally a count)
+- `run_rollback` — reverts applied migrations (optionally a count)
+
+### Configuration resolution
+
+The project is resolved in this order:
+
+1. `--config <path>` — when given, it wins. A missing or invalid file is an error and the server exits non-zero. The config file's directory becomes the project root, so the migrations folder and relative SQLite paths resolve against that directory, not the server's working directory.
+2. `MIGRONDI_*` environment variables — `MIGRONDI_CONNECTION_STRING`, `MIGRONDI_MIGRATIONS`, `MIGRONDI_TABLE_NAME`, `MIGRONDI_DRIVER` override the config file's values.
+3. `cwd/migrondi.json` — the last fallback, with the same defaults the other commands use.
+
+The existing config override flags (`--connection/-c`, `--migrations/-m`, `--table-name/-t`, `--driver/-d`) beat the environment variables, matching the rest of the CLI.
+
+`--readonly` serves only the read tools (`get_project`, `list_migrations`, `dry_run_migrations`, `dry_run_rollback`). `--stdio` is the default (and currently the only) transport; `--http` is rejected.
+
+All server logs go to stderr, so stdout carries only MCP protocol messages and the server is safe to plug into strict clients.
+
+### Harness configuration example
+
+Point the harness at an absolute config path; no working directory is needed:
+
+```json
+{
+  "mcpServers": {
+    "migrondi": {
+      "command": "migrondi",
+      "args": ["mcp", "--config", "/absolute/path/to/migrondi.json"]
+    }
+  }
+}
+```
+

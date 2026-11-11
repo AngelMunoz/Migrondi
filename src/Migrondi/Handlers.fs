@@ -11,16 +11,18 @@ open Spectre.Console
 open Migrondi.Core
 open Migrondi.Core.Serialization
 open Migrondi.Core.FileSystem
+open Migrondi.Env
+open Migrondi.Mcp
 open FsToolkit.ErrorHandling
 
 [<RequireQualifiedAccess>]
 module internal Init =
 
-  type private LoadingFileError =
+  type LoadingFileError =
     | FileNotFound
     | FoundButUnparsable
 
-  let private recoverConfig(values: Map<string, string>) : MigrondiConfig =
+  let recoverConfig(values: Map<string, string>) : MigrondiConfig =
     let defaults = MigrondiConfig.Default
 
     let driver =
@@ -49,7 +51,7 @@ module internal Init =
       driver = driver
     }
 
-  let private (|HardStop|MergeUnforced|ForceClean|ForceMerge|CleanSetup|)
+  let (|HardStop|MergeUnforced|ForceClean|ForceMerge|CleanSetup|)
     (isEmpty, force, merge)
     =
     match isEmpty, force, merge with
@@ -60,7 +62,7 @@ module internal Init =
     | true, _, _ -> ForceClean
     | false, false, _ -> HardStop
 
-  let private isDirectoryEmpty(path: DirectoryInfo) =
+  let isDirectoryEmpty(path: DirectoryInfo) =
     try
       let noDirs =
         Directory.EnumerateDirectories(
@@ -83,7 +85,7 @@ module internal Init =
       path.Create()
       true
 
-  let private loadConfig
+  let loadConfig
     (path: DirectoryInfo)
     (configPath: string)
     (serializer: IMiConfigurationSerializer)
@@ -118,10 +120,7 @@ module internal Init =
         logger.LogWarning "migrondi.json file is not valid json"
         Error FoundButUnparsable
 
-  let private migrationsDirectory
-    (path: DirectoryInfo)
-    (config: MigrondiConfig)
-    =
+  let migrationsDirectory (path: DirectoryInfo) (config: MigrondiConfig) =
     if
       Path.IsPathRooted config.migrations
       || Path.IsPathFullyQualified config.migrations
@@ -130,10 +129,7 @@ module internal Init =
     else
       path.CreateSubdirectory config.migrations
 
-  let private hasExistingMigrations
-    (path: DirectoryInfo)
-    (config: MigrondiConfig)
-    =
+  let hasExistingMigrations (path: DirectoryInfo) (config: MigrondiConfig) =
     let dir = migrationsDirectory path config
 
     let files =
@@ -151,7 +147,7 @@ module internal Init =
 
     files |> Seq.isEmpty |> not
 
-  let private runForceMerge
+  let runForceMerge
     (path: DirectoryInfo)
     (fs: IMiFileSystem)
     (configPath: string)
@@ -178,7 +174,7 @@ module internal Init =
     logger.LogInformation "Migrondi project merged and ready to work."
     0
 
-  let private runCleanSetup
+  let runCleanSetup
     (path: DirectoryInfo)
     (fs: IMiFileSystem)
     (configPath: string)
@@ -245,7 +241,7 @@ module internal Init =
 
 
 [<RequireQualifiedAccess>]
-module internal Migrations =
+module Migrations =
 
   /// Raw content sources for a new migration, as given on the command line.
   type NewContentArgs = {
@@ -839,3 +835,126 @@ module internal Migrations =
       )
 
       1
+
+[<RequireQualifiedAccess>]
+module Mcp =
+
+  /// Why the transport flags failed to parse into an `McpMode`.
+  type McpTransportError =
+    | HttpNotSupported
+    | StdioDisabled
+
+  module Transport =
+
+    /// Parses the raw transport flags once, at the boundary, into the
+    /// transport the server will use. Stdio is the CLI's only transport
+    /// today, so every other explicit choice is a typed parse error.
+    let parse
+      (http: bool option, stdio: bool option)
+      : Result<McpMode, McpTransportError> =
+      match http, stdio with
+      | Some true, _ -> Error HttpNotSupported
+      | _, Some false -> Error StdioDisabled
+      | _ -> Ok McpMode.Stdio
+
+  /// Parsed values of the `mcp` command's flags: `Transport` is already a
+  /// domain value, so no consumer re-validates the raw flags.
+  type McpArgs = {
+    Transport: McpMode
+    Config: string option
+    Readonly: bool option
+    Connection: string option
+    Migrations: string option
+    TableName: string option
+    Driver: string option
+  }
+
+  /// Runs the single-project MCP server over stdio until stdin closes.
+  /// Blocking here is correct: this IS the process lifetime.
+  let runServer
+    (
+      loggerFactory: ILoggerFactory,
+      cwd: string,
+      args: Result<McpArgs, McpTransportError>
+    ) : int =
+    let logger = loggerFactory.CreateLogger("Migrondi")
+
+    match args with
+    | Error HttpNotSupported ->
+      logger.LogError
+        "The HTTP transport is not available in the CLI MCP server."
+
+      1
+    | Error StdioDisabled ->
+      logger.LogError
+        "Only the stdio transport is available in the CLI MCP server. Pass --stdio or omit it."
+
+      1
+    | Ok args ->
+      let cliOverrides: McpOverrides = {
+        connection = args.Connection
+        migrations = args.Migrations
+        tableName = args.TableName
+        driver = args.Driver
+      }
+
+      let resolveArgs: McpResolveArgs = {
+        Cwd = cwd
+        ExplicitConfig = args.Config
+        Overrides = cliOverrides
+      }
+
+      match McpBinding.resolve logger resolveArgs with
+      | Error error ->
+        match error with
+        | ConfigNotFound path ->
+          logger.LogError(
+            "Configuration file not found at '{ConfigPath}'.",
+            path
+          )
+        | ConfigInvalid(path, reason) ->
+          logger.LogError(
+            "Invalid configuration file '{ConfigPath}': {Reason}",
+            path,
+            reason
+          )
+
+        1
+      | Ok binding ->
+        try
+          let migrondi =
+            Migrondi.MigrondiFactory(
+              binding.Config,
+              binding.Root,
+              logger = logger
+            )
+
+          // Creates the migrations table at startup, the same setup
+          // `Commands.setup` performs for every database-touching command
+          // (Initialize delegates to database.SetupDatabase()).
+          migrondi.Initialize()
+
+          let projectInfoTool = McpProjectInfo.createTool binding
+
+          let env: SingleProjectEnv = {
+            lf = loggerFactory
+            migrondi = migrondi
+          }
+
+          let serveArgs: SingleProjectServer.ServeArgs = {
+            Mode = args.Transport
+            ReadOnly = defaultArg args.Readonly false
+            ExtraTools = [ projectInfoTool ]
+          }
+
+          SingleProjectServer.run env loggerFactory serveArgs
+          |> Async.RunSynchronously
+
+          0
+        with ex ->
+          logger.LogError(
+            "The MCP server failed to start: {Message}",
+            ex.Message
+          )
+
+          1
