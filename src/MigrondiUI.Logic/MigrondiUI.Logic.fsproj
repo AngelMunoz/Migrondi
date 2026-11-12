@@ -35,4 +35,7 @@
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
     <ProjectReference Include="..\Migrondi.Mcp\Migrondi.Mcp.fsproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="migrations/**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
