@@ -582,7 +582,9 @@ let ``VirtualProjectDetailsVM - SaveMigration returns false on AlreadyApplied``
   Assert.False(result)
 
 [<Fact>]
-let ``VirtualProjectDetailsVM - DeleteMigration success reloads migrations``() =
+let ``VirtualProjectDetailsVM - RemoveMigration reloads migrations after a successful delete``
+  ()
+  =
   let factory = FakeMigrationOperationsFactory()
 
   let operations = factory.Operations :?> FakeMigrationOperations
@@ -600,13 +602,7 @@ let ``VirtualProjectDetailsVM - DeleteMigration success reloads migrations``() =
       FakeNavigator() :> INavigator
     )
 
-  let result = vm.DeleteMigration migration |> Async.RunSynchronously
-
-  Assert.True(result)
-
-  // the view triggers the reload after a successful delete; the same flow at
-  // the logic layer re-lists migrations through the operations' core
-  vm.ListMigrations() |> Async.RunSynchronously
+  vm.RemoveMigration migration |> Async.RunSynchronously
 
   Assert.True(factory.Core.Calls |> List.contains "MigrationsListAsync")
 
@@ -663,3 +659,57 @@ let ``Routes - local and virtual project urls have the expected format``() =
   )
 
   Assert.Equal("landing", Routes.LandingRouteName)
+
+[<Fact>]
+let ``LocalProjectDetailsVM - RunMigrations DryUp leaves state readable immediately when the command completes``
+  ()
+  =
+  let dryRun = [| createTestMigration "one" |]
+
+  let factory = FakeMigrationOperationsFactory()
+  factory.Core.DryRunUpResult <- (dryRun :> Migration IReadOnlyList)
+
+  let vm =
+    LocalProjectDetailsVM(
+      NullLogger<LocalProjectDetailsVM>.Instance,
+      FakeProjectCollection() :> IProjectCollection,
+      factory :> IMigrationOperationsFactory,
+      createLocalProject(),
+      FakeNavigator() :> INavigator
+    )
+
+  Async.RunSynchronously(vm.RunMigrations(RunMigrationKind.DryUp, 1))
+
+  // no waiting, no events: the host reads the state right away
+  Assert.Equal<Migration array>(dryRun, vm.LastDryRun |> AVal.force)
+
+  Assert.Equal(
+    CurrentShow.DryRun RunMigrationKind.Up,
+    vm.CurrentShow |> AVal.force
+  )
+
+[<Fact>]
+let ``VirtualProjectDetailsVM - ListMigrations leaves state readable immediately when the command completes``
+  ()
+  =
+  let factory = FakeMigrationOperationsFactory()
+
+  let listed = [| Applied(createTestMigration "one") |]
+
+  factory.Core.MigrationsListResult <- (listed :> MigrationStatus IReadOnlyList)
+
+  let vm =
+    VirtualProjectDetailsVM(
+      NullLogger<VirtualProjectDetailsVM>.Instance,
+      FakeProjectCollection() :> IProjectCollection,
+      factory :> IMigrationOperationsFactory,
+      createVirtualProject(),
+      FakeNavigator() :> INavigator
+    )
+
+  Async.RunSynchronously(vm.ListMigrations())
+
+  // no waiting, no events: the host reads the state right away
+  Assert.Equal<MigrationStatus array>(listed, vm.Migrations |> AVal.force)
+
+  Assert.Equal(CurrentShow.Migrations, vm.CurrentShow |> AVal.force)

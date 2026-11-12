@@ -16,6 +16,16 @@ module VirtualProjectDetails =
   open MigrondiUI
   open MigrondiUI.Services
 
+  /// Data-only snapshot of the virtual project details state.
+  [<NoComparison; NoEquality>]
+  type VirtualProjectDetailsState = {
+    Migrations: MigrationStatus[]
+    LastDryRun: Migration[]
+    CurrentShow: MigrationRunner.CurrentShow
+  }
+
+  /// When a command's Async completes, all state writes are complete; a host
+  /// may rebuild its view immediately after.
   type VirtualProjectDetailsVM
     (
       logger: ILogger<VirtualProjectDetailsVM>,
@@ -57,6 +67,17 @@ module VirtualProjectDetails =
     member _.LastDryRun: Migration[] aval = lastDryRun
 
     member _.CurrentShow: MigrationRunner.CurrentShow aval = currentShow
+
+    member _.State: VirtualProjectDetailsState aval =
+      AVal.map3
+        (fun migrations lastDryRun currentShow -> {
+          Migrations = migrations
+          LastDryRun = lastDryRun
+          CurrentShow = currentShow
+        })
+        _migrations
+        lastDryRun
+        currentShow
 
     member _.ListMigrations() = asyncEx {
       logger.LogDebug "Listing migrations"
@@ -203,4 +224,13 @@ module VirtualProjectDetails =
       match! navigator.NavigateByName Routes.LandingRouteName with
       | Ok _ -> return ()
       | Error(e) -> logger.LogWarning("Navigation failed: {error}", e)
+    }
+
+    member this.RemoveMigration(migration: Migration) = asyncEx {
+      let! deleted = this.DeleteMigration migration
+
+      if deleted then
+        do! this.ListMigrations()
+
+      return ()
     }

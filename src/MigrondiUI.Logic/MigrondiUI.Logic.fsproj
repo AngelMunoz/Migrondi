@@ -12,6 +12,7 @@
     <Compile Include="Projects.fs" />
     <Compile Include="OsOperations.fs" />
     <Compile Include="Migrations.fs" />
+    <Compile Include="Adaptive.fs" />
     <Compile Include="Host.fs" />
     <Compile Include="MigrationRunner.fs" />
     <Compile Include="VirtualProjectState.fs" />

@@ -1,24 +1,11 @@
 namespace MigrondiUI.Logic
 
-open System
-open FSharp.Data.Adaptive
-open Migrondi.Core
-open MigrondiUI
-
-/// Update-style setters for adaptive values, same call shape the GUI code
-/// has always used for `cval` state.
-[<AutoOpen>]
-module internal AdaptiveStateExtensions =
-
-  type ChangeableValue<'T> with
-
-    member value.setValue(update: 'T -> 'T) : unit =
-      transact(fun () -> value.Value <- update value.Value)
-
-    member value.setValue(newValue: 'T) : unit =
-      transact(fun () -> value.Value <- newValue)
-
 module VirtualProjectState =
+
+  open System
+  open FSharp.Data.Adaptive
+  open Migrondi.Core
+  open MigrondiUI
 
   let setName (name: string | null) (project: VirtualProject cval) =
     Ok name

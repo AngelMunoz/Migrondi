@@ -19,6 +19,8 @@ module NewProject =
     | CreateLocal
     | ImportToVirtual
 
+  /// When a command's Async completes, all state writes are complete; a host
+  /// may rebuild its view immediately after.
   type NewProjectVM
     (
       logger: ILogger<NewProjectVM>,

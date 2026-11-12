@@ -21,20 +21,6 @@ open SukiUI.Dialogs
 open SukiUI.Toasts
 open MigrondiUI.Views.Routes
 
-Log.Logger <-
-  LoggerConfiguration()
-#if DEBUG
-    .MinimumLevel
-    .Debug()
-#else
-    .MinimumLevel
-    .Information()
-#endif
-    .WriteTo.Console()
-    .CreateLogger()
-
-let loggerFactory = (new LoggerFactory()).AddSerilog Log.Logger
-
 let BuildMainWindow(dialogManager, toastManager) =
   let win =
     (new SukiWindow())
@@ -50,7 +36,7 @@ let BuildMainWindow(dialogManager, toastManager) =
 
   win
 
-let Orchestrate() =
+let Orchestrate(loggerFactory: ILoggerFactory) =
   Migrations.GetMigrondi loggerFactory
   |> ValueOption.defaultWith(fun () -> failwith "No migrondi found")
   |> Migrations.Migrate
@@ -97,24 +83,59 @@ type App() as this =
 
 [<EntryPoint; STAThread>]
 let main argv =
-  let logger = loggerFactory.CreateLogger "MigrondiUI"
-
-  logger.LogInformation
-    "Migrondi UI is currently in preview if you can see this notice, regardless of the reported version (stable or marked as beta/rc)."
-
-  logger.LogInformation
-    "things are subject to change, and will likely break in the up coming releases."
-
-  logger.LogInformation "We expect to stabilize Migrondi UI by 2.0."
-
+  // Parse the server mode before any logging is configured: in MCP mode
+  // every log line must go to stderr, so no Serilog console logger is
+  // created on this path.
   match Server.tryParseArgs argv with
   | Some mcpOptions ->
+#if DEBUG
+    let loggerFactory = McpLogging.createLoggerFactory LogLevel.Debug
+#else
+    let loggerFactory = McpLogging.createLoggerFactory LogLevel.Information
+#endif
+
+    let logger = loggerFactory.CreateLogger "MigrondiUI"
+
+    logger.LogInformation
+      "Migrondi UI is currently in preview if you can see this notice, regardless of the reported version (stable or marked as beta/rc)."
+
+    logger.LogInformation
+      "things are subject to change, and will likely break in the up coming releases."
+
+    logger.LogInformation "We expect to stabilize Migrondi UI by 2.0."
+
     Server.runMcpServer Database.ConnectionFactory mcpOptions loggerFactory
     |> Async.RunSynchronously
 
     0
   | None ->
+    Log.Logger <-
+      LoggerConfiguration()
+#if DEBUG
+        .MinimumLevel
+        .Debug()
+#else
+        .MinimumLevel
+        .Information()
+#endif
+        .WriteTo.Console()
+        .CreateLogger()
+
+    let loggerFactory = (new LoggerFactory()).AddSerilog Log.Logger
+    let logger = loggerFactory.CreateLogger "MigrondiUI"
+
+    logger.LogInformation
+      "Migrondi UI is currently in preview if you can see this notice, regardless of the reported version (stable or marked as beta/rc)."
+
+    logger.LogInformation
+      "things are subject to change, and will likely break in the up coming releases."
+
+    logger.LogInformation "We expect to stabilize Migrondi UI by 2.0."
+
     AppBuilder
       .Configure<App>()
       .UsePlatformDetect()
-      .StartWithClassicDesktopLifetime(Orchestrate, argv)
+      .StartWithClassicDesktopLifetime(
+        (fun () -> Orchestrate loggerFactory),
+        argv
+      )

@@ -1,5 +1,8 @@
 ﻿module MigrondiUI.Components.TextEditor
 
+// This component is the only AvaloniaEdit touchpoint in the UI, so an
+// alternative front end swaps this component alone.
+
 open Avalonia.Controls
 
 open AvaloniaEdit

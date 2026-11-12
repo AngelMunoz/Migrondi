@@ -16,6 +16,16 @@ module LocalProjectDetails =
   open MigrondiUI
   open MigrondiUI.Services
 
+  /// Data-only snapshot of the local project details state.
+  [<NoComparison; NoEquality>]
+  type LocalProjectDetailsState = {
+    Migrations: MigrationStatus[]
+    LastDryRun: Migration[]
+    CurrentShow: MigrationRunner.CurrentShow
+  }
+
+  /// When a command's Async completes, all state writes are complete; a host
+  /// may rebuild its view immediately after.
   type LocalProjectDetailsVM
     (
       logger: ILogger<LocalProjectDetailsVM>,
@@ -54,6 +64,17 @@ module LocalProjectDetails =
     member _.LastDryRun: Migration[] aval = lastDryRun
 
     member _.CurrentShow: MigrationRunner.CurrentShow aval = currentShow
+
+    member _.State: LocalProjectDetailsState aval =
+      AVal.map3
+        (fun migrations lastDryRun currentShow -> {
+          Migrations = migrations
+          LastDryRun = lastDryRun
+          CurrentShow = currentShow
+        })
+        _migrations
+        lastDryRun
+        currentShow
 
     member _.OpenFileExplorer() = asyncEx {
       logger.LogDebug "Opening file explorer"

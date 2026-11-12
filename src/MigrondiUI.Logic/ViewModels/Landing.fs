@@ -18,6 +18,15 @@ module Landing =
     | RemoveProjects
     | Empty
 
+  /// Data-only snapshot of the landing page state.
+  [<NoComparison; NoEquality>]
+  type LandingState = {
+    Projects: Project list
+    ViewState: LandingViewState
+  }
+
+  /// When a command's Async completes, all state writes are complete; a host
+  /// may rebuild its view immediately after.
   type LandingVM
     (
       logger: ILogger<LandingVM>,
@@ -48,6 +57,15 @@ module Landing =
       viewState.setValue Empty
 
     member _.ViewState: aval<LandingViewState> = viewState
+
+    member _.State: LandingState aval =
+      AVal.map2
+        (fun projects viewState -> {
+          Projects = projects
+          ViewState = viewState
+        })
+        _projects
+        viewState
 
     member _.OpenProject(project: Project) : Async<unit> = asyncEx {
       let url =

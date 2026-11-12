@@ -130,11 +130,7 @@ type VProjectDetailsView
 
   let onRemoveRequested migration () = asyncEx {
     logger.LogDebug("Removing migration")
-    let! result = vm.DeleteMigration migration
-
-    if result then
-      do! vm.ListMigrations()
-
+    do! vm.RemoveMigration migration
     return ()
   }
 
