@@ -21,147 +21,16 @@ open Migrondi.Core
 
 open MigrondiUI
 open MigrondiUI.Services
+open MigrondiUI.Logic
+open MigrondiUI.Logic.LocalProjectDetails
 open MigrondiUI.Components
 open MigrondiUI.Components.MigrationRunnerToolbar
 open MigrondiUI.Components.Fields
 
-type LocalProjectDetailsVM
-  (
-    logger: ILogger<LocalProjectDetailsVM>,
-    projects: Services.IProjectCollection,
-    migrondiFactory: Services.IMigrationOperationsFactory,
-    project: LocalProject
-  ) =
-
-  let _migrations = cval [||]
-  let lastDryRun = cval [||]
-
-  let currentShow = cval ProjectDetails.CurrentShow.Migrations
-
-  let handleException(work: Async<unit>) = asyncEx {
-    let! result = work |> Async.Catch
-
-    match result with
-    | Choice1Of2 _ -> return ()
-    | Choice2Of2 ex ->
-      logger.LogError(ex, "An error occurred while processing the request")
-      currentShow.setValue(ProjectDetails.CurrentShow.ExceptionThrown ex)
-      return ()
-  }
-
-  let ops = migrondiFactory.Create(Local project)
-
-  do
-    logger.LogDebug "LocalProjectDetailsVM created"
-    ops.Core.Initialize()
-
-  member _.Project = project
-
-  member _.Migrations: MigrationStatus[] aval = _migrations
-
-  member _.LastDryRun: Migration[] aval = lastDryRun
-
-  member _.CurrentShow: ProjectDetails.CurrentShow aval = currentShow
-
-  member _.OpenFileExplorer() = asyncEx {
-    logger.LogDebug "Opening file explorer"
-
-    let migrationsDir =
-      project.migrondiConfigPath |> Path.GetDirectoryName |> nonNull
-
-    logger.LogDebug("Migrations directory: {migrationsDir}", migrationsDir)
-
-    do! OsOperations.OpenDirectory migrationsDir
-    logger.LogDebug "File explorer opened"
-  }
-
-  member _.ListMigrations() = asyncEx {
-    logger.LogDebug "Listing migrations"
-    let! ct = Async.CancellationToken
-    let! migrations = ops.Core.MigrationsListAsync ct
-
-    logger.LogDebug("Migrations listed: {migrations}", migrations.Count)
-
-    migrations |> Seq.toArray |> _migrations.setValue
-
-    lastDryRun.setValue [||]
-    logger.LogDebug "Last dry run set to empty array"
-
-    currentShow.setValue ProjectDetails.CurrentShow.Migrations
-    return ()
-  }
-
-  member this.NewMigration(name: string) =
-    asyncEx {
-      logger.LogDebug "Creating new migration"
-      let! ct = Async.CancellationToken
-
-      logger.LogDebug("New migration name: {name}", name)
-      let! _ = ops.Core.RunNewAsync(name, cancellationToken = ct)
-      logger.LogDebug("New migration created")
-      return! this.ListMigrations()
-    }
-    |> handleException
-
-  member this.RunMigrations(kind: ProjectDetails.RunMigrationKind, steps: int) =
-    asyncEx {
-      let! ct = Async.CancellationToken
-      logger.LogDebug("Running migrations: {kind}, {steps}", kind, steps)
-
-      match kind with
-      | ProjectDetails.RunMigrationKind.Up ->
-        logger.LogDebug("Running migrations up")
-        do! ops.Core.RunUpAsync(steps, cancellationToken = ct) :> Task
-        do! this.ListMigrations()
-        logger.LogDebug("Migrations up completed")
-        return ()
-      | ProjectDetails.RunMigrationKind.Down ->
-        logger.LogDebug("Running migrations down")
-        do! ops.Core.RunDownAsync(steps, cancellationToken = ct) :> Task
-        do! this.ListMigrations()
-        logger.LogDebug("Migrations down completed")
-        return ()
-      | ProjectDetails.RunMigrationKind.DryUp ->
-        logger.LogDebug("Running migrations dry up")
-        let! run = ops.Core.DryRunUpAsync(steps, cancellationToken = ct)
-
-        logger.LogDebug(
-          "Dry run up completed and found {count} migrations",
-          run.Count
-        )
-
-        run |> Seq.toArray |> lastDryRun.setValue
-
-        currentShow.setValue(
-          ProjectDetails.CurrentShow.DryRun ProjectDetails.RunMigrationKind.Up
-        )
-
-        logger.LogDebug("Current show set to dry run up")
-        return ()
-      | ProjectDetails.RunMigrationKind.DryDown ->
-        logger.LogDebug("Running migrations dry down")
-        let! run = ops.Core.DryRunDownAsync(steps, cancellationToken = ct)
-
-        logger.LogDebug(
-          "Dry run down completed and found {count} migrations",
-          run.Count
-        )
-
-        run |> Seq.toArray |> lastDryRun.setValue
-
-        currentShow.setValue(
-          ProjectDetails.CurrentShow.DryRun ProjectDetails.RunMigrationKind.Down
-        )
-
-        logger.LogDebug("Current show set to dry run down")
-        return ()
-    }
-    |> handleException
-
 let localProjectView
   (
     project: LocalProject,
-    onRunMigrationsRequested: ProjectDetails.RunMigrationKind * int -> unit
+    onRunMigrationsRequested: MigrationRunner.RunMigrationKind * int -> unit
   ) : Control =
   let description = defaultArg project.description "No description"
 
@@ -317,13 +186,18 @@ let buildDetailsView
     logger: ILogger<LocalProjectDetailsVM>,
     projects: Services.IProjectCollection,
     migrondiFactory: Services.IMigrationOperationsFactory,
-    onNavigateBack: unit -> unit
+    navigator: INavigator
   ) = asyncEx {
   let! project = projects.Get projectId
 
   match project with
   | Some(Local p) ->
-    let vm = LocalProjectDetailsVM(logger, projects, migrondiFactory, p)
+    let vm =
+      LocalProjectDetailsVM(logger, projects, migrondiFactory, p, navigator)
+
+    let onNavigateBack() =
+      vm.NavigateBack() |> Async.StartImmediate
+
     return Some(LProjectDetailsView(vm, onNavigateBack) :> Control)
   | Some(Virtual _) -> return failwith "Expected local project but got virtual"
   | None -> return None
@@ -349,19 +223,11 @@ let View
   (nav: INavigable<Control>)
   : Control =
   let projectId = context.getParam<Guid> "projectId" |> ValueOption.toOption
+  let navigator = AvaloniaNavigator nav
 
   let view =
     let projectId = defaultArg projectId Guid.Empty
     cval(buildLoading projectId)
-
-  let onNavigateBack() =
-    asyncEx {
-      match! nav.NavigateByName("landing") with
-      | Ok _ -> ()
-      | Error(e) ->
-        logger.LogWarning("Navigation failed: {error}", e.StringError())
-    }
-    |> Async.StartImmediate
 
   match projectId with
   | Some projectId ->
@@ -374,7 +240,7 @@ let View
           logger,
           projects,
           migrondiFactory,
-          onNavigateBack
+          navigator
         )
       with
       | Some builtView -> view.setValue(builtView)

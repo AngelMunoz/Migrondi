@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Compile Include="TestHelpers.fs" />
+    <Compile Include="LogicTests.fs" />
     <Compile Include="MigrationRunnerToolbarTests.fs" />
     <Compile Include="ProjectDetailsTests.fs" />
     <Compile Include="EditableMigrationTests.fs" />
@@ -40,6 +41,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\MigrondiUI\MigrondiUI.fsproj" />
+    <ProjectReference Include="..\MigrondiUI.Logic\MigrondiUI.Logic.fsproj" />
     <ProjectReference Include="..\Migrondi.Mcp\Migrondi.Mcp.fsproj" />
   </ItemGroup>
 

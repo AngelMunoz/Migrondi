@@ -4,6 +4,7 @@
     <Project Path="src/Migrondi.Mcp/Migrondi.Mcp.fsproj" />
     <Project Path="src/Migrondi.Tests/Migrondi.Tests.fsproj" />
     <Project Path="src/Migrondi/Migrondi.fsproj" />
+    <Project Path="src/MigrondiUI.Logic/MigrondiUI.Logic.fsproj" />
     <Project Path="src/MigrondiUI/MigrondiUI.fsproj" />
     <Project Path="src/MigrondiUI.Tests/MigrondiUI.Tests.fsproj" />
   </Folder>

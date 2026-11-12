@@ -14,49 +14,7 @@ open Migrondi.Core
 open Navs.Avalonia
 open MigrondiUI
 open MigrondiUI.Components.Fields
-
-module VirtualProject =
-
-  let setName (name: string | null) (project: VirtualProject cval) =
-    Ok name
-    |> Result.bind(fun name ->
-      if String.IsNullOrWhiteSpace(name) then
-        Error "Name string cannot be empty."
-      else
-        Ok(nonNull name))
-    |> Result.toOption
-    |> Option.iter(fun name ->
-      project.setValue(fun p -> { p with name = name }))
-
-  let setDescription
-    (description: string | null)
-    (project: VirtualProject cval)
-    =
-    let description =
-      if String.IsNullOrWhiteSpace(description) then
-        None
-      else
-        Some(nonNull description)
-
-    project.setValue(fun p -> { p with description = description })
-
-  let setConnection (connection: string | null) (project: VirtualProject cval) =
-    Ok connection
-    |> Result.bind(fun conn ->
-      if String.IsNullOrWhiteSpace(conn) then
-        Error "Connection string cannot be empty."
-      else
-        Ok(nonNull conn))
-    |> Result.toOption
-    |> Option.iter(fun connection ->
-      project.setValue(fun p -> { p with connection = connection }))
-
-  let setDriver (driver: string) (project: VirtualProject cval) =
-    project.setValue(fun p -> {
-      p with
-          driver = MigrondiDriver.FromString driver
-    })
-
+open MigrondiUI.Logic.VirtualProjectState
 
 type VirtualProjectForm
   (project: VirtualProject aval, onSave: VirtualProject -> Async<unit>) as this
@@ -101,8 +59,7 @@ type VirtualProjectForm
               .Classes([| "FieldBox"; "NameField" |])
               .AcceptsReturn(true)
               .Text(aProject |> AVal.map(_.name) |> AVal.toBinding)
-              .OnTextChangedHandler(fun tb _ ->
-                aProject |> VirtualProject.setName(tb.Text))
+              .OnTextChangedHandler(fun tb _ -> aProject |> setName(tb.Text))
           ),
           LabeledField.Vertical(
             "Description",
@@ -115,7 +72,7 @@ type VirtualProjectForm
                 |> AVal.toBinding
               )
               .OnTextChangedHandler(fun tb _ ->
-                aProject |> VirtualProject.setDescription(tb.Text))
+                aProject |> setDescription(tb.Text))
           ),
           LabeledField.Vertical(
             "Connection String",
@@ -123,7 +80,7 @@ type VirtualProjectForm
               .Classes([| "FieldBox" |])
               .Text(aProject |> AVal.map(_.connection) |> AVal.toBinding)
               .OnTextChangedHandler(fun tb _ ->
-                aProject |> VirtualProject.setConnection(tb.Text))
+                aProject |> setConnection(tb.Text))
           ),
           LabeledField.Vertical(
             "Database Driver",
@@ -136,8 +93,7 @@ type VirtualProjectForm
               .OnSelectionChanged<string>(fun ((selected, _), _) ->
                 selected
                 |> Seq.tryHead
-                |> Option.iter(fun s ->
-                  aProject |> VirtualProject.setDriver(s)))
+                |> Option.iter(fun s -> aProject |> setDriver(s)))
           ),
           saveBtn
         )

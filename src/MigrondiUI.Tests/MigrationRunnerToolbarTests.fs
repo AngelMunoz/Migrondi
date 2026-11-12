@@ -1,6 +1,7 @@
 ﻿module MigrationRunnerToolbarTests
 
 open MigrondiUI.Components.ProjectDetails
+open MigrondiUI.Logic.MigrationRunner
 open Xunit
 open Avalonia.Controls
 open Avalonia.Headless.XUnit

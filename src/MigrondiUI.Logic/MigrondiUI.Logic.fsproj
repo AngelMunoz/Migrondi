@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <DebugType>embedded</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Database.fs" />
+    <Compile Include="VirtualFs.fs" />
+    <Compile Include="Services.fs" />
+    <Compile Include="Projects.fs" />
+    <Compile Include="OsOperations.fs" />
+    <Compile Include="Migrations.fs" />
+    <Compile Include="Host.fs" />
+    <Compile Include="MigrationRunner.fs" />
+    <Compile Include="VirtualProjectState.fs" />
+    <Compile Include="ViewModels/Landing.fs" />
+    <Compile Include="ViewModels/NewProject.fs" />
+    <Compile Include="ViewModels/LocalProjectDetails.fs" />
+    <Compile Include="ViewModels/VirtualProjectDetails.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Donald" />
+    <PackageReference Include="FSharp.UMX" />
+    <PackageReference Include="IcedTasks" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="FSharp.Data.Adaptive" />
+    <PackageReference Include="CLIWrap" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
+    <ProjectReference Include="..\Migrondi.Mcp\Migrondi.Mcp.fsproj" />
+  </ItemGroup>
+</Project>

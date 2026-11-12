@@ -10,6 +10,7 @@
 - **Migrondi:** `list` accepts `--pending`/`--applied`, `--limit`/`--last`, `--search <text>`, and `--show-path`/`--show-content` to filter and inspect migrations without scanning the migrations folder by hand.
 - **Migrondi:** `up` and `down` accept `--to <name>` to apply up to, or roll back to, a named migration (name, filename, or timestamp) instead of counting migrations; the positional amount stays optional and cannot be combined with `--to`.
 - **Project:** Added `migrondi-cli` and `migrondi-library` agent skills under `.agents/skills`, covering CLI usage for agents and `Migrondi.Core` embedding patterns such as custom migration sources.
+- **MigrondiUI:** the UI's logic (project store, view models, navigation and file-picker contracts) now lives in an Avalonia-free library (`MigrondiUI.Logic`), so alternative UI front ends can be evaluated on top of the same logic; screens and behavior stay identical.
 
 ### Changed
 

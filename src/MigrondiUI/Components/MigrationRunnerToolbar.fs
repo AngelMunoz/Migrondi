@@ -8,7 +8,7 @@ open Avalonia.Styling
 open FSharp.Data.Adaptive
 open NXUI.Extensions
 open Navs.Avalonia
-open MigrondiUI.Components.ProjectDetails
+open MigrondiUI.Logic.MigrationRunner
 
 let applyPendingButton(dryRun, onRunMigrationsRequested, getIntValue) =
   let btn =

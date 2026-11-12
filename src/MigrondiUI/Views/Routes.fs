@@ -12,6 +12,7 @@ open NXUI.Extensions
 open Navs.Avalonia
 
 open MigrondiUI.Services
+open MigrondiUI.Logic
 open SukiUI.Controls
 open SukiUI.Theme
 
@@ -30,14 +31,14 @@ let private landingView appEnvironment =
   let { lf = lf; projects = projects } = appEnvironment
 
   let logger = lf.CreateLogger<Landing.LandingVM>()
-  Landing.View(Landing.LandingVM(logger, projects), logger)
+  Landing.View logger projects
 
 let private newProjectView appEnvironment =
   let { lf = lf; projects = projects } = appEnvironment
 
   let logger = lf.CreateLogger<NewProject.NewProjectVM>()
 
-  NewProject.View((NewProject.NewProjectVM(logger, projects)), logger)
+  NewProject.View logger projects
 
 let private projectDetailsView appEnvironment =
   let {

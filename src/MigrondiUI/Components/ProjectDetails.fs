@@ -15,20 +15,9 @@ open Migrondi.Core
 
 open MigrondiUI.Components.Fields
 open MigrondiUI.Components.TextEditor
+open MigrondiUI.Logic.MigrationRunner
 open Avalonia
 
-
-[<Struct>]
-type RunMigrationKind =
-  | Up
-  | Down
-  | DryUp
-  | DryDown
-
-type CurrentShow =
-  | Migrations
-  | DryRun of RunMigrationKind
-  | ExceptionThrown of exn
 
 type MigrationStatusView(migrationStatus: MigrationStatus) =
   inherit UserControl()

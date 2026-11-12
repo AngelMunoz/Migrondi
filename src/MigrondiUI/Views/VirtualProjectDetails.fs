@@ -22,186 +22,15 @@ open Navs.Avalonia
 open Migrondi.Core
 open MigrondiUI
 open MigrondiUI.Services
+open MigrondiUI.Logic
+open MigrondiUI.Logic.VirtualProjectDetails
 open MigrondiUI.Components
 open MigrondiUI.Components.MigrationRunnerToolbar
-
-type VirtualProjectDetailsVM
-  (
-    logger: ILogger<VirtualProjectDetailsVM>,
-    projects: Services.IProjectCollection,
-    migrondiFactory: Services.IMigrationOperationsFactory,
-    project: VirtualProject
-  ) =
-  let _migrations = cval [||]
-  let lastDryRun = cval [||]
-  let currentShow = cval ProjectDetails.CurrentShow.Migrations
-
-  let _project = cval project
-
-  let ops = migrondiFactory.Create(Virtual project)
-
-  let handleError(work: Async<unit>) = asyncEx {
-    let! result = work |> Async.Catch
-
-    match result with
-    | Choice1Of2 _ -> return ()
-    | Choice2Of2 ex ->
-      logger.LogError("An error occurred: {error}", ex)
-      currentShow.setValue(ProjectDetails.CurrentShow.ExceptionThrown ex)
-      return ()
-  }
-
-  do
-    logger.LogDebug "VirtualProjectDetailsVM created"
-    logger.LogDebug "Initializing migrondi"
-    logger.LogDebug("Project connection: {project}", project.connection)
-    ops.Core.Initialize()
-
-  member _.Project: VirtualProject aval = _project
-
-  member _.Migrations: MigrationStatus[] aval = _migrations
-
-  member _.LastDryRun: Migration[] aval = lastDryRun
-
-  member _.CurrentShow: ProjectDetails.CurrentShow aval = currentShow
-
-  member _.ListMigrations() = asyncEx {
-    logger.LogDebug "Listing migrations"
-    let! ct = Async.CancellationToken
-    let! migrations = ops.Core.MigrationsListAsync ct
-
-    logger.LogDebug("Migrations listed: {migrations}", migrations.Count)
-
-    migrations |> Seq.toArray |> _migrations.setValue
-
-    lastDryRun.setValue [||]
-    logger.LogDebug "Last dry run set to empty array"
-
-    currentShow.setValue ProjectDetails.CurrentShow.Migrations
-    return ()
-  }
-
-  member this.CreateNewMigration(name: string) =
-    asyncEx {
-      logger.LogDebug("Creating new migration with name: {name}", name)
-
-      let! ct = Async.CancellationToken
-      do! ops.Core.RunNewAsync(name, cancellationToken = ct) :> Task
-      return! this.ListMigrations()
-    }
-    |> handleError
-
-  member _.SaveMigration(migration: Migration) = asyncEx {
-    logger.LogDebug("Saving migration: {migration}", migration.name)
-
-    let! result = ops.UpdateMigration migration
-
-    match result with
-    | Ok _ ->
-      logger.LogDebug("Migration saved: {migration}", migration.name)
-      return true
-    | Error(Services.MigrationCrudError.AlreadyApplied n) ->
-      logger.LogWarning("Migration {name} has already been applied", n)
-      return false
-    | Error(Services.MigrationCrudError.NotFound n) ->
-      logger.LogWarning("Migration {name} not found", n)
-      return false
-    | Error(Services.MigrationCrudError.DatabaseError msg) ->
-      logger.LogError("Unable to save the migration: {error}", msg)
-      return false
-  }
-
-  member _.DeleteMigration(migration: Migration) = asyncEx {
-    logger.LogDebug("Deleting migration: {migration}", migration.name)
-
-    let! result = ops.DeleteMigration migration.name
-
-    match result with
-    | Ok _ ->
-      logger.LogDebug("Migration deleted: {migration}", migration.name)
-      return true
-    | Error(Services.MigrationCrudError.AlreadyApplied n) ->
-      logger.LogWarning("Migration {name} has already been applied", n)
-      return false
-    | Error(Services.MigrationCrudError.NotFound n) ->
-      logger.LogWarning("Migration {name} not found", n)
-      return false
-    | Error(Services.MigrationCrudError.DatabaseError msg) ->
-      logger.LogError("Unable to delete the migration: {error}", msg)
-      return false
-  }
-
-  member this.RunMigrations(kind: ProjectDetails.RunMigrationKind, steps: int) =
-    asyncEx {
-      let! token = Async.CancellationToken
-      logger.LogDebug("Running migrations: {kind}, {steps}", kind, steps)
-
-      match kind with
-      | ProjectDetails.RunMigrationKind.Up ->
-        logger.LogDebug("Running migrations up")
-        do! ops.Core.RunUpAsync(steps, cancellationToken = token) :> Task
-        do! this.ListMigrations()
-        logger.LogDebug("Migrations up completed")
-        return ()
-      | ProjectDetails.RunMigrationKind.Down ->
-        logger.LogDebug("Running migrations down")
-        do! ops.Core.RunDownAsync(steps, cancellationToken = token) :> Task
-        do! this.ListMigrations()
-        logger.LogDebug("Migrations down completed")
-        return ()
-      | ProjectDetails.RunMigrationKind.DryUp ->
-        logger.LogDebug("Running migrations dry up")
-        let! run = ops.Core.DryRunUpAsync(steps, cancellationToken = token)
-
-        logger.LogDebug(
-          "Dry run up completed and found {count} migrations",
-          run.Count
-        )
-
-        run |> Seq.toArray |> lastDryRun.setValue
-
-        currentShow.setValue(
-          ProjectDetails.CurrentShow.DryRun ProjectDetails.RunMigrationKind.Up
-        )
-
-        logger.LogDebug("Current show set to dry run up")
-        return ()
-      | ProjectDetails.RunMigrationKind.DryDown ->
-        logger.LogDebug("Running migrations dry down")
-        let! run = ops.Core.DryRunDownAsync(steps, cancellationToken = token)
-
-        logger.LogDebug(
-          "Dry run down completed and found {count} migrations",
-          run.Count
-        )
-
-        run |> Seq.toArray |> lastDryRun.setValue
-
-        currentShow.setValue(
-          ProjectDetails.CurrentShow.DryRun ProjectDetails.RunMigrationKind.Down
-        )
-
-        logger.LogDebug("Current show set to dry run down")
-        return ()
-    }
-    |> handleError
-
-  member _.UpdateProject(project: VirtualProject) = asyncEx {
-    logger.LogDebug("Updating project: {project}", project.name)
-
-    try
-      do! projects.UpdateVirtual project
-      _project.setValue project
-      return ()
-    with ex ->
-      logger.LogError("Unable to update the project due: {error}", ex)
-      return ()
-  }
 
 let virtualProjectView
   (
     project: VirtualProject aval,
-    onRunMigrationsRequested: ProjectDetails.RunMigrationKind * int -> unit,
+    onRunMigrationsRequested: MigrationRunner.RunMigrationKind * int -> unit,
     onSave: VirtualProject -> Async<unit>
   ) : Control =
   let projectDescription =
@@ -371,13 +200,18 @@ let buildDetailsView
     logger: ILogger<VirtualProjectDetailsVM>,
     projects: Services.IProjectCollection,
     migrondiFactory: Services.IMigrationOperationsFactory,
-    onNavigateBack: unit -> unit
+    navigator: INavigator
   ) = asyncEx {
   let! project = projects.Get projectId
 
   match project with
   | Some(Virtual p) ->
-    let vm = VirtualProjectDetailsVM(logger, projects, migrondiFactory, p)
+    let vm =
+      VirtualProjectDetailsVM(logger, projects, migrondiFactory, p, navigator)
+
+    let onNavigateBack() =
+      vm.NavigateBack() |> Async.StartImmediate
+
     return Some(VProjectDetailsView(logger, vm, onNavigateBack) :> Control)
   | Some(Local _) -> return failwith "Expected virtual project but got local"
   | None -> return None
@@ -404,19 +238,11 @@ let View
   : Control =
 
   let projectId = context.getParam<Guid> "projectId" |> ValueOption.toOption
+  let navigator = AvaloniaNavigator nav
 
   let view =
     let projectId = defaultArg projectId Guid.Empty
     cval(buildLoading projectId)
-
-  let onNavigateBack() =
-    asyncEx {
-      match! nav.NavigateByName("landing") with
-      | Ok _ -> ()
-      | Error(e) ->
-        logger.LogWarning("Navigation failed: {error}", e.StringError())
-    }
-    |> Async.StartImmediate
 
   match projectId with
   | Some projectId ->
@@ -429,7 +255,7 @@ let View
           logger,
           projects,
           migrondiFactory,
-          onNavigateBack
+          navigator
         )
       with
       | Some(builtView) -> view.setValue(builtView)

@@ -3,6 +3,7 @@ module ProjectDetailsTests
 open Xunit
 open Avalonia.Headless.XUnit
 open MigrondiUI.Components.ProjectDetails
+open MigrondiUI.Logic.MigrationRunner
 open Migrondi.Core
 open System
 open Avalonia.Controls

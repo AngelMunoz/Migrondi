@@ -4,55 +4,20 @@ open System
 
 open Microsoft.Extensions.Logging
 
-open IcedTasks
-open IcedTasks.Polyfill.Async.PolyfillBuilders
-
 open Avalonia.Controls
 open Avalonia.Controls.Templates
 
 open NXUI.Extensions
 
 open FSharp.Data.Adaptive
-open FsToolkit.ErrorHandling
 
 open Navs
 open Navs.Avalonia
 open MigrondiUI
 open MigrondiUI.Services
+open MigrondiUI.Logic
+open MigrondiUI.Logic.Landing
 open SukiUI.Controls
-
-type LandingViewState =
-  | EditProjects
-  | RemoveProjects
-  | Empty
-
-type LandingVM
-  (logger: ILogger<LandingVM>, projects: Services.IProjectCollection) =
-
-  let _projects: Project list cval = cval []
-
-  let viewState = cval Empty
-
-  do logger.LogDebug "LandingVM created"
-
-  member _.Projects: Project list aval = _projects
-
-  member _.LoadProjects() = asyncEx {
-    let! result = projects.List()
-    result |> _projects.setValue
-    return ()
-  }
-
-  member _.SetLandingState(state: LandingViewState) =
-    logger.LogDebug("Setting landing state to {State}", state)
-    viewState.setValue state
-
-  member _.EmptyViewState() =
-    logger.LogDebug "Setting landing state to Empty"
-    viewState.setValue Empty
-
-  member _.ViewState: aval<LandingViewState> = viewState
-
 
 let inline emptyProjectsView() : Control =
   StackPanel()
@@ -117,30 +82,25 @@ let viewContent(handleProjectSelected, projects, viewState) : Control =
   Border().Child(content |> AVal.toBinding)
 
 let View
-  (vm: LandingVM, logger: ILogger)
+  (logger: ILogger<LandingVM>)
+  (projects: IProjectCollection)
   _
   (nav: INavigable<Control>)
   : Control =
   let view = UserControl()
+  let navigator = AvaloniaNavigator nav
+  let vm = LandingVM(logger, projects, navigator)
   vm.LoadProjects() |> Async.StartImmediate
-
-  let handleProjectSelected(project: Project) =
-    asyncEx {
-      let url =
-        match project with
-        | Local _ -> $"/projects/local/{project.Id.ToString()}"
-        | Virtual _ -> $"/projects/virtual/{project.Id.ToString()}"
-
-      match! nav.Navigate url with
-      | Ok _ -> ()
-      | Error(e) ->
-        logger.LogWarning("Navigation Failure: {error}", e.StringError())
-    }
-    |> Async.StartImmediate
 
   view
     .Name("Landing")
     .Content(
       GlassCard()
-        .Content(viewContent(handleProjectSelected, vm.Projects, vm.ViewState))
+        .Content(
+          viewContent(
+            (fun project -> vm.OpenProject project |> Async.StartImmediate),
+            vm.Projects,
+            vm.ViewState
+          )
+        )
     )

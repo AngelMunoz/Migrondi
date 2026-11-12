@@ -8,11 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Extensions.fs" />
-    <Compile Include="Database.fs" />
-    <Compile Include="VirtualFs.fs" />
-    <Compile Include="Services.fs" />
-    <Compile Include="Projects.fs" />
-    <Compile Include="OsOperations.fs" />
+    <Compile Include="Views/AvaloniaHost.fs" />
     <Compile Include="Components/Toolbar.fs" />
     <Compile Include="Components/Fields.fs" />
     <Compile Include="Components/TextEditor.fs" />
@@ -26,7 +22,6 @@
     <Compile Include="Views/LocalProjectDetails.fs" />
     <Compile Include="Views/VirtualProjectDetails.fs" />
     <Compile Include="Views/Routes.fs" />
-    <Compile Include="Migrations.fs" />
     <Compile Include="Mcp/Server.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
@@ -65,5 +60,6 @@
 
     <ProjectReference Include="..\Migrondi.Core\Migrondi.Core.fsproj" />
     <ProjectReference Include="..\Migrondi.Mcp\Migrondi.Mcp.fsproj" />
+    <ProjectReference Include="..\MigrondiUI.Logic\MigrondiUI.Logic.fsproj" />
   </ItemGroup>
 </Project>
