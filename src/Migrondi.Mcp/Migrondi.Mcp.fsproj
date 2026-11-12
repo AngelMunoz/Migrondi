@@ -23,6 +23,10 @@
     <Compile Include="McpTypes.fs" />
     <Compile Include="Logging.fsi" />
     <Compile Include="Logging.fs" />
+    <Compile Include="ProjectBinding.fsi" />
+    <Compile Include="ProjectBinding.fs" />
+    <Compile Include="ProjectInit.fsi" />
+    <Compile Include="ProjectInit.fs" />
     <Compile Include="Results.fsi" />
     <Compile Include="Results.fs" />
     <Compile Include="Tools.fsi" />

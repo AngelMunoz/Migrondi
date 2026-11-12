@@ -214,27 +214,39 @@ That's the General Gist of how to use migrondi.
 
 ## MCP Server
 
-`migrondi mcp` runs an MCP (Model Context Protocol) server over stdio for ONE migrondi project, so AI agents and harnesses can drive migrations as tools instead of shell commands.
+`migrondi mcp` runs an MCP (Model Context Protocol) server over stdio, so AI agents and harnesses can drive migrations as tools instead of shell commands.
 
-The server exposes seven tools:
+The server is **stateless**: nothing about a project is cached between calls. Every tool call resolves its own project binding, builds its own database connection, and runs. One server registration can therefore drive any project on the machine by passing `configPath` per call — or serve one project per workspace when the registration pins `--config` and the tools run with `configPath: null`.
+
+The server exposes nine tools:
 
 - `get_project` — reports the project name, config path, driver, migrations folder, and table name (never the connection string)
 - `list_migrations` — lists migrations with their applied/pending status
 - `dry_run_migrations` — previews the pending migrations that would be applied
 - `dry_run_rollback` — previews the applied migrations that would be reverted
-- `create_migration` — creates a new migration file, optionally with `upContent` and `downContent` SQL
+- `create_migration` — creates a new migration file, optionally with `upContent` and `downContent` SQL, and optionally with `manualTransaction: true` for statements that cannot run inside a transaction (e.g. `CREATE INDEX CONCURRENTLY`)
 - `run_migrations` — applies pending migrations (optionally a count)
 - `run_rollback` — reverts applied migrations (optionally a count)
+- `init_project` — creates a project in a directory: writes `migrondi.json` and creates the migrations folder; an empty directory gets the defaults, a non-empty directory with `force: true` gets its config fields recovered and rewritten (files are never deleted)
+- `update_project_config` — re-writes the project's `migrondi.json` with the given fields layered on top of its current values
+
+Every project tool takes `configPath` as its first argument: pass a path to target that project, or `null` to use the server's startup binding.
+
+### The explicit-`null` convention for optional arguments
+
+Tool schemas mark every optional argument as required-but-nullable. To omit an optional argument, agents must send an explicit `null` for it — for example `{"configPath": null, "amount": null}` — not leave the key out. This applies to `configPath`, `amount`, `upContent`, `downContent`, `manualTransaction`, and every optional field of `init_project` and `update_project_config`. The SDK parameter binder rejects a missing key for these arguments.
 
 ### Configuration resolution
 
-The project is resolved in this order:
+The startup `--config` is resolved once to fail fast on a bad value; every tool call then re-resolves its own binding in this order:
 
-1. `--config <path>` — when given, it wins. A missing or invalid file is an error and the server exits non-zero. The config file's directory becomes the project root, so the migrations folder and relative SQLite paths resolve against that directory, not the server's working directory.
-2. `MIGRONDI_*` environment variables — `MIGRONDI_CONNECTION_STRING`, `MIGRONDI_MIGRATIONS`, `MIGRONDI_TABLE_NAME`, `MIGRONDI_DRIVER` override the config file's values.
-3. `cwd/migrondi.json` — the last fallback, with the same defaults the other commands use.
+1. The call's `configPath` argument — when given, it wins. A missing or invalid file is a tool error.
+2. `--config <path>` — the startup default. A missing or invalid file fails the server start with a non-zero exit. The config file's directory becomes the project root, so the migrations folder and relative SQLite paths resolve against that directory, not the server's working directory.
+3. `cwd/migrondi.json` — the last fallback, with the same defaults the other commands use. A missing file starts the server (the fallback happens per call).
 
-The existing config override flags (`--connection/-c`, `--migrations/-m`, `--table-name/-t`, `--driver/-d`) beat the environment variables, matching the rest of the CLI.
+The config file is re-read on every call: editing `migrondi.json` (or running `init_project`) takes effect on the next call without restarting the server, and `get_project` always reports the project it resolved for that call.
+
+`MIGRONDI_*` environment variables — `MIGRONDI_CONNECTION_STRING`, `MIGRONDI_MIGRATIONS`, `MIGRONDI_TABLE_NAME`, `MIGRONDI_DRIVER` — override the resolved config file's values, and the config override flags (`--connection/-c`, `--migrations/-m`, `--table-name/-t`, `--driver/-d`) beat the environment variables, matching the rest of the CLI.
 
 `--readonly` serves only the read tools (`get_project`, `list_migrations`, `dry_run_migrations`, `dry_run_rollback`). `--stdio` is the default (and currently the only) transport; `--http` is rejected.
 
@@ -254,4 +266,6 @@ Point the harness at an absolute config path; no working directory is needed:
   }
 }
 ```
+
+A single global registration (no `--config`, started from any directory) also works: every tool call carries the `configPath` of the project it targets, and `configPath: null` falls back to the server's working directory project.
 

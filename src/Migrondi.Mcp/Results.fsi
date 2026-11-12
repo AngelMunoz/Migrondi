@@ -264,6 +264,26 @@ module McpResults =
 
     static member Encoder: JDeck.Encoder<ProjectInfoResult>
 
+  /// Result of the stateless `init_project` tool: the created or adopted
+  /// project, or why the directory was refused.
+  type InitProjectResult =
+    | ProjectInitialized of
+      {|
+        directory: string
+        configPath: string
+        mode: string
+      |}
+    | InitError of string
+
+    static member Encoder: JDeck.Encoder<InitProjectResult>
+
+  /// Result of the stateless `update_project_config` tool.
+  type UpdateConfigResult =
+    | ConfigUpdated of {| configPath: string |}
+    | UpdateError of string
+
+    static member Encoder: JDeck.Encoder<UpdateConfigResult>
+
 module McpResultMapper =
 
   val fromEncoder:

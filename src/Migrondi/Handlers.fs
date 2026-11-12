@@ -22,34 +22,11 @@ module internal Init =
     | FileNotFound
     | FoundButUnparsable
 
-  let recoverConfig(values: Map<string, string>) : MigrondiConfig =
-    let defaults = MigrondiConfig.Default
-
-    let driver =
-      values
-      |> Map.tryFind "driver"
-      |> Option.bind(fun value ->
-        try
-          MigrondiDriver.FromString value |> Some
-        with _ ->
-          None)
-      |> Option.defaultValue defaults.driver
-
-    {
-      connection =
-        values
-        |> Map.tryFind "connection"
-        |> Option.defaultValue defaults.connection
-      migrations =
-        values
-        |> Map.tryFind "migrations"
-        |> Option.defaultValue defaults.migrations
-      tableName =
-        values
-        |> Map.tryFind "tableName"
-        |> Option.defaultValue defaults.tableName
-      driver = driver
-    }
+  // Emptiness, field recovery, and the create/adopt/refuse decision live in
+  // the shared Migrondi.Mcp ProjectInit module (single source of truth with
+  // the `init_project` tool); this handler keeps only its two CLI-only
+  // destructive arms (the clean setup that deletes a migrations directory,
+  // and the merge-needs-force refusal).
 
   let (|HardStop|MergeUnforced|ForceClean|ForceMerge|CleanSetup|)
     (isEmpty, force, merge)
@@ -61,29 +38,6 @@ module internal Init =
     | false, true, false -> ForceClean
     | true, _, _ -> ForceClean
     | false, false, _ -> HardStop
-
-  let isDirectoryEmpty(path: DirectoryInfo) =
-    try
-      let noDirs =
-        Directory.EnumerateDirectories(
-          path.FullName,
-          "*",
-          SearchOption.AllDirectories
-        )
-        |> Seq.isEmpty
-
-      let noFiles =
-        Directory.EnumerateFiles(
-          path.FullName,
-          "*",
-          SearchOption.AllDirectories
-        )
-        |> Seq.isEmpty
-
-      noDirs && noFiles
-    with :? DirectoryNotFoundException ->
-      path.Create()
-      true
 
   let loadConfig
     (path: DirectoryInfo)
@@ -114,7 +68,8 @@ module internal Init =
             path.FullName
           ))
         |> Result.map(
-          JsonSerializer.Deserialize<Map<string, string>> >> recoverConfig
+          JsonSerializer.Deserialize<Map<string, string>>
+          >> ProjectInit.recoverConfig
         )
       with :? JsonException ->
         logger.LogWarning "migrondi.json file is not valid json"
@@ -224,7 +179,7 @@ module internal Init =
     let merge = defaultArg merge false
     let configPath = Path.Combine(path.FullName, "./migrondi.json")
 
-    match (isDirectoryEmpty path, force, merge) with
+    match (ProjectInit.isDirectoryEmpty path, force, merge) with
     | ForceMerge -> runForceMerge path fs configPath serializer logger
     | CleanSetup
     | ForceClean -> runCleanSetup path fs configPath logger
@@ -891,20 +846,24 @@ module Mcp =
 
       1
     | Ok args ->
-      let cliOverrides: McpOverrides = {
+      let cliOverrides: ProjectOverrides = {
         connection = args.Connection
         migrations = args.Migrations
         tableName = args.TableName
         driver = args.Driver
       }
 
-      let resolveArgs: McpResolveArgs = {
+      // Fail fast on a bad --config (same messages the process tests
+      // assert); the resolved value is discarded — every tool call
+      // resolves its own binding afterwards, so a missing cwd config
+      // still starts the server.
+      let resolveArgs: ProjectResolveArgs = {
         Cwd = cwd
         ExplicitConfig = args.Config
         Overrides = cliOverrides
       }
 
-      match McpBinding.resolve logger resolveArgs with
+      match ProjectBinding.resolve logger resolveArgs with
       | Error error ->
         match error with
         | ConfigNotFound path ->
@@ -920,34 +879,28 @@ module Mcp =
           )
 
         1
-      | Ok binding ->
+      | Ok _ ->
         try
-          let migrondi =
-            Migrondi.MigrondiFactory(
-              binding.Config,
-              binding.Root,
-              logger = logger
-            )
+          let serverBinding: ServerBinding = {
+            Cwd = cwd
+            DefaultConfigPath = args.Config
+            Overrides = cliOverrides
+          }
 
-          // Creates the migrations table at startup, the same setup
-          // `Commands.setup` performs for every database-touching command
-          // (Initialize delegates to database.SetupDatabase()).
-          migrondi.Initialize()
-
-          let projectInfoTool = McpProjectInfo.createTool binding
-
-          let env: SingleProjectEnv = {
-            lf = loggerFactory
-            migrondi = migrondi
+          let ctx: ToolContext = {
+            Logger = logger
+            Defaults = serverBinding
           }
 
           let serveArgs: SingleProjectServer.ServeArgs = {
             Mode = args.Transport
             ReadOnly = defaultArg args.Readonly false
-            ExtraTools = [ projectInfoTool ]
+            // get_project is part of the shared surface now, so the CLI
+            // adds no extra tools.
+            ExtraTools = []
           }
 
-          SingleProjectServer.run env loggerFactory serveArgs
+          SingleProjectServer.run ctx loggerFactory serveArgs
           |> Async.RunSynchronously
 
           0

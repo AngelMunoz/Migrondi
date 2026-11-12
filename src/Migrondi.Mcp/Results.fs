@@ -194,6 +194,22 @@ module McpResults =
         | ProjectNotFound err ->
           Json.object(List.singleton("error", Encode.string err))
 
+  /// The on-disk file name of a migration. Decoded names from the standard
+  /// writers already carry the timestamp ("<timestamp>_<name>"), so the
+  /// leading prefix is stripped and the file name composes exactly once,
+  /// with the `.sql` extension the real file has. Hand-authored files
+  /// whose NAME line has no timestamp pass through unchanged.
+  let fileNameFor(timestamp: int64, name: string) =
+    let prefix = $"{timestamp}_"
+
+    let friendly =
+      if name.StartsWith(prefix, StringComparison.Ordinal) then
+        name.Substring(prefix.Length)
+      else
+        name
+
+    $"{timestamp}_{friendly}.sql"
+
   type MigrationStatusOutput = {
     name: string
     timestamp: int64
@@ -220,7 +236,7 @@ module McpResults =
         name = migration.name
         timestamp = migration.timestamp
         status = statusStr
-        fullName = $"{migration.timestamp}_{migration.name}"
+        fullName = fileNameFor(migration.timestamp, migration.name)
       }
 
   type ListMigrationsResult = {
@@ -276,7 +292,7 @@ module McpResults =
       downContent = m.downContent
       manualTransaction = m.manualTransaction
       projectId = m.projectId
-      fullName = $"{m.timestamp}_{m.name}"
+      fullName = fileNameFor(m.timestamp, m.name)
     }
 
   type GetMigrationResult =
@@ -313,7 +329,7 @@ module McpResults =
       timestamp = m.timestamp
       upContent = m.upContent
       downContent = m.downContent
-      fullName = $"{m.timestamp}_{m.name}"
+      fullName = fileNameFor(m.timestamp, m.name)
     }
 
   type DryRunResult = {
@@ -371,13 +387,13 @@ module McpResults =
     static member FromMigration(m: Migration) = {
       name = m.name
       timestamp = m.timestamp
-      fullName = $"{m.timestamp}_{m.name}"
+      fullName = fileNameFor(m.timestamp, m.name)
     }
 
     static member FromMigrationRecord(r: MigrationRecord) = {
       name = r.name
       timestamp = r.timestamp
-      fullName = $"{r.timestamp}_{r.name}"
+      fullName = fileNameFor(r.timestamp, r.name)
     }
 
   type MigrationsResult = {
@@ -537,6 +553,46 @@ module McpResults =
           "migrationsFolder", Encode.string r.migrationsFolder
           "tableName", Encode.string r.tableName
         ]
+
+  /// Result of the stateless `init_project` tool: the created or adopted
+  /// project, or why the directory was refused.
+  type InitProjectResult =
+    | ProjectInitialized of
+      {|
+        directory: string
+        configPath: string
+        mode: string
+      |}
+    | InitError of string
+
+    static member Encoder: Encoder<InitProjectResult> =
+      fun result ->
+        match result with
+        | ProjectInitialized p ->
+          Json.object [
+            "success", Encode.boolean true
+            "directory", Encode.string p.directory
+            "configPath", Encode.string p.configPath
+            "mode", Encode.string p.mode
+          ]
+        | InitError err ->
+          Json.object(List.singleton("error", Encode.string err))
+
+  /// Result of the stateless `update_project_config` tool.
+  type UpdateConfigResult =
+    | ConfigUpdated of {| configPath: string |}
+    | UpdateError of string
+
+    static member Encoder: Encoder<UpdateConfigResult> =
+      fun result ->
+        match result with
+        | ConfigUpdated p ->
+          Json.object [
+            "success", Encode.boolean true
+            "configPath", Encode.string p.configPath
+          ]
+        | UpdateError err ->
+          Json.object(List.singleton("error", Encode.string err))
 
 module McpResultMapper =
 

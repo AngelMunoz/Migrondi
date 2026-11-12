@@ -17,12 +17,13 @@ open ModelContextProtocol.Client
 open ModelContextProtocol.Protocol
 
 open Migrondi.Core
+open Migrondi.Mcp
 open Migrondi.Env
 open Migrondi.Handlers
 
 module private McpTestHelpers =
 
-  let emptyOverrides: McpOverrides = {
+  let emptyOverrides: ProjectOverrides = {
     connection = None
     migrations = None
     tableName = None
@@ -96,6 +97,28 @@ module private McpTestHelpers =
 
     tmp, configPath, first, second
 
+  /// A strict MCP client over stdio against the CLI server bound to the
+  /// given config; every stderr line is captured in the returned queue.
+  let connectClient(configPath: string) =
+    let stderrLines = ConcurrentQueue<string>()
+
+    let arguments =
+      List<string>([ cliDll; "mcp"; "--config"; configPath ]) :> IList<string>
+
+    let transportOptions =
+      StdioClientTransportOptions(
+        Command = "dotnet",
+        Arguments = arguments,
+        StandardErrorLines = Action<string>(stderrLines.Enqueue)
+      )
+
+    let clientOptions =
+      McpClientOptions(
+        ClientInfo = Implementation(Name = "mstest-client", Version = "1.0.0")
+      )
+
+    McpClient.CreateAsync(StdioClientTransport(transportOptions), clientOptions)
+
 [<TestClass>]
 type McpServerProcessTests() =
 
@@ -103,7 +126,7 @@ type McpServerProcessTests() =
     """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"raw","version":"1.0"}}}"""
 
   let getProjectLine =
-    """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_project","arguments":{}}}"""
+    """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_project","arguments":{"configPath":null}}}"""
 
   let startServer (arguments: string) (configure: ProcessStartInfo -> unit) =
     let startInfo =
@@ -190,7 +213,7 @@ type McpServerProcessTests() =
 type McpServerE2ETests() =
 
   [<TestMethod>]
-  member _.``strict client completes handshake, seven tools, and the tool sequence``
+  member _.``strict client completes handshake, nine tools, and the tool sequence``
     ()
     : Task = task {
     let projectDir, configPath, _, _ = McpTestHelpers.createE2EProject()
@@ -224,7 +247,7 @@ type McpServerE2ETests() =
 
     let! tools = client.ListToolsAsync()
 
-    Assert.AreEqual(7, tools.Count)
+    Assert.AreEqual(9, tools.Count)
 
     let toolNames = tools |> Seq.map(fun tool -> tool.Name) |> Set.ofSeq
 
@@ -237,6 +260,8 @@ type McpServerE2ETests() =
         "run_migrations"
         "run_rollback"
         "get_project"
+        "init_project"
+        "update_project_config"
       ]
 
     CollectionAssert.AreEquivalent(
@@ -262,7 +287,11 @@ type McpServerE2ETests() =
         Assert.IsTrue(tool.ProtocolTool.Annotations.IdempotentHint.Value)
         Assert.IsTrue(tool.ProtocolTool.Annotations.ReadOnlyHint.Value)
 
-    let! project = client.CallToolAsync("get_project")
+    // Optionals are schema-required-nullable: every call passes an
+    // explicit null for configPath it does not target.
+    let defaultCall = readOnlyDict [ "configPath", box null ]
+
+    let! project = client.CallToolAsync("get_project", defaultCall)
     Assert.IsFalse(project.IsError)
 
     use projectDocument =
@@ -289,7 +318,7 @@ type McpServerE2ETests() =
     // NEVER the connection string.
     Assert.IsFalse(projectRaw.Contains("Data Source"))
 
-    let! list = client.CallToolAsync("list_migrations")
+    let! list = client.CallToolAsync("list_migrations", defaultCall)
     Assert.IsFalse(list.IsError)
 
     let listJson = list.StructuredContent.Value.GetRawText()
@@ -299,7 +328,8 @@ type McpServerE2ETests() =
 
     // The delegate binder lists every parameter as required, so agents
     // (and these calls) pass an explicit null for "all migrations".
-    let allMigrations = readOnlyDict [ "amount", box null ]
+    let allMigrations =
+      readOnlyDict [ "configPath", box null; "amount", box null ]
 
     let! dryRun = client.CallToolAsync("dry_run_migrations", allMigrations)
 
@@ -310,9 +340,11 @@ type McpServerE2ETests() =
 
     let createArguments =
       readOnlyDict [
+        "configPath", box null
         "name", box "e2e_third"
         "upContent", box "CREATE TABLE e2e3 (id INTEGER PRIMARY KEY);"
         "downContent", box "DROP TABLE e2e3;"
+        "manualTransaction", box null
       ]
 
     let! created = client.CallToolAsync("create_migration", createArguments)
@@ -341,18 +373,36 @@ type McpServerE2ETests() =
       $"fullName was '{fullName}', expected '<timestamp>_e2e_third.sql'"
     )
 
+    // Cross-tool identity: every tool that reports this migration must
+    // report the SAME file name the create call returned. Decoded names
+    // carry the timestamp, so a mapper that recomposes it doubles the
+    // timestamp and names a file that does not exist.
+    let! listAfterCreate =
+      client.CallToolAsync("list_migrations", allMigrations)
+
+    let listJson = listAfterCreate.StructuredContent.Value.GetRawText()
+    StringAssert.Contains(listJson, fullName)
+
+    let! dryRunAfterCreate =
+      client.CallToolAsync("dry_run_migrations", allMigrations)
+
+    let dryJson = dryRunAfterCreate.StructuredContent.Value.GetRawText()
+    StringAssert.Contains(dryJson, fullName)
+
     let! run = client.CallToolAsync("run_migrations", allMigrations)
     Assert.IsFalse(run.IsError)
 
     let runJson = run.StructuredContent.Value.GetRawText()
     StringAssert.Contains(runJson, "\"count\":3")
     StringAssert.Contains(runJson, "\"success\":true")
+    StringAssert.Contains(runJson, fullName)
 
     let! rollback = client.CallToolAsync("run_rollback", allMigrations)
     Assert.IsFalse(rollback.IsError)
 
     let rollbackJson = rollback.StructuredContent.Value.GetRawText()
     StringAssert.Contains(rollbackJson, "\"success\":true")
+    StringAssert.Contains(rollbackJson, fullName)
 
     // The config's connection string is a RELATIVE "Data Source=migrondi.db";
     // open the database the server left behind and confirm its migrations
@@ -371,6 +421,220 @@ type McpServerE2ETests() =
     Assert.AreEqual(0L, command.ExecuteScalar() :?> int64)
 
     // Dispose closes stdin: the server process must exit.
+    do! client.DisposeAsync()
+  }
+
+  [<TestMethod>]
+  member _.``one server drives a second project through configPath``() : Task =
+    task {
+      let _, configPathA, _, _ = McpTestHelpers.createE2EProject()
+
+      // an empty second directory: init_project creates the project in it
+      let dirB =
+        Path.Combine(Path.GetTempPath(), $"mcp-stateless-{Guid.NewGuid():N}")
+
+      Directory.CreateDirectory dirB |> ignore
+
+      let! client = McpTestHelpers.connectClient configPathA
+
+      let! init =
+        client.CallToolAsync(
+          "init_project",
+          readOnlyDict [
+            "directory", box dirB
+            "driver", box null
+            "connection", box null
+            "migrations", box null
+            "tableName", box "stateless_table"
+            "force", box null
+          ]
+        )
+
+      Assert.IsFalse(init.IsError)
+
+      let initJson = init.StructuredContent.Value.GetRawText()
+      StringAssert.Contains(initJson, "\"mode\":\"created\"")
+
+      let configPathB = Path.Combine(dirB, "migrondi.json")
+
+      // full lifecycle on B through the server bound to A
+      let callB = readOnlyDict [ "configPath", box configPathB ]
+
+      let! listed = client.CallToolAsync("list_migrations", callB)
+      Assert.IsFalse(listed.IsError)
+
+      let! created =
+        client.CallToolAsync(
+          "create_migration",
+          readOnlyDict [
+            "configPath", box configPathB
+            "name", box "stateless_first"
+            "upContent", box "CREATE TABLE stateless (id INTEGER PRIMARY KEY);"
+            "downContent", box "DROP TABLE stateless;"
+            "manualTransaction", box null
+          ]
+        )
+
+      Assert.IsFalse(created.IsError)
+
+      let! run =
+        client.CallToolAsync(
+          "run_migrations",
+          readOnlyDict [ "configPath", box configPathB; "amount", box null ]
+        )
+
+      Assert.IsFalse(run.IsError)
+
+      let runJson = run.StructuredContent.Value.GetRawText()
+      StringAssert.Contains(runJson, "\"count\":1")
+      StringAssert.Contains(runJson, "stateless_first")
+
+      // B's database and table exist with the applied migration: open
+      // SQLite and count, no file probing.
+      let dbPathB = Path.Combine(dirB, "migrondi.db")
+
+      use connection = new SqliteConnection($"Data Source={dbPathB}")
+
+      connection.Open()
+
+      use command = connection.CreateCommand()
+      command.CommandText <- "SELECT COUNT(*) FROM stateless_table"
+      Assert.AreEqual(1L, command.ExecuteScalar() :?> int64)
+
+      do! client.DisposeAsync()
+    }
+
+  [<TestMethod>]
+  member _.``create_migration accepts manualTransaction and writes the metadata line``
+    ()
+    : Task = task {
+    let projectDir, configPath, _, _ = McpTestHelpers.createE2EProject()
+
+    let! client = McpTestHelpers.connectClient configPath
+
+    let! created =
+      client.CallToolAsync(
+        "create_migration",
+        readOnlyDict [
+          "configPath", box null
+          "name", box "manual_index"
+          "upContent", box "CREATE INDEX idx ON e2e (id);"
+          "downContent", box "DROP INDEX idx;"
+          "manualTransaction", box true
+        ]
+      )
+
+    Assert.IsFalse(created.IsError)
+
+    let createdJson = created.StructuredContent.Value.GetRawText()
+    StringAssert.Contains(createdJson, "manual_index")
+
+    // the file on disk carries the metadata line (Core's encoder writes
+    // the bool via ToString(), so the marker is "True")
+    let migrationsDir = Path.Combine(projectDir, "migrations")
+
+    let file =
+      Directory.EnumerateFiles(migrationsDir, "*.sql")
+      |> Seq.find(fun path ->
+        (Path.GetFileName path).EndsWith("manual_index.sql"))
+
+    let content = File.ReadAllText file
+
+    Assert.IsTrue(
+      content.IndexOf(
+        "-- MIGRONDI:ManualTransaction=true",
+        StringComparison.OrdinalIgnoreCase
+      )
+      >= 0,
+      $"expected the manual-transaction metadata line in:{System.Environment.NewLine}{content}"
+    )
+
+    do! client.DisposeAsync()
+  }
+
+  [<TestMethod>]
+  member _.``update_project_config changes the table and get_project reports it``
+    ()
+    : Task = task {
+    let _, configPath, _, _ = McpTestHelpers.createE2EProject()
+
+    let! client = McpTestHelpers.connectClient configPath
+
+    let! updated =
+      client.CallToolAsync(
+        "update_project_config",
+        readOnlyDict [
+          "configPath", box configPath
+          "connection", box null
+          "migrations", box null
+          "tableName", box "updated_table"
+          "driver", box null
+        ]
+      )
+
+    Assert.IsFalse(updated.IsError)
+
+    // get_project with the same configPath reflects the new value
+    let! project =
+      client.CallToolAsync(
+        "get_project",
+        readOnlyDict [ "configPath", box configPath ]
+      )
+
+    Assert.IsFalse(project.IsError)
+
+    use document =
+      JsonDocument.Parse(project.StructuredContent.Value.GetRawText())
+
+    Assert.AreEqual(
+      configPath,
+      document.RootElement.GetProperty("configPath").GetString()
+    )
+
+    Assert.AreEqual(
+      "updated_table",
+      document.RootElement.GetProperty("tableName").GetString()
+    )
+
+    do! client.DisposeAsync()
+  }
+
+  [<TestMethod>]
+  member _.``init_project on a non-empty directory without force is a tool error``
+    ()
+    : Task = task {
+    let _, configPath, _, _ = McpTestHelpers.createE2EProject()
+
+    let occupied =
+      Path.Combine(Path.GetTempPath(), $"mcp-init-{Guid.NewGuid():N}")
+
+    Directory.CreateDirectory occupied |> ignore
+
+    File.WriteAllText(
+      Path.Combine(occupied, "some-file.txt"),
+      "not a migrondi project"
+    )
+
+    let! client = McpTestHelpers.connectClient configPath
+
+    let! refused =
+      client.CallToolAsync(
+        "init_project",
+        readOnlyDict [
+          "directory", box occupied
+          "driver", box null
+          "connection", box null
+          "migrations", box null
+          "tableName", box null
+          "force", box null
+        ]
+      )
+
+    Assert.IsTrue(refused.IsError)
+
+    let refusedJson = refused.StructuredContent.Value.GetRawText()
+    StringAssert.Contains(refusedJson, "force")
+
     do! client.DisposeAsync()
   }
 

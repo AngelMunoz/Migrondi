@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Migrondi:** The `mcp` server's tools are now stateless — every tool accepts a `configPath` argument to target any project from one registration (send `null` to use the startup binding), and two new tools join the surface: `init_project` creates a project in a directory (never deleting files) and `update_project_config` rewrites `migrondi.json` fields in place. `create_migration` also accepts `manualTransaction` for statements that cannot run inside a transaction.
 - **Migrondi:** New `mcp` command serves one project over stdio as an MCP server, so agents and harnesses can drive migrations as tools (`get_project`, `list_migrations`, dry runs, `create_migration`, `run_migrations`, `run_rollback`) instead of shell commands. `--config` selects the project, anchors its directory as the project root, and layers `MIGRONDI_*` variables and the config override flags on top; `--readonly` serves only the read tools. All server logs go to stderr, keeping stdout clean for strict MCP clients.
 - **Migrondi:** `new` accepts `--up`/`--down` inline SQL and `--up-file`/`--down-file` to read a section from a file (or stdin with `-`), so a migration can be created with its content in one call instead of creating an empty file and editing it afterwards.
 - **Migrondi:** `list` accepts `--pending`/`--applied`, `--limit`/`--last`, `--search <text>`, and `--show-path`/`--show-content` to filter and inspect migrations without scanning the migrations folder by hand.
@@ -12,6 +13,7 @@
 
 ### Changed
 
+- **Migrondi:** **Breaking (behavioral):** the MCP server re-reads the project config on every tool call, so config edits and `init_project` take effect on the next call without restarting the server, and `get_project` reflects the per-call project. Tool calls that omit optional arguments must now send them as explicit `null` (the schemas list them as required-but-nullable).
 - **Migrondi.Mcp:** The shared MCP layer now reports full tool annotations (`idempotentHint` on read tools, `openWorldHint: false` everywhere), the real package version in the `initialize` response instead of a hardcoded value, and serves HTTP statelessly — no session store, localhost-only `Origin` acceptance, and no redundant `Mcp-Session-Id` headers.
 - **Migrondi.Mcp:** MCP clients see the real parameter names (`amount`, `projectId`, ...) in tool schemas again instead of `delegateArg0`, which made those arguments impossible to pass; send `null` for an omitted "all migrations" value (e.g. `{"amount": null}`).
 
@@ -26,6 +28,7 @@
 
 ### Fixed
 
+- **Migrondi.Mcp:** Every tool that reports a migration (`list_migrations`, both dry runs, `run_migrations`, `run_rollback`, `get_migration`) now reports the same real file name (e.g. `1794436380501_add_users.sql`). Previously these results recomposed the timestamp onto the decoded name — which already carries it for standard-written files — producing doubled names like `1794436380501_1794436380501_add_users` that match no file on disk and broke handing identifiers to the CLI (`status`, `--to`). For virtual projects the file name also lacked the `.sql` suffix.
 - **Migrondi.Mcp:** The `create_migration` tool result now reports the migration's name (e.g. `add_users`) and its real file name (e.g. `1794436380501_add_users.sql`). Previously the file name was reported as the name and the timestamp was recomposed onto it, producing a doubled file name like `1794436380501_1794436380501_add_users.sql`; for virtual projects the file name also lacked the `.sql` suffix.
 - **Migrondi:** `status` now returns a non-zero exit code when no migration matches the given name, instead of reporting `NotFound` with a success exit code.
 - **Project:** Addressed the high-severity `SQLitePCLRaw.lib.e_sqlite3` vulnerability (GHSA-2m69-gcr7-jv3q) by overriding `SQLitePCLRaw.bundle_e_sqlite3` to `3.0.5` in central package management.
