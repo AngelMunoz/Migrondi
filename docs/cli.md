@@ -269,3 +269,7 @@ Point the harness at an absolute config path; no working directory is needed:
 
 A single global registration (no `--config`, started from any directory) also works: every tool call carries the `configPath` of the project it targets, and `configPath: null` falls back to the server's working directory project.
 
+### Which host
+
+Use the CLI host (`migrondi mcp`) when an agent drives one project: pin it with `--config` or pass `configPath` per call. Use the GUI host (`MigrondiUI --stdio`/`--http`) when the projects to manage are the many projects registered in the desktop app. Both hosts serve the same result shapes for the shared migration tools; see the [MigrondiUI MCP page](mcp-ui.md) for the GUI host's tools and client entry.
+
