@@ -207,9 +207,7 @@ module private Helpers =
       env.projects.CreateVirtual newProject CancellationToken.None
 
     // one-time target-database setup, as McpServer.fs does
-    let! project = env.projects.Get projectId CancellationToken.None
-
-    match project with
+    match! env.projects.Get projectId CancellationToken.None with
     | Some(Virtual p) ->
       let ops = env.migrondiFactory.Create(Virtual p)
       do! ops.Core.InitializeAsync CancellationToken.None

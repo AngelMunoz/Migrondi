@@ -14,12 +14,13 @@ module ServerBuilder =
   val parseArgs: argv: string array -> McpOptions option
 
   /// Handlers for the multi-project read tools. Each returns the encoded
-  /// `CallToolResult` served for the tool of the same name; exposed so the
-  /// contract tests drive the exact handlers the server registers.
+  /// `CallToolResult` served for the tool of the same name; internal so the
+  /// contract tests (via `InternalsVisibleTo`) drive the exact handlers the
+  /// server registers without widening the public API.
   module ReadTools =
 
     /// `list_migrations` handler.
-    val listMigrationsFn:
+    val internal listMigrationsFn:
       env: McpEnvironment ->
       pid: string ->
         IcedTasks.CancellableTasks.CancellableTask<
@@ -27,7 +28,7 @@ module ServerBuilder =
          >
 
     /// `dry_run_migrations` handler.
-    val dryRunMigrationsFn:
+    val internal dryRunMigrationsFn:
       env: McpEnvironment ->
       pid: string ->
       amount: int option ->
@@ -36,7 +37,7 @@ module ServerBuilder =
          >
 
     /// `dry_run_rollback` handler.
-    val dryRunRollbackFn:
+    val internal dryRunRollbackFn:
       env: McpEnvironment ->
       pid: string ->
       amount: int option ->
@@ -49,7 +50,7 @@ module ServerBuilder =
   module WriteTools =
 
     /// `create_migration` handler.
-    val createMigrationFn:
+    val internal createMigrationFn:
       env: McpEnvironment ->
       pid: string ->
       name: string ->
@@ -60,7 +61,7 @@ module ServerBuilder =
          >
 
     /// `run_migrations` handler.
-    val runMigrationsFn:
+    val internal runMigrationsFn:
       env: McpEnvironment ->
       pid: string ->
       amount: int option ->
@@ -69,7 +70,7 @@ module ServerBuilder =
          >
 
     /// `run_rollback` handler.
-    val runRollbackFn:
+    val internal runRollbackFn:
       env: McpEnvironment ->
       pid: string ->
       amount: int option ->
@@ -79,7 +80,7 @@ module ServerBuilder =
 
   /// Builds the server's tool collection: the 6 read tools, plus the 10
   /// write tools when `readOnly` is false.
-  val buildToolCollection:
+  val internal buildToolCollection:
     env: McpEnvironment ->
     serviceProvider: System.IServiceProvider ->
     readOnly: bool ->
