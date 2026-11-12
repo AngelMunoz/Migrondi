@@ -37,8 +37,10 @@ module McpResults =
 
     static member Encoder: JDeck.Encoder<ListProjectsResult>
 
+  /// Config surface reported by the multi-project `get_project` tool for a
+  /// local project. Hosts must never put connection strings in tool
+  /// results; the CLI `get_project` already obeys this.
   type ProjectConfigOutput = {
-    connection: string
     migrations: string
     tableName: string
     driver: string
@@ -63,11 +65,13 @@ module McpResults =
 
     static member Encoder: JDeck.Encoder<LocalProjectDetail>
 
+  /// Detail reported by the multi-project `get_project` tool for a virtual
+  /// project. Hosts must never put connection strings in tool results; the
+  /// CLI `get_project` already obeys this.
   type VirtualProjectDetail = {
     id: System.Guid
     name: string
     description: string
-    connection: string
     driver: string
     tableName: string
     projectId: System.Guid

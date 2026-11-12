@@ -14,6 +14,7 @@
 
 ### Changed
 
+- **Migrondi.Mcp:** **Breaking (behavioral):** the multi-project `get_project` tool no longer returns database connection strings (local project config and virtual project detail); report hosts must never expose them.
 - **Migrondi:** **Breaking (behavioral):** the MCP server re-reads the project config on every tool call, so config edits and `init_project` take effect on the next call without restarting the server, and `get_project` reflects the per-call project. Tool calls that omit optional arguments must now send them as explicit `null` (the schemas list them as required-but-nullable).
 - **Migrondi.Mcp:** The shared MCP layer now reports full tool annotations (`idempotentHint` on read tools, `openWorldHint: false` everywhere), the real package version in the `initialize` response instead of a hardcoded value, and serves HTTP statelessly — no session store, localhost-only `Origin` acceptance, and no redundant `Mcp-Session-Id` headers.
 - **Migrondi.Mcp:** MCP clients see the real parameter names (`amount`, `projectId`, ...) in tool schemas again instead of `delegateArg0`, which made those arguments impossible to pass; send `null` for an omitted "all migrations" value (e.g. `{"amount": null}`).

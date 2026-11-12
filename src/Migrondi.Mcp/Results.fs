@@ -85,7 +85,6 @@ module McpResults =
     static member Empty = { local = []; virtualProjects = [] }
 
   type ProjectConfigOutput = {
-    connection: string
     migrations: string
     tableName: string
     driver: string
@@ -94,14 +93,12 @@ module McpResults =
     static member Encoder: Encoder<ProjectConfigOutput> =
       fun c ->
         Json.object [
-          "connection", Encode.string c.connection
           "migrations", Encode.string c.migrations
           "tableName", Encode.string c.tableName
           "driver", Encode.string c.driver
         ]
 
     static member FromConfig(c: MigrondiConfig) = {
-      connection = c.connection
       migrations = c.migrations
       tableName = c.tableName
       driver = c.driver.AsString
@@ -150,7 +147,6 @@ module McpResults =
     id: Guid
     name: string
     description: string
-    connection: string
     driver: string
     tableName: string
     projectId: Guid
@@ -163,7 +159,6 @@ module McpResults =
           "id", Encode.guid p.id
           "name", Encode.string p.name
           "description", Encode.string p.description
-          "connection", Encode.string p.connection
           "driver", Encode.string p.driver
           "tableName", Encode.string p.tableName
           "projectId", Encode.guid p.projectId
@@ -174,7 +169,6 @@ module McpResults =
       id = p.id
       name = p.name
       description = defaultArg p.description ""
-      connection = p.connection
       driver = p.driver.AsString
       tableName = p.tableName
       projectId = p.projectId

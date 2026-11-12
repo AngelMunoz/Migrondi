@@ -21,6 +21,7 @@
     <Compile Include="HttpServerTests.fs" />
     <Compile Include="LoggingTests.fs" />
     <Compile Include="SingleProjectServer.fs" />
+    <Compile Include="McpContractTests.fs" />
     <Compile Include="Program.fs" />
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
