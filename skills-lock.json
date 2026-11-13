@@ -1,59 +1,71 @@
 {
-  "version": 1,
+  "version": 2,
   "skills": {
     "fsharp-async-composition": {
       "source": "TheAngryByrd/fsharp-skills",
       "sourceType": "github",
       "skillPath": "skills/fsharp-async-composition/SKILL.md",
-      "computedHash": "fc39fb956b839e930131c0d4f088b63a3f18adf41494de2ddcdf8e5bcda0c64c"
+      "computedHash": ""
     },
     "fsharp-env-capabilities": {
       "source": "TheAngryByrd/fsharp-skills",
       "sourceType": "github",
       "skillPath": "skills/fsharp-env-capabilities/SKILL.md",
-      "computedHash": "6e4623ab33cdae7f8dc385da881ced5a9059e9a07552718db5b162e4622eb7e6"
+      "computedHash": ""
     },
     "fsharp-function-parameters": {
       "source": "AngelMunoz/opinionated-fsharp-skills",
       "sourceType": "github",
       "skillPath": "skills/fsharp-function-parameters/SKILL.md",
-      "computedHash": "57d28ea9d1f0e5dc7e785fbaa365887e39aa05f5be60bda3303c22b4d0a0cf73"
+      "computedHash": ""
     },
     "fsharp-idiom-review": {
       "source": "TheAngryByrd/fsharp-skills",
       "sourceType": "github",
       "skillPath": "skills/fsharp-idiom-review/SKILL.md",
-      "computedHash": "868006a47256d72664ef38f97dc595dcf07a4ce6fab0a4f5d8673cb19b21321e"
+      "computedHash": ""
     },
     "fsharp-module-shape": {
       "source": "AngelMunoz/opinionated-fsharp-skills",
       "sourceType": "github",
       "skillPath": "skills/fsharp-module-shape/SKILL.md",
-      "computedHash": "b27ab763ac316494f9a56910271277d10be68bc60df4fa277f0f1b6122aade8d"
+      "computedHash": ""
     },
     "fsharp-native-aot": {
       "source": "TheAngryByrd/fsharp-skills",
       "sourceType": "github",
       "skillPath": "skills/fsharp-native-aot/SKILL.md",
-      "computedHash": "c58678d17a34c26860bcae6164017f810ecd2bba3021500470e39c65d36d33d5"
+      "computedHash": ""
     },
     "fsharp-performance-types": {
       "source": "TheAngryByrd/fsharp-skills",
       "sourceType": "github",
       "skillPath": "skills/fsharp-performance-types/SKILL.md",
-      "computedHash": "8937efeab958048938f0d24662f242f4f5f3efa1fd70d69359b6412f159abb86"
+      "computedHash": ""
     },
     "fsharp-signature-files": {
       "source": "TheAngryByrd/fsharp-skills",
       "sourceType": "github",
       "skillPath": "skills/fsharp-signature-files/SKILL.md",
-      "computedHash": "30befd61af6ee740b37c9b557ad58671c0e103ee19ee7764934228a654501a5a"
+      "computedHash": ""
+    },
+    "goo-fsharp": {
+      "source": "AngelMunoz/FunGoo",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/goo-fsharp/SKILL.md",
+      "computedHash": "344ae61e03acea79c5cada184fe93f588cf88cde55f24d45c3d1d7204e72efa6"
+    },
+    "goo-widgets-fsharp": {
+      "source": "AngelMunoz/FunGoo",
+      "sourceType": "github",
+      "skillPath": ".agents/skills/goo-widgets-fsharp/SKILL.md",
+      "computedHash": "3fda2a5d45c0f80665ca2c9b4010d33f23bacf35826c780740e399a5d41fbe6a"
     },
     "parse-dont-validate": {
       "source": "TheAngryByrd/fsharp-skills",
       "sourceType": "github",
       "skillPath": "skills/parse-dont-validate/SKILL.md",
-      "computedHash": "c2f2587fe9dee260adbdb98c608aa3b763f12f03d5f781d7cfd58fc041599879"
+      "computedHash": ""
     }
   }
 }

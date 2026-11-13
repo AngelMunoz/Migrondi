@@ -271,5 +271,5 @@ A single global registration (no `--config`, started from any directory) also wo
 
 ### Which host
 
-Use the CLI host (`migrondi mcp`) when an agent drives one project: pin it with `--config` or pass `configPath` per call. Use the GUI host (`MigrondiUI --stdio`/`--http`) when the projects to manage are the many projects registered in the desktop app. Both hosts serve the same result shapes for the shared migration tools; see the [MigrondiUI MCP page](mcp-ui.md) for the GUI host's tools and client entry.
+Use the CLI host (`migrondi mcp`) when an agent drives one project: pin it with `--config` or pass `configPath` per call. Use the GUI host (`Migrondi.UI --http`) when the projects to manage are the many projects registered in the desktop app. Both hosts serve the same result shapes for the shared migration tools; see the [Migrondi.UI MCP page](mcp-ui.md) for the GUI host's tools and client entry.
 

@@ -10,7 +10,7 @@
 - **Migrondi:** `list` accepts `--pending`/`--applied`, `--limit`/`--last`, `--search <text>`, and `--show-path`/`--show-content` to filter and inspect migrations without scanning the migrations folder by hand.
 - **Migrondi:** `up` and `down` accept `--to <name>` to apply up to, or roll back to, a named migration (name, filename, or timestamp) instead of counting migrations; the positional amount stays optional and cannot be combined with `--to`.
 - **Project:** Added `migrondi-cli` and `migrondi-library` agent skills under `.agents/skills`, covering CLI usage for agents and `Migrondi.Core` embedding patterns such as custom migration sources.
-- **MigrondiUI:** the UI's logic (project store, view models, navigation and file-picker contracts) now lives in an Avalonia-free library (`MigrondiUI.Logic`), so alternative UI front ends can be evaluated on top of the same logic; screens and behavior stay identical.
+- **Migrondi.UI:** The desktop app ships on the Goo rendering stack: projects list and management, virtual projects, migration apply/rollback/dry-run with step counts, a highlighted migration view with pending-migration editing, Navs routing, an OS-following dark/light theme, and an HTTP MCP host mode.
 
 ### Changed
 
@@ -27,6 +27,10 @@
 - **MigrondiUI.Tests:** Migrated to the Microsoft Testing Platform with the xUnit v3 runner, targeting `net10.0` only.
 - **Project:** Updated all package dependencies to their latest stable versions, including Avalonia 12.1.6, ModelContextProtocol 2.4.0, MSTest 4.5.2, Serilog 4.4.0, and the database drivers, and updated the local Fantomas and FsDocs tools.
 - **Project:** Moved the MCP tooling into a new shared `Migrondi.Mcp` project that holds the tool definitions, service contracts, result encoders, and both transports. MigrondiUI now keeps only the host code that builds its project collection and starts the server, so the CLI can host the same MCP tools against a single project in a later phase.
+
+### Removed
+
+- **MigrondiUI:** The Avalonia app is replaced by `Migrondi.UI`. `--stdio` for the GUI is gone — the `migrondi` CLI serves stdio.
 
 ### Fixed
 

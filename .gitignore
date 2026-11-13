@@ -368,3 +368,5 @@ dist/
 
 # ignore script created migrations
 samples/scripts/migrations/
+.zcode
+temp-sample

@@ -1,24 +1,19 @@
-<Project>
+﻿<Project>
   <PropertyGroup>
     <!-- Enable central package management, https://learn.microsoft.com/en-us/nuget/consume-packages/Central-Package-Management -->
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Avalonia" Version="12.1.6" />
-    <PackageVersion Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
-    <PackageVersion Include="Avalonia.Desktop" Version="12.1.6" />
-    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.6" />
-    <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.1.6" />
-    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.6" />
-    <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3" />
-    <PackageVersion Include="AvaloniaEdit.TextMate" Version="12.0.0" />
     <PackageVersion Include="CLIWrap" Version="3.10.5" />
     <PackageVersion Include="coverlet.collector" Version="10.1.0" />
     <PackageVersion Include="Donald" Version="10.1.0" />
-    <PackageVersion Include="FSharp.Data.Adaptive" Version="1.2.28" />
     <PackageVersion Include="FSharp.SystemCommandLine" Version="2.3.0" />
     <PackageVersion Include="FSharp.UMX" Version="1.1.0" />
     <PackageVersion Include="FsToolkit.ErrorHandling" Version="5.2.0" />
+    <PackageVersion Include="FunGoo" Version="0.8.0" />
+    <PackageVersion Include="FunGoo.Widgets" Version="0.8.0" />
+    <PackageVersion Include="Goo" Version="0.30.0" />
+    <PackageVersion Include="Goo.Widgets" Version="0.21.0" />
     <PackageVersion Include="IcedTasks" Version="0.11.9" />
     <PackageVersion Include="Ionide.KeepAChangelog.Tasks" Version="0.4.0" PrivateAssets="all" />
     <PackageVersion Include="JDeck" Version="1.1.0" />
@@ -30,19 +25,16 @@
     <PackageVersion Include="ModelContextProtocol" Version="2.4.0" />
     <PackageVersion Include="MSTest" Version="4.5.2" />
     <PackageVersion Include="MySql.Data" Version="26.10.0" />
-    <PackageVersion Include="Navs.Avalonia" Version="1.0.0" />
+    <PackageVersion Include="Navs.Goo" Version="2.1.0" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
-    <PackageVersion Include="NXUI" Version="12.0.0" />
-    <PackageVersion Include="NXUI.Desktop" Version="12.0.0" />
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Spectre.Console" Version="0.57.2" />
-    <PackageVersion Include="SukiUI" Version="7.0.1" />
+    <PackageVersion Include="TextMateSharp" Version="2.0.5" />
     <PackageVersion Include="TextMateSharp.Grammars" Version="2.0.5" />
     <PackageVersion Include="Thoth.Json.Net" Version="12.0.0" />
-    <!-- Avalonia.Headless.XUnit 12.1.6 is compiled against the xunit.v3 3.x discovery API; xunit.v3 4.x breaks test discovery -->
     <PackageVersion Include="xunit.v3.mtp-v2" Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
     <!-- Temporary workaround until vulnerability fixed: https://github.com/dotnet/efcore/issues/38257 -->

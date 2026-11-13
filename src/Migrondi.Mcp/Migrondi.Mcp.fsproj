@@ -15,7 +15,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="MigrondiUI.Tests" />
+    <InternalsVisibleTo Include="Migrondi.UI.Tests" />
     <Compile Include="Types.fsi" />
     <Compile Include="Types.fs" />
     <Compile Include="ServiceContracts.fsi" />

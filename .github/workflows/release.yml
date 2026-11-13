@@ -89,8 +89,8 @@ jobs:
         if: steps.check_tag.outputs.exists == 'false'
         run: |
           VERSION=${{ steps.extract.outputs.version }}
-          for RUNTIME in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64; do
-            dotnet publish src/MigrondiUI/MigrondiUI.fsproj -c Release -r $RUNTIME -f net10.0 --self-contained -p:PublishSingleFile=true -p:Version=$VERSION -o dist/ui/$RUNTIME
+          for RUNTIME in win-x64 linux-x64 osx-arm64; do
+            dotnet publish src/Migrondi.UI -c Release -r $RUNTIME --self-contained -p:Version=$VERSION -o dist/ui/$RUNTIME
           done
 
       - name: Zip Binaries

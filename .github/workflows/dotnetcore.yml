@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Logic layer must not name UI frameworks
-        run: if grep -rniE 'avalonia|sukiui|nxui|navs' src/MigrondiUI.Logic ; then echo "::error::UI framework reference found in src/MigrondiUI.Logic"; exit 1; fi
+        run: if grep -rniE 'avalonia|sukiui|nxui' src/Migrondi.UI/Logic ; then echo "::error::UI framework reference found in src/Migrondi.UI/Logic"; exit 1; fi
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:

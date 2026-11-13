@@ -1,21 +1,20 @@
-# MigrondiUI as an MCP Server
+# Migrondi.UI as an MCP Server
 
-The MigrondiUI desktop app doubles as an MCP (Model Context Protocol) server: run the app binary with `--stdio` or `--http` and MCP clients can drive the migration projects the app manages as tools, instead of clicking through the window.
+The Migrondi.UI desktop app doubles as an MCP (Model Context Protocol) server over HTTP: run the app binary with `--http` and MCP clients can drive the migration projects the app manages as tools, instead of clicking through the window. The `migrondi` CLI owns stdio: pass `--stdio` to the GUI binary and it prints one line pointing at `migrondi mcp --stdio` and exits.
 
 ## Running the server
 
 ```
-MigrondiUI --stdio        # serve over standard input/output
-MigrondiUI --http 8080    # serve over Streamable HTTP on localhost:8080/mcp/
+Migrondi.UI --http 8080    # serve over Streamable HTTP on localhost:8080/mcp/
 ```
 
 Add `--readonly` to serve only the 6 read tools (`list_projects`, `get_project`, `list_migrations`, `get_migration`, `dry_run_migrations`, `dry_run_rollback`). Without `--readonly` the server exposes all 16 tools.
 
-All server logs go to stderr, so stdout carries only MCP protocol messages and the server is safe to plug into strict clients.
+All server logs go to stderr, so the HTTP stream carries only MCP protocol messages. In this mode the app does not open a window.
 
 ## Tools
 
-The GUI host serves the projects the desktop app manages (the project collection stored in the app's own database).
+The host serves the projects the desktop app manages (the project collection stored in the app's own database).
 
 Read tools:
 
@@ -43,14 +42,13 @@ MCP operations target **virtual projects**: the project lifecycle tools (`create
 
 ## Client entry
 
-Point the client at the MigrondiUI binary:
+Point the client at the Migrondi.UI binary's HTTP endpoint:
 
 ```json
 {
   "mcpServers": {
     "migrondiui": {
-      "command": "/absolute/path/to/MigrondiUI",
-      "args": ["--stdio"]
+      "url": "http://localhost:8080/mcp/"
     }
   }
 }
@@ -58,4 +56,4 @@ Point the client at the MigrondiUI binary:
 
 ## Which host
 
-Use the CLI host (`migrondi mcp`) when an agent drives one project pinned by `--config`. Use the GUI host (`MigrondiUI --stdio`/`--http`) for the many projects managed by the desktop app. Both hosts serve the same result shapes for the shared migration tools; see the [CLI MCP section](cli.md) for the single-project tool set.
+Use the CLI host (`migrondi mcp`) when an agent drives one project pinned by `--config`; the CLI serves stdio. Use the GUI host (`Migrondi.UI --http`) for the many projects managed by the desktop app. Both hosts serve the same result shapes for the shared migration tools; see the [CLI MCP section](cli.md) for the single-project tool set.

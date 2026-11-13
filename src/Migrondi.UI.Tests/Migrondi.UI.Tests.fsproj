@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0</TargetFrameworks>
+    <IsPackable>false</IsPackable>
+    <OutputType>Exe</OutputType>
+    <TestingPlatformDotnetTestSupport>true</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="VirtualProjectRepositoryTests.fs" />
+    <Compile Include="VirtualFsTests.fs" />
+    <Compile Include="McpServer.fs" />
+    <Compile Include="HttpServerTests.fs" />
+    <Compile Include="LoggingTests.fs" />
+    <Compile Include="SingleProjectServer.fs" />
+    <Compile Include="McpContractTests.fs" />
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="xunit.v3.mtp-v2" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Migrondi.UI\Migrondi.UI.fsproj" />
+    <ProjectReference Include="..\Migrondi.Mcp\Migrondi.Mcp.fsproj" />
+  </ItemGroup>
+
+</Project>
