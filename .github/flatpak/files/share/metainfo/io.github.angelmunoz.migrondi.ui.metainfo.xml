@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.angelmunoz.migrondi.ui</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Migrondi UI</name>
+  <summary>Manage and run SQL migrations</summary>
+  <description>
+    <p>Migrondi UI manages local and virtual migration projects for SQLite, SQL Server, PostgreSQL, and MySQL. It applies, rolls back, and dry-runs migrations, and serves the app's projects over MCP.</p>
+  </description>
+  <launchable type="desktop-id">io.github.angelmunoz.migrondi.ui.desktop</launchable>
+  <url type="homepage">https://github.com/AngelMunoz/Migrondi</url>
+  <developer_name>Angel Munoz</developer_name>
+  <categories>
+    <category>Development</category>
+    <category>Database</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

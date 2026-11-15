@@ -269,7 +269,7 @@ module Database =
   }
 
   let ConnectionFactory() : IDbConnection =
-    let dbPath = System.IO.Path.Combine(AppContext.BaseDirectory, "migrondi.db")
+    let dbPath = Paths.migrateLegacyDatabase()
     let connectionString = $"Data Source={dbPath};"
     new SqliteConnection(connectionString)
 

@@ -1,0 +1,41 @@
+{
+    "id": "io.github.angelmunoz.migrondi.ui",
+    "branch": "stable",
+    "runtime": "org.freedesktop.Platform",
+    "runtime-version": "26.08",
+    "sdk": "org.freedesktop.Sdk",
+    "command": "migrondiui",
+    "finish-args": [
+        "--share=ipc",
+        "--socket=wayland",
+        "--device=dri",
+        "--share=network",
+        "--filesystem=home"
+    ],
+    "modules": [
+        {
+            "name": "migrondi-ui",
+            "buildsystem": "simple",
+            "build-commands": [
+                "install -d /app/lib/migrondiui",
+                "cp -a . /app/lib/migrondiui/",
+                "rm -rf /app/lib/migrondiui/files",
+                "install -Dm755 files/launcher/migrondiui /app/bin/migrondiui",
+                "install -Dm644 files/share/applications/io.github.angelmunoz.migrondi.ui.desktop /app/share/applications/io.github.angelmunoz.migrondi.ui.desktop",
+                "install -Dm644 files/share/metainfo/io.github.angelmunoz.migrondi.ui.metainfo.xml /app/share/metainfo/io.github.angelmunoz.migrondi.ui.metainfo.xml",
+                "install -Dm644 files/share/icons/hicolor/scalable/apps/io.github.angelmunoz.migrondi.ui.svg /app/share/icons/hicolor/scalable/apps/io.github.angelmunoz.migrondi.ui.svg"
+            ],
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "@URL@",
+                    "sha256": "@HASH@"
+                },
+                {
+                    "type": "dir",
+                    "path": "files"
+                }
+            ]
+        }
+    ]
+}

@@ -1,13 +1,24 @@
 name: Create Release
 
+# A release is cut from CHANGELOG.md: move the [Unreleased] entries into a
+# dated version section, push, then dispatch this workflow. The version,
+# the package versions, and the release notes all come from that section.
+# Publishing to NuGet uses trusted publishing (OIDC), so no long-lived
+# NuGet API key is stored in the repository.
 on:
   workflow_dispatch:
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  create-release:
+  prepare:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+      prerelease: ${{ steps.extract.outputs.prerelease }}
+      exists: ${{ steps.check_tag.outputs.exists }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -17,98 +28,384 @@ jobs:
         id: extract
         run: |
           VERSION_LINE=$(grep -n "^## \[[0-9]" CHANGELOG.md | head -n 1)
-          
+
           if [ -z "$VERSION_LINE" ]; then
-            echo "No version found in CHANGELOG.md"
+            echo "No released version found in CHANGELOG.md. Move the [Unreleased] entries into a dated version section first."
             exit 1
           fi
-          
+
           LINE_NUM=$(echo "$VERSION_LINE" | cut -d: -f1)
           VERSION=$(echo "$VERSION_LINE" | sed -E 's/.*## \[([^]]+)\].*/\1/')
-          
+
+          # A release section must be dated: ## [1.4.0] - 2026-11-20
+          if ! echo "$VERSION_LINE" | grep -qE '\] - [0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+            echo "The $VERSION section needs a date: ## [$VERSION] - YYYY-MM-DD"
+            exit 1
+          fi
+
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "The version '$VERSION' is not a semantic version"
+            exit 1
+          fi
+
           echo "Found version: $VERSION at line $LINE_NUM"
-          
+
           NEXT_HEADER_LINE=$(tail -n +$((LINE_NUM + 1)) CHANGELOG.md | grep -n "^## \[" | head -n 1 | cut -d: -f1)
-          
+
           if [ -z "$NEXT_HEADER_LINE" ]; then
             BODY=$(tail -n +$((LINE_NUM + 1)) CHANGELOG.md)
           else
             BODY=$(tail -n +$((LINE_NUM + 1)) CHANGELOG.md | head -n $((NEXT_HEADER_LINE - 1)))
           fi
-          
-          echo "$BODY" > RELEASE_NOTES.md
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          printf '%s\n' "$BODY" > RELEASE_NOTES.md
+
+          # An empty section would publish a release with no notes.
+          if ! grep -q '[^[:space:]]' RELEASE_NOTES.md; then
+            echo "The $VERSION section of CHANGELOG.md is empty; refusing to publish an empty release."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          if echo "$VERSION" | grep -qiE '(alpha|beta|rc)'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check if Tag Exists
         id: check_tag
         run: |
           if git rev-parse "v${{ steps.extract.outputs.version }}" >/dev/null 2>&1; then
             echo "Tag v${{ steps.extract.outputs.version }} already exists."
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup .NET
+      - name: Keep Release Notes
         if: steps.check_tag.outputs.exists == 'false'
-        uses: actions/setup-dotnet@v5
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+  test:
+    needs: prepare
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
 
-      - name: Restore dependencies
-        if: steps.check_tag.outputs.exists == 'false'
-        run: dotnet restore
+      - name: Restore
+        run: dotnet restore Migrondi.slnx
 
       - name: Build
-        if: steps.check_tag.outputs.exists == 'false'
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build Migrondi.slnx --configuration Release --no-restore
 
       - name: Test
-        if: steps.check_tag.outputs.exists == 'false'
-        run: |
-          dotnet test src/Migrondi.Tests --no-build --configuration Release
-          dotnet test src/MigrondiUI.Tests --no-build --configuration Release
+        run: dotnet test Migrondi.slnx --configuration Release --no-build
+
+  # Both apps ship as .NET tools; the UI app sits beside the CLI on NuGet.
+  # Versions come from CHANGELOG.md through Ionide.KeepAChangelog.Tasks,
+  # so the packed packages must agree with the version this run extracts.
+  pack:
+    needs: [prepare, test]
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore Migrondi.slnx
 
       - name: Pack NuGet packages
-        if: steps.check_tag.outputs.exists == 'false'
-        run: dotnet pack --configuration Release --no-build --output nupkgs
+        run: |
+          dotnet pack src/Migrondi.Core/Migrondi.Core.fsproj -c Release --no-restore -o nupkgs
+          dotnet pack src/Migrondi.Mcp/Migrondi.Mcp.fsproj -c Release --no-restore -o nupkgs
+          dotnet pack src/Migrondi/Migrondi.fsproj -c Release --no-restore -o nupkgs
+          dotnet pack src/Migrondi.UI/Migrondi.UI.fsproj -c Release --no-restore -o nupkgs
 
+      - name: Verify the package set
+        run: |
+          version="${{ needs.prepare.outputs.version }}"
+          count=$(ls nupkgs/*.nupkg | wc -l)
+          if [ "$count" -ne 4 ]; then
+            echo "::error::expected 4 packages, found $count"
+            exit 1
+          fi
+
+          for package in Migrondi.Core Migrondi.Mcp Migrondi MigrondiUI; do
+            if [ ! -f "nupkgs/$package.$version.nupkg" ]; then
+              echo "::error::missing package $package.$version.nupkg"
+              exit 1
+            fi
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs
+          path: nupkgs/*.nupkg
+
+  # The CLI keeps the broad matrix: it has no native dependencies.
+  build-cli:
+    needs: [prepare, test]
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [linux-x64, linux-arm64, osx-x64, osx-arm64, win-x64, win-arm64]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish (self-contained)
+        run: >
+          dotnet publish src/Migrondi/Migrondi.fsproj -c Release
+          -f net10.0 -r ${{ matrix.rid }} --self-contained true
+          -o publish
+
+      - name: Package (zip)
+        run: |
+          version="${{ needs.prepare.outputs.version }}"
+          archive="migrondi-$version-${{ matrix.rid }}.zip"
+
+          test -f publish/Migrondi.dll
+
+          cd publish
+          zip -r -q "../$archive" .
+          cd ..
+
+          sha256sum "$archive" > "$archive.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.rid }}
+          path: migrondi-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.zip*
+
+  # The UI follows the Goo desktop targets: Win x64, Linux x64, and macOS
+  # arm64 only. Goo ships native libraries per RID, so each RID publishes on
+  # its own OS. The archives are self-contained folders, never single-file.
+  build-ui:
+    needs: [prepare, test]
+    if: needs.prepare.outputs.exists == 'false'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runs-on: ubuntu-latest
+            rid: linux-x64
+            native: libSDL3.so
+          - runs-on: windows-latest
+            rid: win-x64
+            native: SDL3.dll
+          - runs-on: macos-latest
+            rid: osx-arm64
+            native: libSDL3.dylib
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Require Apple silicon for the macOS build
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          arch="$(uname -m)"
+          if [ "$arch" != "arm64" ]; then
+            echo "::error::osx-arm64 needs an Apple silicon runner; this runner is $arch"
+            exit 1
+          fi
+
+      - name: Publish (self-contained)
+        shell: bash
+        run: >
+          dotnet publish src/Migrondi.UI/Migrondi.UI.fsproj -c Release
+          -f net10.0 -r ${{ matrix.rid }} --self-contained true
+          -o publish
+
+      # Publish output must carry Goo's native libraries for this RID and the
+      # app's own migrations; a missing file would fail at startup, not here.
+      - name: Verify the publish output
+        shell: bash
+        run: |
+          test -f "publish/${{ matrix.native }}"
+          test -f publish/migrations/1746125086234_AddTables.sql
+
+      - name: Package (zip)
+        shell: pwsh
+        run: |
+          $version = "${{ needs.prepare.outputs.version }}"
+          $archive = "migrondiui-$version-${{ matrix.rid }}.zip"
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          [System.IO.Compression.ZipFile]::CreateFromDirectory("publish", $archive, "Optimal", $false)
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $archive" | Out-File -Encoding ascii "$archive.sha256"
+
+          # Flatpak consumes the same folder as a tar.gz; the bundle job
+          # needs the flat archive, not a zip.
+          if ("${{ matrix.rid }}" -eq "linux-x64") {
+            tar -czf "migrondiui-$version-linux-x64.tar.gz" -C publish .
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ui-${{ matrix.rid }}
+          path: migrondiui-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.*
+
+  # The Flatpak bundle rides the release. The app keeps its database in
+  # LocalApplicationData, so the read-only /app tree holds only program
+  # files and migrations.
+  flatpak:
+    needs: [prepare, build-ui]
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    env:
+      FLATPAK_REPO: ${{ github.workspace }}/flatpak-repo
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install flatpak-builder and the freedesktop runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y --noninteractive flathub \
+            org.freedesktop.Sdk//26.08 org.freedesktop.Platform//26.08
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ui-linux-x64
+          path: artifacts
+
+      - name: Build the Flatpak bundle
+        run: |
+          version="${{ needs.prepare.outputs.version }}"
+          tarball="artifacts/migrondiui-$version-linux-x64.tar.gz"
+          test -f "$tarball"
+          bash .github/flatpak/build.sh "$tarball"
+          flatpak build-bundle \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            "$FLATPAK_REPO" \
+            "migrondiui-$version-linux-x64.flatpak" \
+            io.github.angelmunoz.migrondi.ui stable
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: migrondiui-${{ needs.prepare.outputs.version }}-linux-x64.flatpak
+
+  release:
+    needs: [prepare, pack, build-cli, build-ui, flatpak]
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    # id-token lets NuGet/login exchange the workflow identity for a
+    # short-lived API key; no NUGET_API_KEY secret is involved.
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      # The checkout cleans the workspace, so it runs before the artifact
+      # download; the other way around it deletes the downloaded files.
+      - uses: actions/checkout@v6
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Verify the release assets
+        run: |
+          set -euo pipefail
+          version="${{ needs.prepare.outputs.version }}"
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          for rid in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64; do
+            test -f "artifacts/migrondi-$version-$rid.zip" || fail "missing CLI archive for $rid"
+            test -f "artifacts/migrondi-$version-$rid.zip.sha256" || fail "missing CLI checksum for $rid"
+          done
+
+          for rid in linux-x64 win-x64 osx-arm64; do
+            test -f "artifacts/migrondiui-$version-$rid.zip" || fail "missing UI archive for $rid"
+            test -f "artifacts/migrondiui-$version-$rid.zip.sha256" || fail "missing UI checksum for $rid"
+          done
+
+          for package in Migrondi.Core Migrondi.Mcp Migrondi MigrondiUI; do
+            test -f "artifacts/$package.$version.nupkg" || fail "missing package $package"
+          done
+
+          test -f "artifacts/migrondiui-$version-linux-x64.flatpak" || fail "missing Flatpak bundle"
+          test -f artifacts/RELEASE_NOTES.md || fail "missing release notes"
+
+      # Scoop installs from the release itself; releases/latest/download/
+      # always serves the newest stable manifest, and the checksum sidecar
+      # lets Scoop verify the archive before installing.
+      - name: Render the install manifests
+        run: |
+          version="${{ needs.prepare.outputs.version }}"
+
+          # releases/latest/download/ serves the newest stable name.
+          cp "artifacts/migrondiui-$version-linux-x64.flatpak" \
+            artifacts/migrondiui-linux-x64.flatpak
+
+          hash="$(cut -d' ' -f1 "artifacts/migrondi-$version-win-x64.zip.sha256")"
+          sed -e "s/@VERSION@/$version/g" -e "s/@HASH@/$hash/g" \
+            .github/scoop/migrondi.json > artifacts/migrondi.json
+
+          hash="$(cut -d' ' -f1 "artifacts/migrondiui-$version-win-x64.zip.sha256")"
+          sed -e "s/@VERSION@/$version/g" -e "s/@HASH@/$hash/g" \
+            .github/scoop/migrondi-ui.json > artifacts/migrondi-ui.json
+
+      - name: NuGet login (trusted publishing)
+        id: nuget_login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # Dependencies go first so a restore never asks for a package that this
+      # run has not published yet.
       - name: Publish to NuGet
-        if: steps.check_tag.outputs.exists == 'false'
-        run: dotnet nuget push "nupkgs/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
-
-      - name: Publish CLI Binaries
-        if: steps.check_tag.outputs.exists == 'false'
         run: |
-          VERSION=${{ steps.extract.outputs.version }}
-          for RUNTIME in linux-x64 linux-arm64 osx-x64 osx-arm64 win-x64 win-arm64; do
-            dotnet publish src/Migrondi/Migrondi.fsproj -c Release -r $RUNTIME -f net10.0 --self-contained -p:PublishSingleFile=true -p:Version=$VERSION -o dist/cli/$RUNTIME
+          version="${{ needs.prepare.outputs.version }}"
+
+          for package in Migrondi.Core Migrondi.Mcp Migrondi MigrondiUI; do
+            dotnet nuget push "artifacts/$package.$version.nupkg" \
+              --api-key "${{ steps.nuget_login.outputs.NUGET_API_KEY }}" \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate
           done
-
-      - name: Publish UI Binaries
-        if: steps.check_tag.outputs.exists == 'false'
-        run: |
-          VERSION=${{ steps.extract.outputs.version }}
-          for RUNTIME in win-x64 linux-x64 osx-arm64; do
-            dotnet publish src/Migrondi.UI -c Release -r $RUNTIME --self-contained -p:Version=$VERSION -o dist/ui/$RUNTIME
-          done
-
-      - name: Zip Binaries
-        if: steps.check_tag.outputs.exists == 'false'
-        run: |
-          cd dist/cli && for d in */; do (cd "$d" && zip -r "../migrondi-${d%/}.zip" .); done
-          cd ../ui && for d in */; do (cd "$d" && zip -r "../migrondiui-${d%/}.zip" .); done
 
       - name: Create Release
-        if: steps.check_tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.extract.outputs.version }}
-          name: v${{ steps.extract.outputs.version }}
-          body_path: RELEASE_NOTES.md
+          tag_name: v${{ needs.prepare.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: v${{ needs.prepare.outputs.version }}
+          body_path: artifacts/RELEASE_NOTES.md
           draft: false
-          prerelease: ${{ contains(steps.extract.outputs.version, '-rc') || contains(steps.extract.outputs.version, '-beta') || contains(steps.extract.outputs.version, '-alpha') }}
+          prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
           files: |
-            nupkgs/*.nupkg
-            dist/cli/*.zip
-            dist/ui/*.zip
+            artifacts/migrondi-*.zip
+            artifacts/migrondi-*.zip.sha256
+            artifacts/migrondiui-*.zip
+            artifacts/migrondiui-*.zip.sha256
+            artifacts/migrondiui-*.flatpak
+            artifacts/migrondi.json
+            artifacts/migrondi-ui.json
+            artifacts/*.nupkg

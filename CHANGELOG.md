@@ -11,8 +11,15 @@
 - **Migrondi:** `up` and `down` accept `--to <name>` to apply up to, or roll back to, a named migration (name, filename, or timestamp) instead of counting migrations; the positional amount stays optional and cannot be combined with `--to`.
 - **Project:** Added `migrondi-cli` and `migrondi-library` agent skills under `.agents/skills`, covering CLI usage for agents and `Migrondi.Core` embedding patterns such as custom migration sources.
 - **Migrondi.UI:** The desktop app ships on the Goo rendering stack: projects list and management, virtual projects, migration apply/rollback/dry-run with step counts, a highlighted migration view with pending-migration editing, Navs routing, an OS-following dark/light theme, and an HTTP MCP host mode. The shell, project list, new-project flow, and project screen share one design system (palette tiers, button hierarchy, chips, page headers): runs are the only primary actions and ask before applying or rolling back, previews and step limits sit beside them, and each screen names its single next step.
+- **MigrondiUI:** The desktop app also ships as the `migrondiui` .NET tool: `dotnet tool install --global MigrondiUI` installs it, and `dnx MigrondiUI` runs it without an install.
+- **MigrondiUI:** Linux releases include a Flatpak bundle (`io.github.angelmunoz.migrondi.ui`) built from the same self-contained archive, so `flatpak install --bundle` installs the app and its launcher.
+- **Project:** Windows installs use Scoop manifests published with each release (`migrondi.json`, `migrondi-ui.json`), so `scoop install` and `scoop update` fetch and verify the archives.
 
 ### Changed
+
+- **Migrondi:** **Breaking:** Binary releases are self-contained folders inside zip archives, not single-file executables, and no AOT build is used. Extract the archive and run `Migrondi` or `Migrondi.UI`.
+- **CI:** Releases publish to NuGet with trusted publishing and take the version from `CHANGELOG.md`. The run packs `Migrondi`, `MigrondiUI`, `Migrondi.Core`, and `Migrondi.Mcp`, and publishes CLI archives for six RIDs and UI archives for Windows x64, Linux x64, and macOS arm64.
+- **MigrondiUI:** The app database and virtual project files now live in the user's local application data folder instead of next to the executable. An existing database moves on first start, and app or tool updates no longer replace the data.
 
 - **Migrondi.Mcp:** **Breaking (behavioral):** the multi-project `get_project` tool no longer returns database connection strings (local project config and virtual project detail); report hosts must never expose them.
 - **Migrondi:** **Breaking (behavioral):** the MCP server re-reads the project config on every tool call, so config edits and `init_project` take effect on the next call without restarting the server, and `get_project` reflects the per-call project. Tool calls that omit optional arguments must now send them as explicit `null` (the schemas list them as required-but-nullable).
@@ -30,6 +37,7 @@
 
 ### Removed
 
+- **Project:** The `migrondi_install.sh` and `migrondi_install.ps1` install scripts and `build.fsx` are gone. Install with the .NET tools, Scoop, or a release archive; build with `dotnet build`.
 - **MigrondiUI:** The Avalonia app is replaced by `Migrondi.UI`. `--stdio` for the GUI is gone — the `migrondi` CLI serves stdio.
 
 ### Fixed

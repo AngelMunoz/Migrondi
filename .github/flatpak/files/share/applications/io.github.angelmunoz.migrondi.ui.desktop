@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Migrondi UI
+Comment=Manage and run SQL migrations
+Exec=migrondiui
+Icon=io.github.angelmunoz.migrondi.ui
+Terminal=false
+Categories=Development;Database;
+StartupWMClass=Migrondi.UI

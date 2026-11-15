@@ -6,9 +6,18 @@
     <Nullable>enable</Nullable>
     <DebugType>embedded</DebugType>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- Ships as the `migrondiui` .NET tool beside the binary archives. -->
+    <PackageId>MigrondiUI</PackageId>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>migrondiui</ToolCommandName>
+    <Title>Migrondi UI</Title>
+    <Description>The Migrondi desktop app: manage local and virtual migration projects, run and roll back migrations, and serve them over MCP.</Description>
+    <PackageTags>migrondi;sql;migrations;desktop;mcp</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="Logic/Paths.fs" />
     <Compile Include="Logic/Database.fs" />
     <Compile Include="Logic/VirtualFs.fs" />
     <Compile Include="Logic/Services.fs" />
@@ -59,6 +68,14 @@
       CopyToOutputDirectory="PreserveNewest"
       CopyToPublishDirectory="PreserveNewest"
       Link="migrations/%(RecursiveDir)%(Filename)%(Extension)"
+      Pack="false"
+    />
+    <!-- A tool package has no contentFiles; the app's own migrations must sit
+         in the tools folder beside the assembly. -->
+    <None
+      Include="Logic/migrations/**"
+      Pack="true"
+      PackagePath="tools/$(TargetFramework)/any/migrations/"
     />
   </ItemGroup>
 

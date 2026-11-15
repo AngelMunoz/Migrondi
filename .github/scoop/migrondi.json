@@ -1,0 +1,26 @@
+{
+    "version": "@VERSION@",
+    "description": "SQL migrations runner: apply or roll back versioned .sql migrations",
+    "homepage": "https://github.com/AngelMunoz/Migrondi",
+    "license": "MIT",
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/AngelMunoz/Migrondi/releases/download/v@VERSION@/migrondi-@VERSION@-win-x64.zip",
+            "hash": "@HASH@"
+        }
+    },
+    "bin": [
+        ["Migrondi.exe", "migrondi"]
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/AngelMunoz/Migrondi/releases/download/v$version/migrondi-$version-win-x64.zip",
+                "hash": {
+                    "url": "$url.sha256"
+                }
+            }
+        }
+    }
+}

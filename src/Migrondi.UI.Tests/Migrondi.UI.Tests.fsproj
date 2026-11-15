@@ -15,6 +15,7 @@
     <Compile Include="LoggingTests.fs" />
     <Compile Include="SingleProjectServer.fs" />
     <Compile Include="McpContractTests.fs" />
+    <Compile Include="AppDataTests.fs" />
     <Compile Include="MigrationEditorTests.fs" />
     <Compile Include="LocalMigrationFileTests.fs" />
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />

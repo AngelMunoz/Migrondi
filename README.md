@@ -1,78 +1,67 @@
 [![.NET Core](https://github.com/AngelMunoz/Migrondi/actions/workflows/dotnetcore.yml/badge.svg)](https://github.com/AngelMunoz/Migrondi/actions/workflows/dotnetcore.yml)
 ![NuGet Version](https://img.shields.io/nuget/vpre/Migrondi?label=Migrondi)
 ![NuGet Version](https://img.shields.io/nuget/vpre/Migrondi.Core?label=Migrondi.Core)
+![NuGet Version](https://img.shields.io/nuget/vpre/MigrondiUI?label=MigrondiUI)
 
 # Migrondi
 
-Migrondi is a SQL Migrations tool designed to be simple and execute simple migrations. Write SQL and execute SQL against your database.
+Migrondi is a SQL migrations tool: write versioned `.sql` files and it tracks which ones a database has applied, then applies pending migrations or rolls applied ones back.
 
-Migrondi Runs on the major three platforms on both `x64` and `arm64`.
+It supports SQLite, SQL Server, PostgreSQL, and MySQL. The CLI runs on Windows, Linux, and macOS (x64 and arm64). The desktop app, Migrondi UI, runs on Windows x64, Linux x64, and macOS arm64, the platforms Goo supports.
 
 ## Install
 
-### For .NET users
+### .NET tools
 
-Grab it as a dotnet tool
+The CLI installs as `migrondi`; the desktop app and its HTTP MCP host install as `migrondiui`. Migrondi UI needs the .NET 10 runtime; the CLI targets .NET 8, 9, and 10.
 
-```
-dotnet tool install Migrondi
-```
-
-### For Non .NET users
-
-Grab the binary from the releases page or build from source and put it on your `PATH`, that way the command is available globally e.g.
-
-Alternatively, you can use the following one-liners to install the latest version:
-
-### Linux/OSX
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/AngelMunoz/Migrondi/vnext/migrondi_install.sh | bash
+```sh
+dotnet tool install --global Migrondi
+dotnet tool install --global MigrondiUI
 ```
 
-This will download and execute the `migrondi_install.sh` script. It will install `migrondi` to `$HOME/.local/share/Migrondi` by default and attempt to add it to your shell's PATH.
+Run a tool without installing it:
 
-If you prefer manual installation:
-
-```bash
-# you can put this at the end of your ~/.bashrc or ~/.zshrc
-# $HOME/Apps/migrondi is a directory where you have downloaded your "Migrondi" binary
-export MIGRONDI_HOME="$HOME/Apps/migrondi"
-export PATH="$PATH:$MIGRONDI_HOME"
+```sh
+dnx Migrondi -- list
+dnx MigrondiUI -- --http 8080
 ```
 
-### Windows users
-
-Open PowerShell and run:
+### Windows: Scoop
 
 ```powershell
-iwr https://raw.githubusercontent.com/AngelMunoz/Migrondi/vnext/migrondi_install.ps1 -UseBasicParsing | iex
+scoop install https://github.com/AngelMunoz/Migrondi/releases/latest/download/migrondi.json
+scoop install https://github.com/AngelMunoz/Migrondi/releases/latest/download/migrondi-ui.json
 ```
 
-This will download and execute the `migrondi_install.ps1` script. It will install `migrondi` to `$env:LOCALAPPDATA\\Migrondi` by default and attempt to add it to your user PATH.
+These addresses serve the newest stable release manifest. Scoop checks the SHA-256 before installing, and `scoop update` adopts each new release.
 
-If you prefer manual installation:
+### Linux: Flatpak
 
-```powershell
-# you can put this at the end of your $profile file
-
-$env:MIGRONDI_HOME="$HOME/Apps/migrondi"
-$env:PATH += ";$env:MIGRONDI_HOME"
+```sh
+flatpak install --user --bundle https://github.com/AngelMunoz/Migrondi/releases/latest/download/migrondiui-linux-x64.flatpak
 ```
 
-or add it via the System Properties
+The bundle installs Migrondi UI and its launcher. Flatpak offers to install the freedesktop runtime from Flathub. Install the bundle from a new release to update the app.
 
-- Open the Start Search, type in "SystemPropertiesAdvanced.exe",
-- Click the “Environment Variables…” button.
-- Edit the PATH env variable and add the location of the migrondi executable.
-- You might need to restart your machine for the changes to take effect.
+### Binary archives
 
-## Quick Usage Reference
+Download the archive for your platform from the [releases page](https://github.com/AngelMunoz/Migrondi/releases). Each release also carries a `.sha256` file for its archives.
 
-```
-Description:
-  A dead simple SQL migrations runner, apply or rollback migrations at your ease
+| App | Platforms | Archive |
+| --- | --- | --- |
+| CLI | `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-x64`, `osx-arm64` | `migrondi-<version>-<rid>.zip` |
+| Migrondi UI | `win-x64`, `linux-x64`, `osx-arm64` | `migrondiui-<version>-<rid>.zip` |
 
+The archives are self-contained: they need no .NET installation. Extract the archive and add its folder to `PATH` (the CLI) or start the app from it (the UI).
+
+Migrondi UI keeps its database and virtual project files in your local application data folder, so an app or tool update does not replace them.
+
+Migrondi UI needs Vulkan 1.3. On Linux it also needs a native Wayland session; X11 and XWayland are not supported.
+
+## Quick usage reference
+
+```text
 Usage:
   Migrondi [command] [options]
 
@@ -81,26 +70,28 @@ Options:
   -?, -h, --help  Show help and usage information
 
 Commands:
-  init, setup <path>         Creates a migrondi.json file where the comand is invoked or the path provided []
-  create, new <name>         This will create a new SQL migration file in the configured directory for migrations
-  apply, up <amount>         Runs migrations against the configured database []
-  down, rollback <amount>    Runs migrations against the configured database []
-  list, show                 Reads migrations files and the database to show what is the current state of the migrations
-  show-state, status <name>  Checks whether the migration file has been applied or not to the database
+  init, setup <path>         Creates a migrondi.json file where the command is invoked or the path provided
+  create, new <name>         Creates a new SQL migration file in the configured migrations directory
+  apply, up <amount>         Applies pending migrations
+  down, rollback <amount>    Rolls applied migrations back
+  list, show                 Reads migration files and the database to show the current state
+  show-state, status <name>  Checks whether a migration is applied or pending
+  mcp                        Runs an MCP server over stdio for the project in the current directory or --config
 ```
 
 ## Build
 
-Use the build.fsx (`dotnet fsi build.fsx`) script or clone and run
-
+```sh
+dotnet restore
+dotnet build Migrondi.slnx
+dotnet test Migrondi.slnx
 ```
-dotnet publish -c Release -r <RID> --self-contained true -p:PublishSingleFile=true -o dist
+
+Publish a self-contained folder for a platform:
+
+```sh
+dotnet publish src/Migrondi/Migrondi.fsproj -c Release -r <RID> --self-contained true -o dist
+dotnet publish src/Migrondi.UI/Migrondi.UI.fsproj -c Release -r <RID> --self-contained true -o dist
 ```
 
-replace RID and the angle brackets with any of the following
-
-- [Windows RIDs](https://docs.microsoft.com/en-us/dotnet/core/rid-catalog#windows-rids)
-- [Linux RIDs](https://docs.microsoft.com/en-us/dotnet/core/rid-catalog#linux-rids)
-- [MacOS RIDs](https://docs.microsoft.com/en-us/dotnet/core/rid-catalog#macos-rids)
-
-this should give you a binary file in the `dist` directory, after that put it wherever you want and add it to your path and you can start using it
+The release workflow (`.github/workflows/release.yml`) packs the .NET tools, builds the archives, and publishes the release. See [CONTRIBUTING.md](CONTRIBUTING.md#releasing) for the release checklist.

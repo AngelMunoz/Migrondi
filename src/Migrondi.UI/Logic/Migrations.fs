@@ -14,7 +14,7 @@ let GetMigrondi(lf: ILoggerFactory) = voption {
   let path = Path.GetFullPath AppContext.BaseDirectory
 
   let migrations = Path.Combine(path, "migrations")
-  let dataSource = Path.Combine(path, "migrondi.db")
+  let dataSource = Paths.migrateLegacyDatabase()
 
   let config = {
     MigrondiConfig.Default with

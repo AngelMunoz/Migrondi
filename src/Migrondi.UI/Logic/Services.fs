@@ -442,16 +442,9 @@ type MigrationOperationsFactory
       elif dataSource.StartsWith(":") then
         connection
       else
-        let appData =
-          Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)
-
-        let baseDir = Path.Combine(appData, "MigrondiUI", vProjectId.ToString())
+        let baseDir = Paths.virtualProjectDirectory vProjectId
         let fileName = dataSource.Replace("./", "").Replace(".\\", "")
         let absolutePath = Path.Combine(baseDir, fileName)
-
-        if not(Directory.Exists baseDir) then
-          Directory.CreateDirectory baseDir |> ignore
-
         let restOfConnection = connection.Substring(m.Index + m.Length)
         $"Data Source={absolutePath}{restOfConnection}"
 

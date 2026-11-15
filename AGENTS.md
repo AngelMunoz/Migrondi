@@ -9,8 +9,8 @@ Migrondi is a SQL migrations tool: you write versioned `.sql` files and it track
 The repo ships three independently useful components built on one engine:
 
 - **`Migrondi.Core`** — the packable migration library. The `IMigrondi` service (built via `Migrondi.MigrondiFactory`) coordinates the file system and database: create migrations, apply/rollback (optionally a count), dry-run, and list status. Migration content is read through a pluggable `IMiMigrationSource` — the default reads SQL from disk, but you can supply a custom source (HTTP, S3, blob storage, …). The public API is CLS-friendly (sync + async overloads, `Result` extensions), so it embeds cleanly into F#/C#/VB applications.
-- **`Migrondi`** — the CLI, distributed as a `dotnet` global tool (`migrondi`) and as self-contained single-file binaries for Windows/macOS/Linux (x64 + arm64). Commands: `init`, `new`, `up`/`apply`, `down`/`rollback`, `list`/`show`, `status` (each with aliases).
-- **`MigrondiUI`** — an Avalonia desktop app that also runs as an **MCP (Model Context Protocol) server**. As a UI it manages multiple migration "projects" (on-disk local projects and virtual projects stored in its own database). In MCP mode it exposes those projects and migration operations (create/update/delete migrations, dry-run, apply, rollback, import/export) as tools, so an AI agent can drive migrations over MCP (MCP operations target virtual projects).
+- **`Migrondi`** — the CLI, distributed as a `dotnet` global tool (`migrondi`) and as self-contained archives for Windows/macOS/Linux (x64 + arm64). Commands: `init`, `new`, `up`/`apply`, `down`/`rollback`, `list`/`show`, `status`, `mcp` (each with aliases).
+- **`Migrondi.UI`** — the Goo-based desktop app, distributed as the `migrondiui` .NET tool, as self-contained archives for Windows x64, Linux x64, and macOS arm64, and as a Linux Flatpak bundle. It also runs as an **HTTP MCP (Model Context Protocol) server**. As a UI it manages multiple migration "projects" (on-disk local projects and virtual projects stored in its own database). In MCP mode it exposes those projects and migration operations (create/update/delete migrations, dry-run, apply, rollback, import/export) as tools, so an AI agent can drive migrations over MCP (MCP operations target virtual projects).
 
 The codebase uses F# with `.fsi` signature files, MSTest for tests, and Fantomas for formatting.
 
@@ -25,11 +25,14 @@ The codebase uses F# with `.fsi` signature files, MSTest for tests, and Fantomas
 ## Project Structure
 
 - `src/Migrondi.Core` — the packable migration library/engine.
-- `src/Migrondi` — the CLI (global tool + self-contained binaries).
-- `src/MigrondiUI` — the Avalonia app and MCP server.
-- `src/Migrondi.Tests`, `src/MigrondiUI.Tests` — test projects (not packable).
+- `src/Migrondi` — the CLI (`migrondi` tool + self-contained archives).
+- `src/Migrondi.Mcp` — the shared MCP tool definitions and both transports, used by the CLI and the UI.
+- `src/Migrondi.UI` — the Goo desktop app (`migrondiui` tool + self-contained archives) and HTTP MCP host.
+- `src/Migrondi.Tests`, `src/Migrondi.UI.Tests` — test projects (not packable).
 - `samples/` — sample usage.
 - `docs/` — the [FsDocs](https://fsprojects.github.io/FSharp.Formatting/) documentation site.
+
+Migrondi UI keeps mutable state (the app database and virtual project files) under `Environment.SpecialFolder.LocalApplicationData`/`MigrondiUI`, never next to the executable. The install folder holds only program files and the app's SQL migrations; Flatpak mounts it read-only.
 
 > Target frameworks, package versions, and similar build details live in each project's `.fsproj` and `Directory.Build.props` — read those directly rather than relying on this file, since they change over time.
 
@@ -89,15 +92,15 @@ dotnet build
 dotnet build src/Migrondi/Migrondi.fsproj
 dotnet build src/Migrondi.Core/Migrondi.Core.fsproj
 
-# Build for specific runtime
-dotnet fsi build.fsx build:runtime -- linux-x64
+# Self-contained folder for one platform
+dotnet publish src/Migrondi/Migrondi.fsproj -c Release -r linux-x64 --self-contained true -o dist
 ```
 
 ### Test
 
 ```bash
 # Run all tests
-dotnet test src/Migrondi.Tests
+dotnet test Migrondi.slnx
 
 # Run single test
 dotnet test src/Migrondi.Tests --filter "FullyQualifiedName=Namespace.ClassName.MethodName"
@@ -134,7 +137,7 @@ GitHub Actions live in `.github/workflows/`:
 
 - `dotnetcore.yml` — restores, builds, and tests `Migrondi.slnx` on .NET 10, on `main`/`vnext` pushes and PRs.
 - `docs.yml` — builds the FsDocs site and deploys it to GitHub Pages (from `vnext`).
-- `release.yml` — a `workflow_dispatch` release: extracts the version from `CHANGELOG.md`, runs tests, packs the NuGet packages, publishes self-contained CLI/UI binaries for `linux`/`osx`/`win` (x64/arm64), and creates a GitHub Release.
+- `release.yml` — a `workflow_dispatch` release driven by `CHANGELOG.md`. It reads the version and release notes from the first released section, runs the tests, packs `Migrondi`, `MigrondiUI`, `Migrondi.Core`, and `Migrondi.Mcp`, publishes self-contained archives (CLI: six RIDs; UI: `win-x64`, `linux-x64`, `osx-arm64`), builds the Linux Flatpak bundle, publishes to NuGet with trusted publishing, and creates the GitHub Release with the archives, checksums, Scoop manifests, Flatpak bundle, and packages.
 
 ## Changelog Management
 
@@ -183,4 +186,6 @@ The changelog is written for **developers upgrading their version**, not as a de
 
 ### Versioning
 
-The package version is derived from `CHANGELOG.md` at pack time by `Ionide.KeepAChangelog.Tasks` (wired in `Directory.Build.props`), and applies to every packable project. There is no need to edit versions in project files or CI manually. Cutting a release is done by moving the desired content from `[Unreleased]` into a new version section, then triggering the **Create Release** workflow.
+The package version is derived from `CHANGELOG.md` at pack time by `Ionide.KeepAChangelog.Tasks` 0.4.0 (wired in `Directory.Build.props`), and applies to every packable project. There is no need to edit versions in project files or CI manually.
+
+`Migrondi` and `MigrondiUI` pack as .NET tools (`migrondi`, `migrondiui`); `Migrondi.Core` and `Migrondi.Mcp` pack as libraries. The release checklist lives in [CONTRIBUTING.md](CONTRIBUTING.md#releasing).

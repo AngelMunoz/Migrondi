@@ -19,7 +19,7 @@ let runGui() =
   Window.ConfigureApplication(
     "Migrondi UI",
     "0.1.0",
-    "io.github.angelmunoz.migrondi.ui.spike"
+    "io.github.angelmunoz.migrondi.ui"
   )
 
   use loggerFactory =

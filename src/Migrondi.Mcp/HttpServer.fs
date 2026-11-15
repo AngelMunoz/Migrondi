@@ -51,7 +51,7 @@ module HttpServerHelpers =
   // POST. `Stateless = true` makes the transport answer the single request
   // inline, so no session store exists and `Mcp-Session-Id` is never emitted;
   // the process keeps no cross-request state. Verified by the strict-client
-  // tests in src/MigrondiUI.Tests/HttpServerTests.fs.
+  // tests in src/Migrondi.UI.Tests/HttpServerTests.fs.
   let handlePostRequest
     (context: Net.HttpListenerContext)
     (serverOptions: McpServerOptions)

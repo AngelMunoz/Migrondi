@@ -1,11 +1,12 @@
 # Migrondi.UI as an MCP Server
 
-The Migrondi.UI desktop app doubles as an MCP (Model Context Protocol) server over HTTP: run the app binary with `--http` and MCP clients can drive the migration projects the app manages as tools, instead of clicking through the window. The `migrondi` CLI owns stdio: pass `--stdio` to the GUI binary and it prints one line pointing at `migrondi mcp --stdio` and exits.
+The Migrondi.UI desktop app doubles as an MCP (Model Context Protocol) server over HTTP: run the app with `--http` and MCP clients can drive the migration projects the app manages as tools, instead of clicking through the window. The `migrondi` CLI owns stdio: pass `--stdio` to the GUI and it prints one line pointing at `migrondi mcp --stdio` and exits.
 
 ## Running the server
 
 ```
-Migrondi.UI --http 8080    # serve over Streamable HTTP on localhost:8080/mcp/
+migrondiui --http 8080    # serve over Streamable HTTP on localhost:8080/mcp/
+Migrondi.UI --http 8080   # the same, from the binary archive
 ```
 
 Add `--readonly` to serve only the 6 read tools (`list_projects`, `get_project`, `list_migrations`, `get_migration`, `dry_run_migrations`, `dry_run_rollback`). Without `--readonly` the server exposes all 16 tools.
@@ -42,7 +43,7 @@ MCP operations target **virtual projects**: the project lifecycle tools (`create
 
 ## Client entry
 
-Point the client at the Migrondi.UI binary's HTTP endpoint:
+Point the client at the app's HTTP endpoint:
 
 ```json
 {
@@ -56,4 +57,4 @@ Point the client at the Migrondi.UI binary's HTTP endpoint:
 
 ## Which host
 
-Use the CLI host (`migrondi mcp`) when an agent drives one project pinned by `--config`; the CLI serves stdio. Use the GUI host (`Migrondi.UI --http`) for the many projects managed by the desktop app. Both hosts serve the same result shapes for the shared migration tools; see the [CLI MCP section](cli.md) for the single-project tool set.
+Use the CLI host (`migrondi mcp`) when an agent drives one project pinned by `--config`; the CLI serves stdio. Use the GUI host (`migrondiui --http`) for the many projects managed by the desktop app. Both hosts serve the same result shapes for the shared migration tools; see the [CLI MCP section](cli.md) for the single-project tool set.
