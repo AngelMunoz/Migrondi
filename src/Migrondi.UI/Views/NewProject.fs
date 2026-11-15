@@ -1,10 +1,12 @@
 module Migrondi.UI.Views.NewProject
 
 open System
+open System.IO
 
 open Goo
 open Goo.Widgets
 open Goo.Widgets.Inputs
+open Goo.Widgets.Navigation
 open FunGoo.Children
 open FunGoo.Interop
 open FunGoo.Style
@@ -16,6 +18,7 @@ open IcedTasks.Polyfill.Async.PolyfillBuilders
 open Navs
 
 open Migrondi.Core
+open Migrondi.Core.Serialization
 open MigrondiUI
 open MigrondiUI.Services
 open Migrondi.UI.Logic
@@ -33,6 +36,7 @@ type NewProjectState = {
   mutable ConfigPath: string
   mutable Notice: string
   mutable Busy: bool
+  mutable Tab: string
 }
 
 // One event channel for the page's actions; the cell dispatches it. Text
@@ -40,8 +44,10 @@ type NewProjectState = {
 type NewProjectEvent =
   | Back
   | BrowseConfig
+  | CreateLocal
   | CreateVirtual
   | Import
+  | SelectTab of string
 
 // State transitions: plain functions, callable without a window.
 let created(state: NewProjectState, name: string) =
@@ -76,6 +82,43 @@ type Operations = {
 
 // Background operations: the cell arrives as a parameter, so these stay
 // plain functions and the object expression stays non-recursive.
+// Creates a local project on disk: picks a folder, writes the default
+// config with a migrations folder, and registers it. The picker needs the
+// UI thread, so this starts immediate and continues on a worker.
+let createLocal(operations: Operations) : unit =
+  asyncEx {
+    let! picked = operations.Picker.PickDirectory()
+
+    match picked with
+    | None -> ()
+    | Some directory ->
+      try
+        let config = MigrondiConfig.Default
+
+        Directory.CreateDirectory(Path.Combine(directory, "migrations"))
+        |> ignore
+
+        let configPath = Path.Combine(directory, "migrondi.json")
+
+        File.WriteAllText(configPath, MiSerializer.Encode config)
+
+        let! projectId = operations.Projects.RegisterLocal configPath
+
+        operations.PostUI.Post(fun () ->
+          operations.State.Notice <- "Created local project"
+          operations.State.Busy <- false
+          operations.Feedback.Toast "Created local project"
+          operations.Cell.Rebuild())
+
+        Navigation.go(operations.Navigator, Routes.localProjectUrl projectId)
+        |> ignore
+      with ex ->
+        operations.PostUI.Post(fun () ->
+          failed(operations.State, "Creating the local project", ex)
+          operations.Feedback.Toast $"Create failed: {ex.Message}"
+          operations.Cell.Rebuild())
+  }
+  |> Async.StartImmediate
 
 // Runs on the UI thread from the Build-authored callback: the picker needs
 // it to start the native chooser. The await part continues on a worker.
@@ -165,71 +208,95 @@ let importLocal(operations: Operations) : unit =
   }
   |> Async.Start
 
-// View pieces: plain functions over the palette and state, one event
-// callback each.
-let headerBar(palette: Palette, onEvent: NewProjectEvent -> unit) : Blob =
+// The field cells the form mounts: each owns its draft, so typing never
+// repaints the page. Created once at cell birth and pushed the state's
+// value on every build, so cleared forms and picker results land.
+type Fields = {
+  Name: TextFieldCell
+  Description: TextFieldCell
+  Connection: TextFieldCell
+  TableName: TextFieldCell
+  ConfigPath: TextFieldCell
+}
+
+let fieldsFor(state: NewProjectState) : Fields = {
+  Name = textField("Payroll service", "", fun value -> state.Name <- value)
+  Description =
+    textField(
+      "What this project tracks",
+      "",
+      fun value -> state.Description <- value
+    )
+  Connection =
+    textField(
+      "Data Source=./migrondi.db",
+      "",
+      fun value -> state.Connection <- value
+    )
+  TableName =
+    textField("", state.TableName, fun value -> state.TableName <- value)
+  ConfigPath =
+    textField(
+      "Path to a migrondi.json",
+      "",
+      fun value -> state.ConfigPath <- value
+    )
+}
+
+let fieldRow(palette: Palette, label: string, child: Blob) : Blob =
+  Container(FlexDirection = FlexDirection.Column, Gap = 6, MinWidth = 0)
+    .Children(fieldLabel(palette, label), child)
+
+// One form surface for every creation path: same width, same rhythm, so the
+// three flows read as one screen with three modes instead of three screens.
+let formCard
+  (palette: Palette, title: string, description: string, body: Blob array)
+  : Blob =
+  let heading: Blob =
+    Container(FlexDirection = FlexDirection.Column, Gap = 4)
+      .Children(
+        Text(
+          Content = title,
+          FontSize = 15,
+          Color = palette.Text,
+          FontWeight = 600
+        ),
+        Text(Content = description, FontSize = 12, Color = palette.TextMuted)
+      )
+
   Container(
-    Key = "new-project-header",
+    FlexDirection = FlexDirection.Column,
+    Gap = 16,
+    Padding = 20,
+    Width = 640.0,
+    BackgroundColor = palette.Panel,
+    BorderRadius = 10
+  )
+    .Children
+    [| heading; yield! body |]
+
+// The action row every form ends with: the notice on the left, the single
+// primary action on the right.
+let formActions
+  (
+    palette: Palette,
+    state: NewProjectState,
+    label: string,
+    onEvent: NewProjectEvent -> unit
+  ) : Blob =
+  Container(
     FlexDirection = FlexDirection.Row,
     Gap = 8,
     AlignItems = AlignItems.Center
   )
     .Children(
       Text(
-        Key = "new-project-title",
-        Content = "New project",
-        FontSize = 20,
-        Color = palette.Text,
+        Content = state.Notice,
+        FontSize = 12,
+        Color = palette.TextMuted,
         FlexGrow = 1.0
       ),
-      actionButton(palette, "< Back", fun () -> onEvent Back)
-    )
-
-let fieldRow(palette: Palette, label: string, child: Blob) : Blob =
-  Container(
-    FlexDirection = FlexDirection.Column,
-    Gap = 4,
-    FlexGrow = 1.0,
-    MinWidth = 0
-  )
-    .Children(
-      Text(Content = label, FontSize = 12, Color = palette.TextMuted),
-      child
-    )
-
-let importBar
-  (palette: Palette, state: NewProjectState, onEvent: NewProjectEvent -> unit)
-  : Blob =
-  Container(
-    Key = "new-project-import",
-    FlexDirection = FlexDirection.Column,
-    Gap = 8,
-    Padding = 12,
-    BackgroundColor = palette.Panel,
-    BorderRadius = 8,
-    BorderWidth = edgesFromFloat 1.0,
-    BorderColor = palette.Border
-  )
-    .Children(
-      Text(
-        Content = "Import a local project into a virtual one",
-        FontSize = 14,
-        Color = palette.Text
-      ),
-      Container(FlexDirection = FlexDirection.Row, Gap = 8)
-        .Children(
-          Container(FlexGrow = 1.0, MinWidth = 0)
-            .Children(
-              TextField(
-                Placeholder = "Path to a migrondi.json",
-                Value = state.ConfigPath,
-                OnChange = fun value -> state.ConfigPath <- value
-              )
-                .Build()
-            ),
-          actionButton(palette, "Browse...", fun () -> onEvent BrowseConfig),
-          actionButton(palette, "Import", fun () -> onEvent Import)
-        )
+      primaryButton(palette, label, state.Busy, fun () -> onEvent CreateVirtual)
     )
 
 // The driver picker is a mounted widget: it mounts under one stable key and
@@ -252,83 +319,188 @@ let driverPicker
 
   Cell.Mount<ComboBoxInput, ComboBox>(key, input)
 
-let virtualForm
+let virtualTab
   (
     palette: Palette,
     state: NewProjectState,
+    fields: Fields,
     onDriverSelect: Action<string>,
     onEvent: NewProjectEvent -> unit
   ) : Blob =
-  Container(
-    Key = "new-project-virtual",
-    FlexDirection = FlexDirection.Column,
-    Gap = 8,
-    Padding = 12,
-    BackgroundColor = palette.Panel,
-    BorderRadius = 8,
-    BorderWidth = edgesFromFloat 1.0,
-    BorderColor = palette.Border
-  )
-    .Children(
-      Text(
-        Content = "Create a virtual project",
-        FontSize = 14,
-        Color = palette.Text
-      ),
-      fieldRow(
-        palette,
-        "Project name",
-        TextField(
-          Placeholder = "My project",
-          Value = state.Name,
-          OnChange = fun value -> state.Name <- value
+  formCard(
+    palette,
+    "Virtual project",
+    "Stored in this app's own database. No files on disk, migrations included.",
+    [|
+      Container(FlexDirection = FlexDirection.Row, Gap = 12)
+        .Children(
+          Container(FlexGrow = 1.0, MinWidth = 0)
+            .Children(
+              fieldRow(
+                palette,
+                "Project name",
+                mountField("new-project-name", fields.Name, state.Name)
+              )
+            ),
+          Container(FlexGrow = 1.0, MinWidth = 0)
+            .Children(
+              fieldRow(
+                palette,
+                "Description (optional)",
+                mountField(
+                  "new-project-description",
+                  fields.Description,
+                  state.Description
+                )
+              )
+            )
         )
-          .Build()
-      ),
-      fieldRow(
-        palette,
-        "Description (optional)",
-        TextField(
-          Placeholder = "What this project tracks",
-          Value = state.Description,
-          OnChange = fun value -> state.Description <- value
-        )
-          .Build()
-      ),
       fieldRow(
         palette,
         "Connection string",
-        TextField(
-          Placeholder = "Data Source=./migrondi.db",
-          Value = state.Connection,
-          OnChange = fun value -> state.Connection <- value
+        mountField(
+          "new-project-connection",
+          fields.Connection,
+          state.Connection
         )
-          .Build()
-      ),
+      )
+      Container(FlexDirection = FlexDirection.Row, Gap = 12)
+        .Children(
+          Container(FlexGrow = 1.0, MinWidth = 0)
+            .Children(
+              fieldRow(
+                palette,
+                "Driver",
+                driverPicker("new-project-driver", state, onDriverSelect)
+              )
+            ),
+          Container(FlexGrow = 1.0, MinWidth = 0)
+            .Children(
+              fieldRow(
+                palette,
+                "Tracking table",
+                mountField(
+                  "new-project-table",
+                  fields.TableName,
+                  state.TableName
+                )
+              )
+            )
+        )
+      :> Blob
+      formActions(palette, state, "Create project", onEvent)
+    |]
+  )
+
+let importTab
+  (
+    palette: Palette,
+    state: NewProjectState,
+    fields: Fields,
+    onEvent: NewProjectEvent -> unit
+  ) : Blob =
+  let actions =
+    Container(
+      FlexDirection = FlexDirection.Row,
+      Gap = 8,
+      AlignItems = AlignItems.Center
+    )
+      .Children(
+        Text(
+          Content = state.Notice,
+          FontSize = 12,
+          Color = palette.TextMuted,
+          FlexGrow = 1.0
+        ),
+        actionButton(palette, "Browse…", fun () -> onEvent BrowseConfig),
+        primaryButton(
+          palette,
+          "Import project",
+          state.Busy,
+          fun () -> onEvent Import
+        )
+      )
+
+  formCard(
+    palette,
+    "Import from disk",
+    "Reads an existing migrondi.json and its migrations into a virtual project.",
+    [|
       fieldRow(
         palette,
-        "Table name",
-        TextField(
-          Value = state.TableName,
-          OnChange = fun value -> state.TableName <- value
-        )
-          .Build()
-      ),
-      fieldRow(
-        palette,
-        "Driver",
-        driverPicker("new-project-driver", state, onDriverSelect)
-      ),
+        "migrondi.json path",
+        mountField("new-project-config", fields.ConfigPath, state.ConfigPath)
+      )
+      actions
+    |]
+  )
+
+let localTab(palette: Palette, onEvent: NewProjectEvent -> unit) : Blob =
+  formCard(
+    palette,
+    "New project on disk",
+    "Picks a folder, writes migrondi.json and a migrations folder, then registers it.",
+    [|
       Container(FlexDirection = FlexDirection.Row, Gap = 8)
         .Children(
-          Text(
-            Content = state.Notice,
-            FontSize = 12,
-            Color = palette.TextMuted,
-            FlexGrow = 1.0
-          ),
-          actionButton(palette, "Create", fun () -> onEvent CreateVirtual)
+          primaryButton(
+            palette,
+            "Choose folder…",
+            false,
+            fun () -> onEvent CreateLocal
+          )
         )
+      :> Blob
+    |]
+  )
+
+let page
+  (
+    palette: Palette,
+    state: NewProjectState,
+    fields: Fields,
+    onDriverSelect: Action<string>,
+    onTabSelect: Action<string>,
+    onEvent: NewProjectEvent -> unit
+  ) : Blob =
+  let tabs =
+    Cell.Mount<TabBarInput, TabBar>(
+      "new-project-tabs",
+      TabBarInput(
+        Items = [|
+          NavigationItem(Id = "virtual", Label = "Virtual")
+          NavigationItem(Id = "import", Label = "From disk")
+          NavigationItem(Id = "local", Label = "New on disk")
+        |],
+        SelectedId = state.Tab,
+        OnSelect = onTabSelect
+      )
+    )
+
+  let form =
+    match state.Tab with
+    | "import" -> importTab(palette, state, fields, onEvent)
+    | "local" -> localTab(palette, onEvent)
+    | _ -> virtualTab(palette, state, fields, onDriverSelect, onEvent)
+
+  Container(
+    Key = "new-project",
+    FlexDirection = FlexDirection.Column,
+    Gap = 20,
+    Padding = 24,
+    Width = percent 100.0,
+    Height = percent 100.0,
+    BackgroundColor = palette.Canvas
+  )
+    .Children(
+      pageHeader(
+        palette,
+        "New project",
+        "Create a virtual project, import one from disk, or scaffold a new folder",
+        [| actionButton(palette, "< Back", fun () -> onEvent Back) |]
+      ),
+      tabs,
+      form
     )
 
 // The page owns its form state (state ladder tier 2). It carries no load
@@ -351,11 +523,15 @@ let create<'env
     ConfigPath = ""
     Notice = ""
     Busy = false
+    Tab = "virtual"
   }
 
-  // Created once at cell birth: the mounted driver picker input carries the
-  // same delegate instance on every Build.
+  // Created once at cell birth: the mounted driver picker and tab bar keep
+  // their delegates, and the fields keep their drafts.
   let onDriverSelect = Action<string>(fun id -> state.Driver <- id)
+  let onTabSelect = Action<string>(fun id -> state.Tab <- id)
+
+  let fields = fieldsFor state
 
   {
     new Cell() with
@@ -376,25 +552,10 @@ let create<'env
           function
           | Back -> Navigation.go(env.Navigator, "/")
           | BrowseConfig -> browse operations
+          | CreateLocal -> createLocal operations
           | CreateVirtual -> createVirtual operations
           | Import -> importLocal operations
+          | SelectTab _ -> this.Rebuild()
 
-        Container(
-          Key = "new-project",
-          FlexDirection = FlexDirection.Column,
-          Gap = 12,
-          Padding = 12,
-          Width = percent 100.0,
-          Height = percent 100.0,
-          BackgroundColor = palette.Canvas
-        )
-          .Children(
-            headerBar(palette, onEvent),
-            importBar(palette, state, onEvent),
-            scrollColumn(
-              palette,
-              "new-project-scroll",
-              [| virtualForm(palette, state, onDriverSelect, onEvent) |]
-            )
-          )
+        page(palette, state, fields, onDriverSelect, onTabSelect, onEvent)
   }

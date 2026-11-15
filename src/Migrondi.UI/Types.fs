@@ -84,6 +84,13 @@ module Routes =
 
   let virtualProjectUrl(projectId: Guid) = $"/projects/virtual/{projectId}"
 
+  let localSettingsUrl(projectId: Guid) =
+    $"/projects/local/{projectId}/settings"
+
+  let virtualSettingsUrl(projectId: Guid) =
+    $"/projects/virtual/{projectId}/settings"
+
+
 /// Starts a navigation and logs failures; the outlet renders the result.
 /// `Navigate` returns a cold task: an unstarted call (for example
 /// `Navigate url |> ignore`) goes nowhere.

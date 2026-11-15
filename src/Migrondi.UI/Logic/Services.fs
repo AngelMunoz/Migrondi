@@ -272,7 +272,7 @@ type MigrationOperations
     projectId: Guid,
     createConnection: unit -> System.Data.IDbConnection,
     isVirtual: bool,
-    rootDir: string
+    migrationsDir: string
   ) =
 
   let findVirtualMigration =
@@ -283,6 +283,57 @@ type MigrationOperations
   let removeVirtualMigration =
     Database.RemoveVirtualMigrationByName createConnection
 
+  // Reads one migration file, returning None when it cannot be decoded.
+  // Runs synchronously: migration files are small, and callers already run
+  // on background threads.
+  let tryDecodeMigration(path: string) : Migration option =
+    try
+      let content = File.ReadAllText path
+      MiSerializer.Decode(content, nonNull(Path.GetFileName path)) |> Some
+    with _ ->
+      None
+
+  // Locates a local migration file by decoded content, falling back to the
+  // filename: legacy files carry a timestamped NAME no name glob matches.
+  let findLocalMigration(name: string) : (string * Migration) option =
+    let files =
+      try
+        Directory.GetFiles(migrationsDir, "*.sql")
+      with _ -> [||]
+
+    let rec search(paths: string list) =
+      match paths with
+      | [] -> None
+      | path :: rest ->
+        let decoded = tryDecodeMigration path
+
+        match decoded with
+        | Some migration when migration.name = name -> Some(path, migration)
+        | _ ->
+          let fallback =
+            match
+              Migration.ExtractFromFilename(nonNull(Path.GetFileName path))
+            with
+            | Ok(fname, _) when fname = name -> decoded
+            | _ -> None
+
+          match fallback with
+          | Some migration -> Some(path, migration)
+          | None -> search rest
+
+    search(Array.toList files)
+
+  // Legacy files written by Core's RunNew carry a timestamped NAME
+  // (`<ts>_<name>(.sql)`, truncated by the metadata charset). Pending
+  // migrations are safe to normalize since no applied row references them.
+  let normalizeName(migration: Migration, path: string) : Migration =
+    match Migration.ExtractFromFilename(nonNull(Path.GetFileName path)) with
+    | Ok(fname, timestamp) when timestamp = migration.timestamp ->
+      match MigrationName.Validate fname with
+      | Ok clean -> { migration with name = clean }
+      | Error _ -> migration
+    | _ -> migration
+
   interface IMigrationOperations with
     member _.Core = core
 
@@ -291,17 +342,7 @@ type MigrationOperations
         let! result = findVirtualMigration projectId name
         return result |> Option.map(fun vm -> vm.ToMigration())
       else
-        let files = Directory.GetFiles(rootDir, $"*_{name}.sql")
-
-        match files with
-        | [||] -> return None
-        | _ ->
-          let path = files[0]
-          let! ct = CancellableTask.getCancellationToken()
-          let! content = File.ReadAllTextAsync(path, ct)
-          let name = Path.GetFileName path |> nonNull
-          let migration = MiSerializer.Decode(content, name)
-          return Some migration
+        return findLocalMigration name |> Option.map snd
     }
 
     member _.UpdateMigration(migration: Migration) = cancellableTask {
@@ -335,13 +376,13 @@ type MigrationOperations
 
           return Ok()
       else
-        let files = Directory.GetFiles(rootDir, $"*_{migration.name}.sql")
+        let located = findLocalMigration migration.name
 
-        match files with
-        | [||] -> return Error(MigrationCrudError.NotFound migration.name)
-        | _ ->
-          let path = files[0]
-          let content = MiSerializer.Encode migration
+        match located with
+        | None -> return Error(MigrationCrudError.NotFound migration.name)
+        | Some(path, _) ->
+          let normalized = normalizeName(migration, path)
+          let content = MiSerializer.Encode normalized
           do! File.WriteAllTextAsync(path, content, ct)
           return Ok()
     }
@@ -364,12 +405,12 @@ type MigrationOperations
         do! removeVirtualMigration projectId name
         return Ok()
       else
-        let files = Directory.GetFiles(rootDir, $"*_{name}.sql")
+        let located = findLocalMigration name
 
-        match files with
-        | [||] -> return Error(MigrationCrudError.NotFound name)
-        | _ ->
-          File.Delete files[0]
+        match located with
+        | None -> return Error(MigrationCrudError.NotFound name)
+        | Some(path, _) ->
+          File.Delete path
           return Ok()
     }
 
@@ -422,6 +463,7 @@ type MigrationOperationsFactory
         | None -> failwith $"Project {p.name} has no valid config"
         | Some config ->
           let rootDir = Path.GetDirectoryName p.migrondiConfigPath |> nonNull
+          let migrationsDir = Path.Combine(rootDir, config.migrations)
 
           cache.GetOrAdd(
             p.id,
@@ -429,7 +471,13 @@ type MigrationOperationsFactory
               let mLogger = loggerFactory.CreateLogger<IMigrondi>()
               let core = Migrondi.MigrondiFactory(config, rootDir, mLogger)
 
-              MigrationOperations(core, p.id, createConnection, false, rootDir)
+              MigrationOperations(
+                core,
+                p.id,
+                createConnection,
+                false,
+                migrationsDir
+              )
               :> IMigrationOperations
           )
 

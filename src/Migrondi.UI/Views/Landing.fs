@@ -27,6 +27,8 @@ type LandingState = {
   mutable Projects: Project array
   mutable ConfigPath: string
   mutable Notice: string
+  mutable Query: string
+  mutable RegisterOpen: bool
 }
 
 // One event channel for the page's actions; the cell dispatches it.
@@ -34,46 +36,47 @@ type LandingEvent =
   | Refresh
   | Browse
   | Register
+  | ToggleRegister
+  | NewProject
+  | Search of string
   | Open of Project
 
-// Chip colors that read on both appearances: saturated backgrounds with a
-// near-white foreground.
-let kindBadge(project: Project) : Blob =
-  let content, background =
-    match project with
-    | Local _ -> "Local", Color.Rgb(43, 61, 89)
-    | Virtual _ -> "Virtual", Color.Rgb(35, 74, 52)
-
-  Badge(
-    Content = content,
-    BackgroundColor = Nullable background,
-    TextColor = Nullable(Color.Rgb(235, 240, 248))
-  )
-    .Build()
-
 // One row per project. Activation opens the project; it is not selection.
+// The row carries the kind chip and a chevron, so scanning the list answers
+// "what is this project and how do I get in" without reading the caption.
 let inline projectRow
   (
     palette: Palette,
     project: Project,
     [<InlineIfLambda>] onEvent: LandingEvent -> unit
   ) : Blob =
-  let caption =
+  let caption, kind, tone =
     match project with
-    | Local p -> p.migrondiConfigPath
-    | Virtual p -> p.connection
+    | Local p -> p.migrondiConfigPath, "Local", Info
+    | Virtual p -> p.connection, "Virtual", Neutral
 
-  let description = project.Description |> Option.defaultValue caption
+  let trailing =
+    Container(
+      FlexDirection = FlexDirection.Row,
+      AlignItems = AlignItems.Center,
+      Gap = 12
+    )
+      .Children
+      [|
+        chip(palette, tone, kind)
+        Text(Content = "›", FontSize = 16, Color = palette.TextMuted)
+      |]
 
   ListRow(
     Title = project.Name,
-    Caption = description,
-    Trailing = kindBadge project,
+    Caption = caption,
+    Trailing = trailing,
     OnClick = (fun _ -> onEvent(Open project)),
-    MinHeight = Nullable(lengthFromFloat 44.0),
-    PaddingVertical = Nullable 8.0
+    MinHeight = Nullable(lengthFromFloat 52.0),
+    PaddingVertical = Nullable 10.0
   )
-    .backgroundColor(palette.Row)
+    .backgroundColor(palette.Panel)
+    .hoverBackgroundColor(palette.Row)
     .textColor(palette.Text)
     .Build()
 
@@ -89,6 +92,7 @@ let loaded(state: LandingState, found: Project array) =
 
 let registered(state: LandingState, name: string, found: Project array) =
   state.ConfigPath <- ""
+  state.RegisterOpen <- false
   state.Projects <- found
   state.Notice <- $"Registered {name}"
 
@@ -180,88 +184,132 @@ let register<'env
 
 // View pieces: plain functions over the palette and state, one event
 // callback each.
-let headerBar
-  (palette: Palette, state: LandingState, onEvent: LandingEvent -> unit)
-  : Blob =
-  Container(
-    FlexDirection = FlexDirection.Row,
-    Gap = 8,
-    AlignItems = AlignItems.Center
-  )
-    .Children(
-      Text(
-        Key = "landing-title",
-        Content = "Projects",
-        FontSize = 20,
-        Color = palette.Text,
-        FlexGrow = 1.0
-      ),
-      Text(
-        Key = "landing-notice",
-        Content = state.Notice,
-        FontSize = 12,
-        Color = palette.TextMuted
-      ),
-      actionButton(palette, "Refresh", fun () -> onEvent Refresh)
-    )
-
 let registerBar
-  (palette: Palette, state: LandingState, onEvent: LandingEvent -> unit)
-  : Blob =
+  (
+    palette: Palette,
+    state: LandingState,
+    configField: TextFieldCell,
+    onEvent: LandingEvent -> unit
+  ) : Blob =
   Container(
-    FlexDirection = FlexDirection.Row,
+    FlexDirection = FlexDirection.Column,
     Gap = 8,
-    AlignItems = AlignItems.Center
+    Padding = 12,
+    BackgroundColor = palette.Panel,
+    BorderRadius = 8
   )
     .Children(
-      Container(FlexGrow = 1.0, MinWidth = 0)
+      Container(
+        FlexDirection = FlexDirection.Row,
+        Gap = 8,
+        AlignItems = AlignItems.Center
+      )
         .Children(
-          TextField(
-            Placeholder = "Path to a migrondi.json",
-            Value = state.ConfigPath,
-            OnChange = fun value -> state.ConfigPath <- value
-          )
-            .Build()
-        ),
-      actionButton(palette, "Browse...", fun () -> onEvent Browse),
-      actionButton(palette, "Register local", fun () -> onEvent Register)
+          Container(FlexGrow = 1.0, MinWidth = 0)
+            .Children(
+              mountField("landing-config", configField, state.ConfigPath)
+            ),
+          actionButton(palette, "Browse...", fun () -> onEvent Browse),
+          primaryButton(palette, "Register", false, fun () -> onEvent Register)
+        )
     )
 
 let projectRows
   (palette: Palette, state: LandingState, onEvent: LandingEvent -> unit)
   : Blob array =
+  let query = state.Query.Trim()
+
+  let matching =
+    if String.IsNullOrEmpty query then
+      state.Projects
+    else
+      state.Projects
+      |> Array.filter(fun project ->
+        let text =
+          match project with
+          | Local p -> $"{p.name} {p.migrondiConfigPath}"
+          | Virtual p -> $"{p.name} {p.connection}"
+
+        text.Contains(query, StringComparison.OrdinalIgnoreCase))
+
   if Array.isEmpty state.Projects then
     [|
       EmptyState(
-        Title = "No projects",
-        Description = "Register a migrondi.json below to see it here",
-        MinHeight = Nullable(lengthFromFloat 160.0)
+        Title = "No projects yet",
+        Description =
+          "Create a project, or register an existing migrondi.json on disk",
+        MinHeight = Nullable(lengthFromFloat 180.0)
+      )
+        .Build()
+    |]
+  elif Array.isEmpty matching then
+    [|
+      EmptyState(
+        Title = "No matches",
+        Description = $"No project matches \"{query}\"",
+        MinHeight = Nullable(lengthFromFloat 140.0)
       )
         .Build()
     |]
   else
-    state.Projects |> Array.map(fun p -> projectRow(palette, p, onEvent))
+    matching |> Array.map(fun p -> projectRow(palette, p, onEvent))
 
 let page
-  (palette: Palette, state: LandingState, onEvent: LandingEvent -> unit)
-  : Blob =
+  (
+    palette: Palette,
+    state: LandingState,
+    configField: TextFieldCell,
+    searchField: TextFieldCell,
+    onEvent: LandingEvent -> unit
+  ) : Blob =
+  let localCount, virtualCount =
+    state.Projects
+    |> Array.fold
+      (fun (locals, virtuals) project ->
+        match project with
+        | Local _ -> locals + 1, virtuals
+        | Virtual _ -> locals, virtuals + 1)
+      (0, 0)
+
+  let subtitle =
+    if Array.isEmpty state.Projects then
+      "No projects registered yet"
+    else
+      $"{localCount} local · {virtualCount} virtual"
+
+  let actions = [|
+    actionButton(palette, "Refresh", fun () -> onEvent Refresh)
+    actionButton(palette, "Register existing", fun () -> onEvent ToggleRegister)
+    primaryButton(palette, "New project", false, fun () -> onEvent NewProject)
+  |]
+
+  // The header carries the actions; the search sits in its own row so the
+  // list starts immediately below it.
+  let searchRow =
+    Container(Width = 320.0)
+      .Children(mountField("landing-search", searchField, state.Query))
+
   Container(
     Key = "landing",
     FlexDirection = FlexDirection.Column,
-    Gap = 12,
-    Padding = 12,
+    Gap = 16,
+    Padding = 24,
     Width = percent 100.0,
     Height = percent 100.0,
     BackgroundColor = palette.Canvas
   )
     .Children(
-      headerBar(palette, state, onEvent),
-      registerBar(palette, state, onEvent),
+      pageHeader(palette, "Projects", subtitle, actions),
+      searchRow,
       scrollColumn(
         palette,
         "landing-projects",
         projectRows(palette, state, onEvent)
-      )
+      ),
+      if state.RegisterOpen then
+        registerBar(palette, state, configField, onEvent)
+      else
+        Container(Height = 0.0)
     )
 
 // The landing page owns the projects list (state ladder tier 2). Loads run
@@ -279,11 +327,39 @@ let create<'env
     Projects = Array.empty
     ConfigPath = ""
     Notice = "Loading projects..."
+    Query = ""
+    RegisterOpen = false
   }
+
+  // Created once at cell birth: the mounted fields carry their own drafts,
+  // so typing never rebuilds the project list. Search commits (Enter or
+  // focus loss), so it rebuilds once per search instead of per keystroke.
+  let configField =
+    textField(
+      "Path to a migrondi.json",
+      "",
+      fun value -> state.ConfigPath <- value
+    )
+
+  // The commit callback needs the cell, but the field is created before the
+  // object expression exists; the cell installs the refresh in Start.
+  let mutable refreshAfterSearch = ignore
+
+  let searchField =
+    textFieldWithCommit(
+      "Search projects (Enter)",
+      "",
+      ignore,
+      fun value ->
+        state.Query <- value
+        refreshAfterSearch()
+    )
 
   {
     new LandingCell() with
-      override this.Start() = reload(this, env, state)
+      override this.Start() =
+        refreshAfterSearch <- fun () -> this.Rebuild()
+        reload(this, env, state)
 
       override this.Build() : Blob =
         let palette = Palette.forTheme env.Theme.Store.Dark
@@ -293,6 +369,11 @@ let create<'env
           | Refresh -> reload(this, env, state)
           | Browse -> browse(this, env, state)
           | Register -> register(this, env, state)
+          | ToggleRegister ->
+            state.RegisterOpen <- not state.RegisterOpen
+            this.Rebuild()
+          | NewProject -> Navigation.go(env.Navigator, "/projects/new")
+          | Search _ -> this.Rebuild()
           | Open project ->
             let url =
               match project with
@@ -301,5 +382,5 @@ let create<'env
 
             Navigation.go(env.Navigator, url)
 
-        page(palette, state, onEvent)
+        page(palette, state, configField, searchField, onEvent)
   }

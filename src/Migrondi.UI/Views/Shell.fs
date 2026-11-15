@@ -21,6 +21,7 @@ open Migrondi.UI.Types
 open Migrondi.UI.Views.Common
 open Migrondi.UI.Views.Landing
 open Migrondi.UI.Views.ProjectDetails
+open Migrondi.UI.Views.ProjectSettingsPage
 open Migrondi.UI.Views.NewProject
 
 /// The root cell the composition root drives: `Router` hands the route
@@ -134,6 +135,44 @@ let create(env: IAppEnv, navigator: GooNavigator, feedback: Cell) : ShellCell =
         | ValueNone -> return notFound(Guid.Empty)
       }
     )
+
+    Route.define<Blob>(
+      "local-project-settings",
+      "/projects/local/:projectId<guid>/settings",
+      fun (context: RouteContext) (_: INavigable) -> asyncEx {
+        match context.GetParam<Guid>("projectId") with
+        | ValueSome projectId ->
+          let! found = env.Projects.Get projectId
+
+          match found with
+          | Some(Local _ as project) ->
+            let cell = ProjectSettingsPage.create(env, project)
+            currentPage <- ValueSome cell
+
+            return Cell.Mount((fun () -> cell), $"settings-local-{projectId}")
+          | _ -> return notFound(projectId)
+        | ValueNone -> return notFound(Guid.Empty)
+      }
+    )
+
+    Route.define<Blob>(
+      "virtual-project-settings",
+      "/projects/virtual/:projectId<guid>/settings",
+      fun (context: RouteContext) (_: INavigable) -> asyncEx {
+        match context.GetParam<Guid>("projectId") with
+        | ValueSome projectId ->
+          let! found = env.Projects.Get projectId
+
+          match found with
+          | Some(Virtual _ as project) ->
+            let cell = ProjectSettingsPage.create(env, project)
+            currentPage <- ValueSome cell
+
+            return Cell.Mount((fun () -> cell), $"settings-virtual-{projectId}")
+          | _ -> return notFound(projectId)
+        | ValueNone -> return notFound(Guid.Empty)
+      }
+    )
   ]
 
   let router = GooRouter(routes) :> IRouter<Blob>
@@ -144,8 +183,48 @@ let create(env: IAppEnv, navigator: GooNavigator, feedback: Cell) : ShellCell =
 
   // The outlet renders the router's snapshot. The initial URI starts the
   // first navigation once; `Start` re-runs it only when it never ran.
-  let outlet = new RouterOutlet(initialUri = "/")
+  // `MIGRONDI_UI_ROUTE` picks a preview route for headless captures; Goo
+  // validates `--scene` against registered scenes, so this is its own knob.
+  let initialUri =
+    match Environment.GetEnvironmentVariable "MIGRONDI_UI_ROUTE" with
+    | null
+    | "" -> "/"
+    | route when route.StartsWith "/" -> route
+    | route -> $"/{route}"
+
+  let outlet = new RouterOutlet(initialUri = initialUri)
   outlet.Router <- Some router
+
+  // Routing is async, and a headless capture happens on the first frame, so
+  // a preview route mounts its page directly instead of waiting for the
+  // router. Only `MIGRONDI_UI_ROUTE` reaches this path.
+  let previewPage: Cell option * (unit -> unit) option =
+    match initialUri with
+    | "/projects/new" -> Some(NewProject.create env), None
+    | "/preview/details" ->
+      // Headless capture aid: the router is async, and the frame lands on
+      // the first pass, so load the first project synchronously here.
+      let projects =
+        (env.Projects.List()) System.Threading.CancellationToken.None
+        |> fun work -> work.GetAwaiter().GetResult()
+
+      match projects with
+      | first :: _ ->
+        let details = ProjectDetails.create(env, first)
+        Some(details :> Cell), Some(fun () -> details.Snapshot())
+      | [] -> None, None
+    | "/preview/settings" ->
+      let projects =
+        (env.Projects.List()) System.Threading.CancellationToken.None
+        |> fun work -> work.GetAwaiter().GetResult()
+
+      match projects with
+      | first :: _ -> Some(ProjectSettingsPage.create(env, first)), None
+      | [] -> None, None
+    | _ -> None, None
+
+  let preview = fst previewPage
+  let previewStart = snd previewPage
 
   let outletFactory = fun () -> outlet :> Cell
 
@@ -189,45 +268,54 @@ let create(env: IAppEnv, navigator: GooNavigator, feedback: Cell) : ShellCell =
               Expanded = true,
               OnSelect = railSelect,
               BackgroundColor = palette.Panel,
-              SelectedBackgroundColor = palette.RowSelected,
+              SelectedBackgroundColor = palette.AccentSoft,
               HoverBackgroundColor = palette.Row,
-              TextColor = palette.Text,
-              SelectedTextColor = palette.Text
+              TextColor = palette.TextMuted,
+              SelectedTextColor = palette.Accent
             )
           )
 
-        // The old app's side menu: brand on top, destinations below,
-        // footer with the theme switch under the content.
+        // One quiet surface: brand, destinations, appearance switch. No
+        // dividers or footer credits competing with the content.
         let sidebar =
           Container(
             Key = "shell-sidebar",
             FlexDirection = FlexDirection.Column,
-            Width = 220,
+            Width = 216,
             MinHeight = 0,
             BackgroundColor = palette.Panel
           )
             .Children(
               Container(
                 Key = "shell-brand",
-                FlexDirection = FlexDirection.Column,
-                Gap = 2,
-                Padding = 12,
-                BorderWidth = topEdge 1.0,
-                BorderColor = palette.Border
+                FlexDirection = FlexDirection.Row,
+                AlignItems = AlignItems.Center,
+                Gap = 10,
+                Padding = 20
               )
                 .Children(
-                  Text(
-                    Key = "shell-title",
-                    Content = "Migrondi UI",
-                    FontSize = 16,
-                    Color = palette.Text
+                  Container(
+                    Width = 8.0,
+                    Height = 8.0,
+                    BorderRadius = 4.0,
+                    BackgroundColor = palette.Accent
                   ),
-                  Text(
-                    Key = "shell-caption",
-                    Content = "Migrations Management Tool",
-                    FontSize = 11,
-                    Color = palette.TextMuted
-                  )
+                  Container(FlexDirection = FlexDirection.Column, Gap = 2)
+                    .Children(
+                      Text(
+                        Key = "shell-title",
+                        Content = "Migrondi",
+                        FontSize = 15,
+                        Color = palette.Text,
+                        FontWeight = 600
+                      ),
+                      Text(
+                        Key = "shell-caption",
+                        Content = "Migration manager",
+                        FontSize = 11,
+                        Color = palette.TextMuted
+                      )
+                    )
                 ),
               Container(
                 Key = "shell-menu",
@@ -239,21 +327,10 @@ let create(env: IAppEnv, navigator: GooNavigator, feedback: Cell) : ShellCell =
               Container(
                 Key = "shell-sidebar-footer",
                 FlexDirection = FlexDirection.Column,
-                Gap = 8,
                 Padding = 12
               )
                 .Children(
-                  actionButton(
-                    palette,
-                    themeLabel,
-                    fun () -> this.ToggleTheme()
-                  ),
-                  Text(
-                    Key = "shell-footer",
-                    Content = "Powered by Migrondi",
-                    FontSize = 10,
-                    Color = palette.TextMuted
-                  )
+                  quietButton(palette, themeLabel, fun () -> this.ToggleTheme())
                 )
             )
 
@@ -274,10 +351,13 @@ let create(env: IAppEnv, navigator: GooNavigator, feedback: Cell) : ShellCell =
               MinWidth = 0,
               MinHeight = 0
             )
-              .Children(
-                Cell.Mount(outletFactory, "shell-outlet"),
+              .Children
+              [|
+                match preview with
+                | Some page -> Cell.Mount((fun () -> page), "preview-page")
+                | None -> Cell.Mount(outletFactory, "shell-outlet")
                 Cell.Mount(feedbackFactory, "feedback")
-              )
+              |]
           )
 
       override this.ToggleTheme() =
@@ -288,5 +368,7 @@ let create(env: IAppEnv, navigator: GooNavigator, feedback: Cell) : ShellCell =
         currentPage |> ValueOption.iter(fun cell -> cell.Rebuild())
         this.Rebuild()
 
-      override this.Start() = outlet.Start()
+      override this.Start() =
+        previewStart |> Option.iter(fun start -> start())
+        outlet.Start()
   }

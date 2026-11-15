@@ -2,6 +2,7 @@ module Migrondi.UI.Views.ProjectDetails
 
 open System
 open System.Collections.Generic
+open System.IO
 open System.Threading.Tasks
 
 open Goo
@@ -10,6 +11,7 @@ open Goo.Widgets.Content
 open Goo.Widgets.Feedback
 open Goo.Widgets.Inputs
 open Goo.Widgets.Layout
+open Goo.Widgets.Navigation
 open TextMateSharp.Grammars
 open TextMateSharp.Registry
 open FunGoo.Children
@@ -26,6 +28,7 @@ open MigrondiUI
 open MigrondiUI.Services
 open Migrondi.UI.Types
 open Migrondi.UI.Views.Common
+open Migrondi.UI.Views.MigrationEditor
 open Migrondi.UI.Views.ProjectSettings
 
 // Precomputed SQL styles for one migration, plus the migration and the
@@ -52,14 +55,14 @@ type CodeSection = {
 type DetailsState = {
   mutable Statuses: MigrationStatus array
   mutable Output: string
+  mutable DryPreview: (bool * Migration array) voption
   mutable Busy: bool
   mutable NewName: string
   mutable Selected: Migration voption
   mutable Spans: MigrationSpans voption
   mutable Editing: bool
-  mutable EditUp: string
-  mutable EditDown: string
-  mutable EditManualTransaction: bool
+  mutable Section: string
+  mutable NewOpen: bool
   mutable LimitSteps: bool
   mutable Step: float
 }
@@ -71,29 +74,22 @@ type DetailsEvent =
   | DryDown
   | Apply
   | Rollback
+  | Refresh
   | Create
-  | DeleteProject
+  | Settings
   | Show of Migration
   | ToggleEdit
-  | SaveEdit
-  | RemoveMigration
+  | ToggleNew
+  | SelectSection of string
 
-// Status chip colors that read on both appearances: saturated backgrounds
-// with a near-white foreground.
-let statusBadge(status: MigrationStatus) : Blob =
-  let label, background =
-    match status with
-    | Applied _ -> "Applied", Color.Rgb(35, 74, 52)
-    | Pending _ -> "Pending", Color.Rgb(89, 66, 35)
+// Status as a chip: the tone carries the meaning, the label confirms it.
+let statusChip(palette: Palette, status: MigrationStatus) : Blob =
+  match status with
+  | Applied _ -> chip(palette, Good, "Applied")
+  | Pending _ -> chip(palette, Warn, "Pending")
 
-  Badge(
-    Content = label,
-    BackgroundColor = Nullable background,
-    TextColor = Nullable(Color.Rgb(235, 240, 248))
-  )
-    .Build()
-
-// One row per migration, with its database status. Clicking selects it.
+// One row per migration. The left edge carries a status dot so scanning the
+// column answers "what is left" without reading each chip.
 let statusRow
   (
     palette: Palette,
@@ -106,17 +102,40 @@ let statusRow
     | Applied m -> m
     | Pending m -> m
 
+  let date =
+    DateTimeOffset.FromUnixTimeMilliseconds(migration.timestamp).ToString("G")
+
+  let caption =
+    if migration.manualTransaction then
+      $"{date} · manual"
+    else
+      date
+
+  let dot =
+    match status with
+    | Applied _ -> palette.Success
+    | Pending _ -> palette.Warning
+
+  let trailing =
+    Container(
+      Width = 8.0,
+      Height = 8.0,
+      BorderRadius = 4.0,
+      BackgroundColor = dot
+    )
+
   ListRow(
-    Title = migration.name,
-    Caption = $"timestamp {migration.timestamp}",
-    Trailing = statusBadge status,
+    Title = truncateMiddle 30 migration.name,
+    Caption = caption,
+    Trailing = trailing,
     OnClick = (fun _ -> onEvent(Show migration)),
     Selected = (selected = ValueSome migration),
     SelectedBackgroundColor = Nullable palette.RowSelected,
-    MinHeight = Nullable(lengthFromFloat 40.0),
-    PaddingVertical = Nullable 6.0
+    MinHeight = Nullable(lengthFromFloat 52.0),
+    PaddingVertical = Nullable 10.0
   )
-    .backgroundColor(palette.Row)
+    .backgroundColor(palette.Panel)
+    .hoverBackgroundColor(palette.Row)
     .textColor(palette.Text)
     .Build()
 
@@ -124,6 +143,7 @@ let statusRow
 let listed(state: DetailsState, found: MigrationStatus array) =
   state.Statuses <- found
   state.Busy <- false
+  state.DryPreview <- ValueNone
 
 // The right pane shows the latest result: an operation that reports into the
 // output pane releases the selected migration's code view, as the old app's
@@ -132,9 +152,12 @@ let paneReleased(state: DetailsState) =
   state.Selected <- ValueNone
   state.Spans <- ValueNone
 
-let shown(state: DetailsState, text: string) =
+let shown
+  (state: DetailsState, up: bool, preview: Migration array, summary: string)
+  =
   paneReleased state
-  state.Output <- text
+  state.DryPreview <- ValueSome(up, preview)
+  state.Output <- summary
   state.Busy <- false
 
 let applied
@@ -158,13 +181,9 @@ let selected(state: DetailsState, migration: Migration) =
   state.Selected <- ValueSome migration
   state.Spans <- ValueNone
 
-// Entering edit mode copies the pending migration's content into the draft
-// fields; leaving it keeps the stored content untouched.
-let editStarted(state: DetailsState, migration: Migration) =
-  state.Editing <- true
-  state.EditUp <- migration.upContent
-  state.EditDown <- migration.downContent
-  state.EditManualTransaction <- migration.manualTransaction
+// Entering edit mode just flips the flag: the editor cell the page mounts
+// copies the pending migration's content into its own draft fields.
+let editStarted(state: DetailsState) = state.Editing <- true
 
 let editEnded(state: DetailsState) = state.Editing <- false
 
@@ -189,8 +208,9 @@ let highlighted(state: DetailsState, spans: MigrationSpans) =
 
 let failed(state: DetailsState, context: string, ex: exn) =
   paneReleased state
-  state.Output <- $"{context} failed: {ex.Message}"
+  state.Output <- $"{context} failed ({ex.GetType().Name}): {ex.Message}"
   state.Busy <- false
+  state.DryPreview <- ValueNone
 
 // What an operation needs: the cell to rebuild, the marshaller to return
 // through, the state to write, the migration operations to drive, the SQL
@@ -253,29 +273,20 @@ let runDry(operations: Operations, up: bool) : unit =
             cancellationToken = ct
           )
 
-      let text =
-        preview
-        |> Seq.map(fun m ->
-          let content = if up then m.upContent else m.downContent
+      let items = preview |> Array.ofSeq
 
-          $"-- {m.timestamp}_{m.name}.sql\n{content}")
-        |> String.concat "\n\n"
-
-      let output =
-        if String.IsNullOrEmpty text then
+      let summary =
+        if Array.isEmpty items then
           $"{heading}: nothing"
         else
-          $"{heading}:\n{text}"
-
-      let toast =
-        match amount with
-        | Some limit ->
-          $"{heading} {min limit (Seq.length preview)} of {Seq.length preview} migrations"
-        | None -> $"{heading} {Seq.length preview} migrations"
+          match amount with
+          | Some limit ->
+            $"{heading} {min limit items.Length} of {items.Length} migrations"
+          | None -> $"{heading} {items.Length} migrations"
 
       operations.PostUI.Post(fun () ->
-        shown(operations.State, output)
-        operations.Feedback.Toast toast
+        shown(operations.State, up, items, summary)
+        operations.Feedback.Toast summary
         operations.Cell.Rebuild())
     with ex ->
       let context = if up then "Dry run up" else "Dry run down"
@@ -337,6 +348,39 @@ let run(operations: Operations, up: bool) : unit =
         failed(operations.State, context, ex)
         operations.Feedback.Toast $"{context} failed: {ex.Message}"
         operations.Cell.Rebuild())
+  }
+  |> Async.Start
+
+// Destructive runs ask first; the confirm continuation starts the run on
+// the UI thread.
+let confirmRun(operations: Operations, up: bool) : unit =
+  let target =
+    match stepAmount operations.State with
+    | Some count -> $"{count} migration(s)"
+    | None -> "all migrations"
+
+  let action = if up then "Apply" else "Rollback"
+
+  operations.Feedback.Confirm(
+    $"{action} {target}?",
+    action,
+    fun () -> run(operations, up)
+  )
+
+// Opens the local project's root folder in the OS file explorer.
+let openFolder(operations: Operations, project: LocalProject) : unit =
+  asyncEx {
+    match
+      project.migrondiConfigPath |> Path.GetDirectoryName |> Option.ofObj
+    with
+    | None -> operations.Feedback.Toast "Could not resolve the project folder"
+    | Some root ->
+      try
+        do! Migrondi.UI.OsOperations.OpenDirectory root
+      with ex ->
+        operations.PostUI.Post(fun () ->
+          operations.Feedback.Toast $"Open folder failed: {ex.Message}"
+          operations.Cell.Rebuild())
   }
   |> Async.Start
 
@@ -494,125 +538,142 @@ let tokenizeMigration(operations: Operations, migration: Migration) : unit =
 let showMigration(operations: Operations, migration: Migration) : unit =
   selected(operations.State, migration)
   tokenizeMigration(operations, migration)
-// Saves the draft over the selected pending migration. The engine refuses
-// applied migrations (AlreadyApplied); that DU case surfaces as a toast and
-// the edit state stays. A successful save reloads the list and re-selects
-// the migration so it tokenizes fresh.
-let saveMigrationEdit(operations: Operations) : unit =
+// The editor mount key: one stable key per migration, so each migration
+// keeps its own draft while it is selected again.
+let editorKey(migration: Migration) : string =
+  $"details-editor-{migration.timestamp}-{migration.name}"
+
+// The editor reports a saved draft: evict its cell, reload the list, drop
+// edit mode, and re-select the migration so it tokenizes fresh.
+let editorSaved
+  (
+    operations: Operations,
+    editors: Dictionary<string, MigrationEditorCell>,
+    updated: Migration
+  ) : unit =
+  asyncEx {
+    editors.Remove(editorKey updated) |> ignore
+
+    try
+      let! ct = Async.CancellationToken
+      let! found = operations.Ops.Core.MigrationsListAsync ct
+      let items = Array.ofSeq found
+
+      let fresh =
+        items
+        |> Array.tryPick(function
+          | Pending p when
+            p.name = updated.name || p.timestamp = updated.timestamp
+            ->
+            Some p
+          | _ -> None)
+
+      operations.PostUI.Post(fun () ->
+        listed(operations.State, items)
+        editEnded(operations.State)
+
+        match fresh with
+        | Some current -> selected(operations.State, current)
+        | None -> operations.State.Selected <- ValueNone
+
+        operations.Feedback.Toast $"Saved {updated.name}"
+        operations.Cell.Rebuild())
+
+      match fresh with
+      | Some current -> tokenizeMigration(operations, current)
+      | None -> ()
+    with ex ->
+      operations.PostUI.Post(fun () ->
+        failed(operations.State, "Reloading migrations", ex)
+        operations.Feedback.Toast $"Reload failed: {ex.Message}"
+        operations.Cell.Rebuild())
+  }
+  |> Async.StartImmediate
+
+// The editor reports a deletion: evict its cell, clear the selection,
+// reload the list, and rebuild the page.
+let editorDeleted
+  (operations: Operations, editors: Dictionary<string, MigrationEditorCell>)
+  : unit =
   asyncEx {
     match operations.State.Selected with
     | ValueNone -> ()
     | ValueSome current ->
-      let migration = {
-        current with
-            upContent = operations.State.EditUp
-            downContent = operations.State.EditDown
-            manualTransaction = operations.State.EditManualTransaction
-      }
-
-      operations.State.Busy <- true
+      editors.Remove(editorKey current) |> ignore
 
       try
         let! ct = Async.CancellationToken
-        let! result = operations.Ops.UpdateMigration migration
+        let! found = operations.Ops.Core.MigrationsListAsync ct
+        let items = Array.ofSeq found
 
-        match result with
-        | Ok() ->
-          let! found = operations.Ops.Core.MigrationsListAsync ct
-          let items = Array.ofSeq found
-
-          let fresh =
-            items
-            |> Array.tryPick(function
-              | Pending p when p.name = migration.name -> Some p
-              | _ -> None)
-
-          operations.PostUI.Post(fun () ->
-            listed(operations.State, items)
-            editEnded(operations.State)
-
-            match fresh with
-            | Some updated -> selected(operations.State, updated)
-            | None -> operations.State.Selected <- ValueNone
-
-            operations.Feedback.Toast $"Saved {migration.name}"
-            operations.Cell.Rebuild())
-
-          match fresh with
-          | Some updated -> tokenizeMigration(operations, updated)
-          | None -> ()
-        | Error(MigrationCrudError.AlreadyApplied name) ->
-          operations.PostUI.Post(fun () ->
-            operations.State.Busy <- false
-            operations.Feedback.Toast $"Cannot save {name}: already applied"
-            operations.Cell.Rebuild())
-        | Error(MigrationCrudError.NotFound name) ->
-          operations.PostUI.Post(fun () ->
-            operations.State.Busy <- false
-            operations.Feedback.Toast $"Cannot save {name}: not found"
-            operations.Cell.Rebuild())
-        | Error(MigrationCrudError.DatabaseError message) ->
-          operations.PostUI.Post(fun () ->
-            operations.State.Busy <- false
-            operations.Feedback.Toast $"Cannot save: {message}"
-            operations.Cell.Rebuild())
+        operations.PostUI.Post(fun () ->
+          operations.State.Selected <- ValueNone
+          operations.State.Spans <- ValueNone
+          editEnded(operations.State)
+          listed(operations.State, items)
+          operations.Feedback.Toast $"Deleted {current.name}"
+          operations.Cell.Rebuild())
       with ex ->
         operations.PostUI.Post(fun () ->
-          failed(operations.State, "Saving the migration", ex)
-          operations.Feedback.Toast $"Save failed: {ex.Message}"
+          failed(operations.State, "Reloading migrations", ex)
+          operations.Feedback.Toast $"Reload failed: {ex.Message}"
           operations.Cell.Rebuild())
   }
-  |> Async.Start
+  |> Async.StartImmediate
 
-// Deletes the selected pending migration after a confirmation; the
-// selection clears, the list reloads, and a toast reports the outcome.
-let removeMigration(operations: Operations) : unit =
+// The editor reports a cancelled edit: evict its draft and leave edit mode.
+// Runs on the UI thread, straight from the editor's outcome channel.
+let editorCancelled
+  (operations: Operations, editors: Dictionary<string, MigrationEditorCell>)
+  : unit =
   match operations.State.Selected with
+  | ValueSome current -> editors.Remove(editorKey current) |> ignore
   | ValueNone -> ()
-  | ValueSome current ->
-    operations.Feedback.Confirm(
-      $"Delete migration {current.name}?",
-      "Delete",
-      fun () ->
-        asyncEx {
-          try
-            let! ct = Async.CancellationToken
-            let! result = operations.Ops.DeleteMigration current.name
 
-            match result with
-            | Ok() ->
-              let! found = operations.Ops.Core.MigrationsListAsync ct
-              let items = Array.ofSeq found
+  editEnded(operations.State)
+  operations.Cell.Rebuild()
 
-              operations.PostUI.Post(fun () ->
-                operations.State.Selected <- ValueNone
-                operations.State.Spans <- ValueNone
-                editEnded(operations.State)
-                listed(operations.State, items)
-                operations.Feedback.Toast $"Deleted {current.name}"
-                operations.Cell.Rebuild())
-            | Error(MigrationCrudError.AlreadyApplied name) ->
-              operations.PostUI.Post(fun () ->
-                operations.Feedback.Toast
-                  $"Cannot delete {name}: already applied"
+// The outcome channel the mounted editors report through.
+let onEditorOutcome
+  (operations: Operations, editors: Dictionary<string, MigrationEditorCell>)
+  : EditorOutcome -> unit =
+  function
+  | Saved migration -> editorSaved(operations, editors, migration)
+  | Deleted -> editorDeleted(operations, editors)
+  | Cancelled -> editorCancelled(operations, editors)
 
-                operations.Cell.Rebuild())
-            | Error(MigrationCrudError.NotFound name) ->
-              operations.PostUI.Post(fun () ->
-                operations.Feedback.Toast $"Cannot delete {name}: not found"
-                operations.Cell.Rebuild())
-            | Error(MigrationCrudError.DatabaseError message) ->
-              operations.PostUI.Post(fun () ->
-                operations.Feedback.Toast $"Cannot delete: {message}"
-                operations.Cell.Rebuild())
-          with ex ->
-            operations.PostUI.Post(fun () ->
-              failed(operations.State, "Deleting the migration", ex)
-              operations.Feedback.Toast $"Delete failed: {ex.Message}"
-              operations.Cell.Rebuild())
-        }
-        |> Async.Start
-    )
+// Mounts the migration's editor cell: one retained instance per migration
+// under its stable key, so drafts survive parent rebuilds and theme flips
+// repaint through `SetDark`.
+let mountEditor
+  (
+    operations: Operations,
+    editors: Dictionary<string, MigrationEditorCell>,
+    migration: Migration
+  ) : Blob =
+  let key = editorKey migration
+
+  let editor =
+    match editors.TryGetValue key with
+    | true, existing -> existing
+    | false, _ ->
+      let args: EditorArgs = {
+        PostUI = operations.PostUI
+        Feedback = operations.Feedback
+        Ops = operations.Ops
+        Theme = operations.Theme
+        Migration = migration
+      }
+
+      let fresh =
+        MigrationEditor.create(args, onEditorOutcome(operations, editors))
+
+      editors[key] <- fresh
+      fresh
+
+  editor.SetDark operations.Theme.Dark
+
+  Cell.Mount(Func<Cell>(fun () -> editor :> Cell), key)
 
 
 /// A details page the shell starts: the abstract member keeps the cell an
@@ -624,93 +685,180 @@ type DetailsCell() =
   /// Creates the tracking table and kicks the first migration listing.
   abstract Start: unit -> unit
 
-// View pieces: plain functions over the palette and state, one event
-// callback each.
-let header(palette: Palette, project: Project) : Blob =
-  let title, caption =
+  /// Loads the migration list synchronously for a headless capture, which
+  /// renders before the posted listing lands.
+  abstract Snapshot: unit -> unit
+
+// The page header: identity on the left, the run actions on the right.
+// Project settings live on their own screen, reached from here.
+let header
+  (
+    palette: Palette,
+    state: DetailsState,
+    project: Project,
+    onStepChange: Action<float>,
+    onEvent: DetailsEvent -> unit
+  ) : Blob =
+  let pending =
+    state.Statuses
+    |> Array.sumBy(function
+      | Pending _ -> 1
+      | Applied _ -> 0)
+
+  let applied =
+    state.Statuses
+    |> Array.sumBy(function
+      | Applied _ -> 1
+      | Pending _ -> 0)
+
+  let title, path, kind, tone =
     match project with
-    | Local p -> p.name, p.migrondiConfigPath
-    | Virtual p -> p.name, p.connection
+    | Local p -> p.name, p.migrondiConfigPath, "Local", Info
+    | Virtual p -> p.name, p.connection, "Virtual", Neutral
 
-  Container(
-    Key = "details-header",
-    FlexDirection = FlexDirection.Column,
-    Gap = 2
+  let subtitle = $"{kind} · {pending} pending · {applied} applied"
+
+  pageHeader(
+    palette,
+    title,
+    subtitle,
+    [|
+      primaryButton(
+        palette,
+        $"Apply {pending}",
+        state.Busy || pending = 0,
+        fun () -> onEvent Apply
+      )
+      dangerButton(
+        palette,
+        $"Roll back {applied}",
+        state.Busy || applied = 0,
+        (fun () -> onEvent Rollback)
+      )
+    |]
   )
-    .Children(
-      Text(Content = title, FontSize = 20, Color = palette.Text),
-      Text(Content = caption, FontSize = 12, Color = palette.TextMuted)
-    )
 
-let toolbar
+// The run bar: previews and the step bound on the left, project-level
+// controls on the right. Keeping it out of the header is what lets the
+// header stay one line at the default window size.
+let runBar
   (
     palette: Palette,
     state: DetailsState,
     onStepChange: Action<float>,
     onEvent: DetailsEvent -> unit
   ) : Blob =
-  // The limit toggle and the step count default to all migrations; the
-  // number input only feeds the engine while the toggle is on.
   Container(
-    Key = "details-toolbar",
+    Key = "details-run-bar",
     FlexDirection = FlexDirection.Row,
     Gap = 8,
     AlignItems = AlignItems.Center
   )
     .Children(
-      actionButton(palette, "Dry Up", fun () -> onEvent DryUp),
-      actionButton(palette, "Dry Down", fun () -> onEvent DryDown),
-      actionButton(palette, "Apply", fun () -> onEvent Apply),
-      actionButton(palette, "Rollback", fun () -> onEvent Rollback),
+      sizedButton(
+        palette,
+        "Dry run up",
+        108.0,
+        state.Busy,
+        fun () -> onEvent DryUp
+      ),
+      sizedButton(
+        palette,
+        "Dry run down",
+        124.0,
+        state.Busy,
+        fun () -> onEvent DryDown
+      ),
       ToggleSwitch(
         Value = state.LimitSteps,
         AccessibilityName = "Limit migrations",
         OnChange = fun limit -> state.LimitSteps <- limit
       )
         .Build(),
-      Text(Content = "Limit", FontSize = 12, Color = palette.TextMuted),
-      Cell.Mount<NumberInputInput, NumberInput>(
-        "details-step",
-        NumberInputInput(
-          Value = state.Step,
-          Minimum = Nullable 1.0,
-          Step = Nullable 1.0,
-          ShowSpinButtons = Nullable true,
-          Disabled = not state.LimitSteps,
-          Width = Nullable(lengthFromFloat 110.0),
-          AccessibilityName = "Migration count",
-          OnChange = onStepChange,
-          OnCommit = onStepChange
-        )
-      ),
+      Container(Width = 76.0)
+        .Children(
+          Cell.Mount<NumberInputInput, NumberInput>(
+            "details-step",
+            NumberInputInput(
+              Value = state.Step,
+              Minimum = Nullable 1.0,
+              Step = Nullable 1.0,
+              ShowSpinButtons = Nullable false,
+              Disabled = not state.LimitSteps,
+              Width = Nullable(lengthFromFloat 76.0),
+              AccessibilityName = "Migration count",
+              OnChange = onStepChange,
+              OnCommit = onStepChange
+            )
+          )
+        ),
       Text(
-        Content = (if state.Busy then "Working..." else ""),
+        Content = (if state.Busy then "Working…" else ""),
         FontSize = 12,
         Color = palette.TextMuted,
         FlexGrow = 1.0
-      )
+      ),
+      actionButton(palette, "Refresh", fun () -> onEvent Refresh),
+      actionButton(palette, "Settings", fun () -> onEvent Settings)
     )
 
-let newMigrationBar
-  (palette: Palette, state: DetailsState, onEvent: DetailsEvent -> unit)
-  : Blob =
-  Container(
-    Key = "details-new",
-    FlexDirection = FlexDirection.Row,
-    Gap = 8,
-    AlignItems = AlignItems.Center
-  )
-    .Children(
-      Container(FlexGrow = 1.0, MinWidth = 0)
+// The list header owns creating a migration: the input only exists while
+// the user is adding one, so the list keeps the width.
+let listHeader
+  (
+    palette: Palette,
+    state: DetailsState,
+    nameField: TextFieldCell,
+    onEvent: DetailsEvent -> unit
+  ) : Blob =
+  let title =
+    Text(
+      Content = $"Migrations · {state.Statuses.Length}",
+      FontSize = 12,
+      Color = palette.TextMuted,
+      FontWeight = 600,
+      FlexGrow = 1.0
+    )
+
+  let newRow =
+    if state.NewOpen then
+      Container(FlexDirection = FlexDirection.Column, Gap = 8)
         .Children(
-          TextField(
-            Placeholder = "new migration name",
-            Value = state.NewName,
-            OnChange = fun value -> state.NewName <- value
+          mountField("details-new-name", nameField, state.NewName),
+          Container(FlexDirection = FlexDirection.Row, Gap = 8)
+            .Children(
+              Container(FlexGrow = 1.0)
+                .Children(
+                  primaryButton(
+                    palette,
+                    "Create",
+                    state.Busy,
+                    fun () -> onEvent Create
+                  )
+                ),
+              actionButton(palette, "Cancel", fun () -> onEvent ToggleNew)
+            )
+        )
+    else
+      Container(Height = 0.0)
+
+  Container(FlexDirection = FlexDirection.Column, Gap = 10)
+    .Children(
+      Container(
+        FlexDirection = FlexDirection.Row,
+        Gap = 8,
+        AlignItems = AlignItems.Center
+      )
+        .Children(
+          title,
+          actionButtonDisabled(
+            palette,
+            "+ New",
+            state.Busy,
+            (fun () -> onEvent ToggleNew)
           )
-            .Build()
         ),
-      actionButton(palette, "New migration", fun () -> onEvent Create)
+      newRow
     )
 
 let migrationRows
@@ -730,31 +878,16 @@ let migrationRows
     |> Array.map(fun status ->
       statusRow(palette, status, state.Selected, onEvent))
 
-let outputPane(palette: Palette, state: DetailsState) : Blob =
-  Container(
-    FlexGrow = 1.0,
-    FlexShrink = 1.0,
-    MinWidth = 0,
-    Padding = 12,
-    BackgroundColor = palette.Panel,
-    BorderRadius = 8,
-    BorderWidth = edgesFromFloat 1.0,
-    BorderColor = palette.Border
-  )
-    .Children(
-      scrollColumn(
-        palette,
-        "details-output",
-        [|
-          Text(
-            Key = "details-output-text",
-            Content = state.Output,
-            FontSize = 13,
-            Color = palette.Text
-          )
-        |]
-      )
-    )
+// One dry-run section as the preview pane shows it: the direction's
+// content, wrapped in the transaction markers the engine would emit unless
+// the migration opts out with manualTransaction.
+let dryContent(up: bool, migration: Migration) : string =
+  let content = if up then migration.upContent else migration.downContent
+
+  if migration.manualTransaction then
+    content
+  else
+    $"-- ----------START TRANSACTION----------\n{content}\n-- ----------COMMIT TRANSACTION----------"
 
 // One mounted CodeBlock per section. The spans reference stays put while
 // the content is unchanged, so the widget never re-highlights; omitting it
@@ -767,27 +900,80 @@ let codePane(section: CodeSection) : Blob =
         Code = section.Content,
         Language = section.Label,
         StyleSpans = spans,
-        ShowLineNumbers = true
+        ShowLineNumbers = true,
+        Width = Nullable(percent 100.0)
       )
     | ValueNone ->
       CodeBlockInput(
         Code = section.Content,
         Language = section.Label,
-        ShowLineNumbers = true
+        ShowLineNumbers = true,
+        Width = Nullable(percent 100.0)
       )
 
   Cell.Mount<CodeBlockInput, CodeBlock>(section.Key, input)
 
-// The right pane: the selected migration's up and down sections once one
-// is selected, otherwise the dry-run output as before. Spans painted for
-// another palette are ignored, so a theme switch shows plain content until
-// the migration is selected again.
+// The right pane: the dry-run result while there is one, otherwise nothing
+// until a migration is selected. A stale "no operation" line is noise, so
+// an idle pane explains what to do instead.
+let outputPane(palette: Palette, state: DetailsState) : Blob =
+  let preview: Blob array =
+    match state.DryPreview with
+    | ValueSome(up, migrations) ->
+      migrations
+      |> Array.map(fun migration ->
+        codePane {
+          Key = $"details-dry-{migration.timestamp}-{migration.name}"
+          Label = (if up then "up · SQL" else "down · SQL")
+          Content = dryContent(up, migration)
+          Spans = ValueNone
+        })
+    | ValueNone -> [||]
+
+  let content: Blob array =
+    if String.IsNullOrWhiteSpace state.Output && Array.isEmpty preview then
+      [|
+        EmptyState(
+          Title = "Nothing selected",
+          Description =
+            "Pick a migration to read its SQL, or preview a run to see what would happen",
+          MinHeight = Nullable(lengthFromFloat 200.0)
+        )
+          .Build()
+      |]
+    else
+      [|
+        if String.IsNullOrWhiteSpace state.Output then
+          Container(Height = 0.0)
+        else
+          Text(
+            Key = "details-output-text",
+            Content = state.Output,
+            FontSize = 13,
+            Color = palette.Text
+          )
+          :> Blob
+        yield! preview
+      |]
+
+  Container(
+    FlexDirection = FlexDirection.Column,
+    FlexGrow = 1.0,
+    FlexShrink = 1.0,
+    MinWidth = 0,
+    Gap = 12,
+    Padding = 16
+  )
+    .Children(scrollColumn(palette, "details-output", content))
+
+// The right pane: the selected migration as an Up/Down tab pair, one code
+// block at a time instead of two stacked walls of SQL. Editing mounts the
+// editor cell; a theme switch shows plain content until spans repaint.
 let migrationPane
   (
     palette: Palette,
     state: DetailsState,
-    onEditUp: Action<string>,
-    onEditDown: Action<string>,
+    mountEditor: Migration -> Blob,
     onEvent: DetailsEvent -> unit
   ) : Blob =
   match state.Selected with
@@ -801,92 +987,65 @@ let migrationPane
 
     let pending = selectedIsPending state
     let editing = pending && state.Editing
+    let showUp = state.Section <> "down"
 
-    // While editing a pending migration the sections are controlled
-    // TextAreas; otherwise they are the highlighted read-only panes.
     let sections: Blob array =
       if editing then
-        [|
-          Container(FlexDirection = FlexDirection.Row, Gap = 8)
-            .Children(
-              ToggleSwitch(
-                Value = state.EditManualTransaction,
-                AccessibilityName = "Manual transaction",
-                OnChange = fun value -> state.EditManualTransaction <- value
-              )
-                .Build(),
-              Text(
-                Content = "Manual transaction",
-                FontSize = 12,
-                Color = palette.TextMuted,
-                FlexGrow = 1.0
-              ),
-              actionButton(palette, "Save", fun () -> onEvent SaveEdit),
-              actionButton(palette, "Done", fun () -> onEvent ToggleEdit)
-            )
-          Cell.Mount<TextAreaInput, TextArea>(
-            "details-edit-up",
-            TextAreaInput(
-              Value = state.EditUp,
-              Label = "Migrate up",
-              OnChange = onEditUp,
-              Height = Nullable(lengthFromFloat 200.0),
-              BackgroundColor = Nullable palette.Panel,
-              TextColor = Nullable palette.Text
-            )
-          )
-          Cell.Mount<TextAreaInput, TextArea>(
-            "details-edit-down",
-            TextAreaInput(
-              Value = state.EditDown,
-              Label = "Migrate down",
-              OnChange = onEditDown,
-              Height = Nullable(lengthFromFloat 200.0),
-              BackgroundColor = Nullable palette.Panel,
-              TextColor = Nullable palette.Text
-            )
-          )
-        |]
+        [| mountEditor migration |]
       else
-        let actions: Blob array =
-          if pending then
-            [|
-              actionButton(palette, "Edit", fun () -> onEvent ToggleEdit)
-
-              actionButton(palette, "Delete", fun () -> onEvent RemoveMigration)
-            |]
-          else
-            [||]
-
-        let hint =
-          Text(
-            Content =
-              (if pending then "This migration is still pending" else ""),
-            FontSize = 12,
-            Color = palette.TextMuted,
-            FlexGrow = 1.0
+        let tabs =
+          Cell.Mount<TabBarInput, TabBar>(
+            "details-sections",
+            TabBarInput(
+              Items = [|
+                NavigationItem(Id = "up", Label = "Migrate up")
+                NavigationItem(Id = "down", Label = "Migrate down")
+              |],
+              SelectedId = state.Section,
+              OnSelect = fun id -> onEvent(SelectSection id)
+            )
           )
-          :> Blob
 
-        let row =
-          Container(FlexDirection = FlexDirection.Row, Gap = 8).Children [|
-            hint
-            yield! actions
-          |]
+        let headerRow =
+          Container(
+            FlexDirection = FlexDirection.Row,
+            Gap = 10,
+            AlignItems = AlignItems.Center
+          )
+            .Children
+            [|
+              Text(
+                Content = truncateMiddle 44 migration.name,
+                FontSize = 16,
+                Color = palette.Text,
+                FontWeight = 600,
+                FlexGrow = 1.0
+              )
+              :> Blob
+              statusChip(
+                palette,
+                (if pending then Pending migration else Applied migration)
+              )
+              if pending then
+                actionButton(palette, "Edit", fun () -> onEvent ToggleEdit)
+            |]
 
         [|
-          row
+          headerRow
+          tabs
           codePane {
-            Key = "details-content-up"
-            Label = "up · SQL"
-            Content = migration.upContent
-            Spans = upSpans
-          }
-          codePane {
-            Key = "details-content-down"
-            Label = "down · SQL"
-            Content = migration.downContent
-            Spans = downSpans
+            Key =
+              if showUp then
+                "details-content-up"
+              else
+                "details-content-down"
+            Label = (if showUp then "up · SQL" else "down · SQL")
+            Content =
+              (if showUp then
+                 migration.upContent
+               else
+                 migration.downContent)
+            Spans = (if showUp then upSpans else downSpans)
           }
         |]
 
@@ -895,11 +1054,7 @@ let migrationPane
       FlexGrow = 1.0,
       FlexShrink = 1.0,
       MinWidth = 0,
-      Padding = 12,
-      BackgroundColor = palette.Panel,
-      BorderRadius = 8,
-      BorderWidth = edgesFromFloat 1.0,
-      BorderColor = palette.Border
+      Padding = 16
     )
       .Children(scrollColumn(palette, "details-content-scroll", sections))
 
@@ -907,56 +1062,59 @@ let body
   (
     palette: Palette,
     state: DetailsState,
-    onEditUp: Action<string>,
-    onEditDown: Action<string>,
+    nameField: TextFieldCell,
+    mountEditor: Migration -> Blob,
     onEvent: DetailsEvent -> unit
   ) : Blob =
+  let list =
+    Container(
+      FlexDirection = FlexDirection.Column,
+      Gap = 12,
+      Width = 340.0,
+      MinWidth = 280.0
+    )
+      .Children(
+        listHeader(palette, state, nameField, onEvent),
+        scrollColumn(
+          palette,
+          "details-migrations",
+          migrationRows(palette, state, onEvent)
+        )
+      )
+
   Container(
     Key = "details-body",
     FlexDirection = FlexDirection.Row,
-    Gap = 12,
+    Gap = 16,
     FlexGrow = 1.0,
     FlexShrink = 1.0,
     MinHeight = 0
   )
-    .Children(
-      Container(FlexGrow = 1.0, FlexShrink = 1.0, MinWidth = 0)
-        .Children(
-          scrollColumn(
-            palette,
-            "details-migrations",
-            migrationRows(palette, state, onEvent)
-          )
-        ),
-      migrationPane(palette, state, onEditUp, onEditDown, onEvent)
-    )
+    .Children(list, migrationPane(palette, state, mountEditor, onEvent))
 
 let page
   (
     palette: Palette,
     state: DetailsState,
     project: Project,
-    management: Blob,
+    nameField: TextFieldCell,
     onStepChange: Action<float>,
-    onEditUp: Action<string>,
-    onEditDown: Action<string>,
+    mountEditor: Migration -> Blob,
     onEvent: DetailsEvent -> unit
   ) : Blob =
   Container(
     Key = "project-details",
     FlexDirection = FlexDirection.Column,
-    Gap = 12,
-    Padding = 12,
+    Gap = 20,
+    Padding = 24,
     Width = percent 100.0,
     Height = percent 100.0,
     BackgroundColor = palette.Canvas
   )
     .Children(
-      header(palette, project),
-      toolbar(palette, state, onStepChange, onEvent),
-      newMigrationBar(palette, state, onEvent),
-      management,
-      body(palette, state, onEditUp, onEditDown, onEvent)
+      header(palette, state, project, onStepChange, onEvent),
+      runBar(palette, state, onStepChange, onEvent),
+      body(palette, state, nameField, mountEditor, onEvent)
     )
 
 // The details page owns its slice of app state (state ladder tier 2).
@@ -972,15 +1130,15 @@ let create<'env
   : DetailsCell =
   let state = {
     Statuses = Array.empty
-    Output = "No operation run yet"
+    Output = ""
+    DryPreview = ValueNone
     Busy = false
     NewName = ""
     Selected = ValueNone
     Spans = ValueNone
     Editing = false
-    EditUp = ""
-    EditDown = ""
-    EditManualTransaction = false
+    Section = "up"
+    NewOpen = false
     LimitSteps = false
     Step = 1.0
   }
@@ -994,11 +1152,17 @@ let create<'env
   let sql: IGrammar =
     Registry(options).LoadGrammar(options.GetScopeByExtension(".sql"))
 
-  // Created once at cell birth: the mounted TextArea and NumberInput inputs
-  // carry the same delegate instances on every Build.
-  let onEditUp = fun value -> state.EditUp <- value
-  let onEditDown = fun value -> state.EditDown <- value
-  let onStepChange = fun value -> state.Step <- value
+  // Created once at cell birth: the mounted fields carry their own drafts,
+  // so typing never repaints the page, and the NumberInput input carries
+  // the same delegate instance on every Build.
+  let onStepChange = Action<float>(fun value -> state.Step <- value)
+
+  let nameField =
+    textField("new migration name", "", fun value -> state.NewName <- value)
+
+  // One retained editor cell per migration, so drafts survive parent
+  // rebuilds; evicted when the migration is saved, deleted, or discarded.
+  let editors = Dictionary<string, MigrationEditorCell>()
 
   let operations(this: Cell) : Operations = {
     Cell = this
@@ -1010,12 +1174,12 @@ let create<'env
     Feedback = env.Feedback
   }
 
-  // Created once, beside the cell it mounts: the settings section keeps its
-  // form state across rebuilds and feeds on `SetDark` for theme flips.
-  let settings =
+  // Created once, beside the cell it mounts: the settings screen owns its
+  // own state; this page only navigates there.
+  let settingsUrl =
     match project with
-    | Virtual vp -> ValueSome(ProjectSettingsCell(env, vp))
-    | Local _ -> ValueNone
+    | Local p -> Routes.localSettingsUrl p.id
+    | Virtual p -> Routes.virtualSettingsUrl p.id
 
   {
     new DetailsCell() with
@@ -1023,6 +1187,11 @@ let create<'env
         // The tracking table exists before the first listing.
         ops.Core.Initialize()
         reload(operations this)
+
+      override this.Snapshot() =
+        ops.Core.Initialize()
+        listed(state, Array.ofSeq(ops.Core.MigrationsList()))
+        this.Rebuild()
 
       override this.Build() : Blob =
         let dark = env.Theme.Store.Dark
@@ -1033,57 +1202,33 @@ let create<'env
           | Back -> Navigation.go(env.Navigator, "/")
           | DryUp -> runDry(operations this, true)
           | DryDown -> runDry(operations this, false)
-          | Apply -> run(operations this, true)
-          | Rollback -> run(operations this, false)
+          | Apply -> confirmRun(operations this, true)
+          | Rollback -> confirmRun(operations this, false)
+          | Refresh -> reload(operations this)
           | Create -> createMigration(operations this)
-          | DeleteProject -> ProjectSettings.deleteProject(this, env, project)
-          | Show migration -> showMigration(operations this, migration)
+          | Settings -> Navigation.go(env.Navigator, settingsUrl)
+          | Show migration ->
+            selected(state, migration)
+            tokenizeMigration(operations this, migration)
           | ToggleEdit ->
-            match state.Selected with
-            | ValueSome migration when selectedIsPending state ->
-              if state.Editing then
-                editEnded state
-              else
-                editStarted(state, migration)
-            | _ -> ()
-          | SaveEdit -> saveMigrationEdit(operations this)
-          | RemoveMigration -> removeMigration(operations this)
+            state.Selected
+            |> ValueOption.filter(fun _ -> selectedIsPending state)
+            |> ValueOption.iter(fun _ ->
+              if state.Editing then editEnded state else editStarted state)
+          | ToggleNew ->
+            state.NewOpen <- not state.NewOpen
+            this.Rebuild()
+          | SelectSection id ->
+            state.Section <- id
+            this.Rebuild()
 
-        // Virtual projects manage themselves through the mounted settings
-        // section; local projects carry only the soft-delete action.
-        let management: Blob =
-          match settings with
-          | ValueSome section ->
-            section.SetDark dark
-
-            Cell.Mount(
-              Func<Cell>(fun () -> section :> Cell),
-              "project-settings"
-            )
-          | ValueNone ->
-            actionButton(
-              palette,
-              "Delete project",
-              fun () -> onEvent DeleteProject
-            )
-
-        Container(
-          Key = "project-details-root",
-          FlexDirection = FlexDirection.Column,
-          FlexGrow = 1.0,
-          MinHeight = 0
+        page(
+          palette,
+          state,
+          project,
+          nameField,
+          onStepChange,
+          (fun migration -> mountEditor(operations this, editors, migration)),
+          onEvent
         )
-          .Children(
-            actionButton(palette, "< Back", fun () -> onEvent Back),
-            page(
-              palette,
-              state,
-              project,
-              management,
-              onStepChange,
-              onEditUp,
-              onEditDown,
-              onEvent
-            )
-          )
   }

@@ -21,7 +21,9 @@
     <Compile Include="Host.fs" />
     <Compile Include="Feedback.fs" />
     <Compile Include="Views/Common.fs" />
+    <Compile Include="Views/MigrationEditor.fs" />
     <Compile Include="Views/ProjectSettings.fs" />
+    <Compile Include="Views/ProjectSettingsPage.fs" />
     <Compile Include="Views/Landing.fs" />
     <Compile Include="Views/ProjectDetails.fs" />
     <Compile Include="Views/NewProject.fs" />

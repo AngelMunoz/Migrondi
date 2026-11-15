@@ -10,7 +10,7 @@
 - **Migrondi:** `list` accepts `--pending`/`--applied`, `--limit`/`--last`, `--search <text>`, and `--show-path`/`--show-content` to filter and inspect migrations without scanning the migrations folder by hand.
 - **Migrondi:** `up` and `down` accept `--to <name>` to apply up to, or roll back to, a named migration (name, filename, or timestamp) instead of counting migrations; the positional amount stays optional and cannot be combined with `--to`.
 - **Project:** Added `migrondi-cli` and `migrondi-library` agent skills under `.agents/skills`, covering CLI usage for agents and `Migrondi.Core` embedding patterns such as custom migration sources.
-- **Migrondi.UI:** The desktop app ships on the Goo rendering stack: projects list and management, virtual projects, migration apply/rollback/dry-run with step counts, a highlighted migration view with pending-migration editing, Navs routing, an OS-following dark/light theme, and an HTTP MCP host mode.
+- **Migrondi.UI:** The desktop app ships on the Goo rendering stack: projects list and management, virtual projects, migration apply/rollback/dry-run with step counts, a highlighted migration view with pending-migration editing, Navs routing, an OS-following dark/light theme, and an HTTP MCP host mode. The shell, project list, new-project flow, and project screen share one design system (palette tiers, button hierarchy, chips, page headers): runs are the only primary actions and ask before applying or rolling back, previews and step limits sit beside them, and each screen names its single next step.
 
 ### Changed
 
@@ -40,6 +40,7 @@
 - **Migrondi:** `status` now returns a non-zero exit code when no migration matches the given name, instead of reporting `NotFound` with a success exit code.
 - **Project:** Addressed the high-severity `SQLitePCLRaw.lib.e_sqlite3` vulnerability (GHSA-2m69-gcr7-jv3q) by overriding `SQLitePCLRaw.bundle_e_sqlite3` to `3.0.5` in central package management.
 - **Project:** Addressed the high-severity `System.Security.Cryptography.Pkcs` vulnerabilities (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7) that Microsoft.Data.SqlClient pulled in, by overriding that package to `10.0.14` in central package management. No project reports a vulnerable package now.
+- **Migrondi.UI:** Local migration save, delete, and lookup now resolve the configured migrations directory and locate files by decoded content (falling back to the filename), instead of globbing the project root by name — pending local migrations always save instead of reporting `NotFound`. Saving a timestamped file also normalizes its `NAME` to the friendly name.
 
 ## [1.3.0] - 2026-06-27
 

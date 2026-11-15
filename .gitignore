@@ -370,3 +370,5 @@ dist/
 samples/scripts/migrations/
 .zcode
 temp-sample
+# Goo devtools runtime (descriptors, inspector state)
+src/Migrondi.UI/.goo/

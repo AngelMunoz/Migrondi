@@ -151,20 +151,27 @@ let exportProject<'env
   }
   |> Async.StartImmediate
 
-// The collapsible management section for virtual projects. A class because
-// outside code must reach it: the details page keeps the instance, feeds it
-// the appearance through `SetDark`, and mounts it under one stable key, so
-// the form state survives theme flips.
-type ProjectSettingsCell<'env
+// A settings section the details page mounts: the abstract member keeps the
+// cell an object expression while the page feeds the appearance through
+// `SetDark` and the form state survives theme flips.
+[<AbstractClass>]
+type ProjectSettingsCell() =
+  inherit Cell()
+
+  /// Repaints the section for the appearance; the form state survives.
+  abstract SetDark: bool -> unit
+
+// The collapsible management section for virtual projects. The fields own
+// their drafts, so typing a connection string never repaints the section.
+let create<'env
   when 'env :> IProvideProjects
   and 'env :> IProvidePostUI
   and 'env :> IProvideTheme
   and 'env :> IProvideFeedback
   and 'env :> IProvideFilePicker
-  and 'env :> IProvideNavigator>(env: 'env, project: VirtualProject) =
-
-  inherit Cell()
-
+  and 'env :> IProvideNavigator>
+  (env: 'env, project: VirtualProject)
+  : ProjectSettingsCell =
   let state = {
     Name = project.name
     Description = project.description |> Option.defaultValue ""
@@ -181,102 +188,121 @@ type ProjectSettingsCell<'env
   let mutable dark = env.Theme.Store.Dark
 
   // Created once at cell birth: the mounted driver picker input carries the
-  // same delegate instance on every Build.
+  // same delegate instance on every Build, and the fields keep their drafts.
   let onDriverSelect = fun id -> state.Driver <- id
 
-  member this.SetDark(next: bool) =
-    if dark <> next then
-      dark <- next
-      this.Rebuild()
+  let nameField =
+    textField("Project name", state.Name, fun value -> state.Name <- value)
 
-  override this.Build() : Blob =
-    let palette = Palette.forTheme dark
-
-    let onEvent =
-      function
-      | Save -> saveSettings(this, env, state, project)
-      | Delete -> deleteProject(this, env, Virtual project)
-      | Export -> exportProject(this, env, project)
-
-    let form =
-      Container(
-        Key = "project-settings-form",
-        FlexDirection = FlexDirection.Column,
-        Gap = 8,
-        Padding = 12,
-        BackgroundColor = palette.Panel,
-        BorderRadius = 8,
-        BorderWidth = edgesFromFloat 1.0,
-        BorderColor = palette.Border
-      )
-        .Children(
-          Container(FlexDirection = FlexDirection.Row, Gap = 8)
-            .Children(
-              Container(FlexGrow = 1.0, MinWidth = 0)
-                .Children(
-                  TextField(
-                    Placeholder = "Project name",
-                    Value = state.Name,
-                    OnChange = fun value -> state.Name <- value
-                  )
-                    .Build()
-                ),
-              actionButton(palette, "Save", fun () -> onEvent Save)
-            ),
-          TextField(
-            Placeholder = "Description (optional)",
-            Value = state.Description,
-            OnChange = fun value -> state.Description <- value
-          )
-            .Build(),
-          TextField(
-            Placeholder = "Connection string",
-            Value = state.Connection,
-            OnChange = fun value -> state.Connection <- value
-          )
-            .Build(),
-          TextField(
-            Placeholder = "Table name",
-            Value = state.TableName,
-            OnChange = fun value -> state.TableName <- value
-          )
-            .Build(),
-          Cell.Mount<ComboBoxInput, ComboBox>(
-            "project-settings-driver",
-            ComboBoxInput(
-              Items = [|
-                ComboBoxOption(Id = "sqlite", Label = "sqlite")
-                ComboBoxOption(Id = "mssql", Label = "mssql (SQL Server)")
-                ComboBoxOption(Id = "postgresql", Label = "postgresql")
-                ComboBoxOption(Id = "mysql", Label = "mysql")
-              |],
-              SelectedId = state.Driver,
-              OnSelect = onDriverSelect
-            )
-          ),
-          Container(FlexDirection = FlexDirection.Row, Gap = 8)
-            .Children(
-              Text(
-                Content = state.Notice,
-                FontSize = 12,
-                Color = palette.TextMuted,
-                FlexGrow = 1.0
-              ),
-              actionButton(palette, "Export...", fun () -> onEvent Export),
-              actionButton(palette, "Delete project", fun () -> onEvent Delete)
-            )
-        )
-
-    let content = form :> Blob
-
-    Disclosure(
-      Label = "Project settings",
-      Expanded = state.Expanded,
-      OnExpandedChange = (fun expanded -> state.Expanded <- expanded),
-      BackgroundColor = Nullable palette.Row,
-      TextColor = Nullable palette.Text,
-      BorderColor = Nullable palette.Border,
-      ContentPadding = Nullable 0.0,
-      Content = content
+  let descriptionField =
+    textField(
+      "Description (optional)",
+      state.Description,
+      fun value -> state.Description <- value
     )
-      .Build()
+
+  let connectionField =
+    textField(
+      "Connection string",
+      state.Connection,
+      fun value -> state.Connection <- value
+    )
+
+  let tableField =
+    textField(
+      "Table name",
+      state.TableName,
+      fun value -> state.TableName <- value
+    )
+
+  {
+    new ProjectSettingsCell() with
+      override this.SetDark(next: bool) =
+        if dark <> next then
+          dark <- next
+          this.Rebuild()
+
+      override this.Build() : Blob =
+        let palette = Palette.forTheme dark
+
+        let onEvent =
+          function
+          | Save -> saveSettings(this, env, state, project)
+          | Delete -> deleteProject(this, env, Virtual project)
+          | Export -> exportProject(this, env, project)
+
+        let form =
+          Container(
+            Key = "project-settings-form",
+            FlexDirection = FlexDirection.Column,
+            Gap = 8,
+            Padding = 12,
+            BackgroundColor = palette.Panel,
+            BorderRadius = 8,
+            BorderWidth = edgesFromFloat 1.0,
+            BorderColor = palette.Border
+          )
+            .Children(
+              Container(FlexDirection = FlexDirection.Row, Gap = 8)
+                .Children(
+                  Container(FlexGrow = 1.0, MinWidth = 0)
+                    .Children(
+                      mountField("settings-name", nameField, state.Name)
+                    ),
+                  actionButton(palette, "Save", fun () -> onEvent Save)
+                ),
+              mountField(
+                "settings-description",
+                descriptionField,
+                state.Description
+              ),
+              mountField(
+                "settings-connection",
+                connectionField,
+                state.Connection
+              ),
+              mountField("settings-table", tableField, state.TableName),
+              Cell.Mount<ComboBoxInput, ComboBox>(
+                "project-settings-driver",
+                ComboBoxInput(
+                  Items = [|
+                    ComboBoxOption(Id = "sqlite", Label = "sqlite")
+                    ComboBoxOption(Id = "mssql", Label = "mssql (SQL Server)")
+                    ComboBoxOption(Id = "postgresql", Label = "postgresql")
+                    ComboBoxOption(Id = "mysql", Label = "mysql")
+                  |],
+                  SelectedId = state.Driver,
+                  OnSelect = onDriverSelect
+                )
+              ),
+              Container(FlexDirection = FlexDirection.Row, Gap = 8)
+                .Children(
+                  Text(
+                    Content = state.Notice,
+                    FontSize = 12,
+                    Color = palette.TextMuted,
+                    FlexGrow = 1.0
+                  ),
+                  actionButton(palette, "Export...", fun () -> onEvent Export),
+                  actionButton(
+                    palette,
+                    "Delete project",
+                    fun () -> onEvent Delete
+                  )
+                )
+            )
+
+        let content = form :> Blob
+
+        Disclosure(
+          Label = "Project settings",
+          Expanded = state.Expanded,
+          OnExpandedChange = (fun expanded -> state.Expanded <- expanded),
+          BackgroundColor = Nullable palette.Row,
+          TextColor = Nullable palette.Text,
+          BorderColor = Nullable palette.Border,
+          ContentPadding = Nullable 0.0,
+          Content = content
+        )
+          .Build()
+  }
