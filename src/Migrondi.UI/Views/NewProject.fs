@@ -212,35 +212,41 @@ let importLocal(operations: Operations) : unit =
 // repaints the page. Created once at cell birth and pushed the state's
 // value on every build, so cleared forms and picker results land.
 type Fields = {
-  Name: TextFieldCell
-  Description: TextFieldCell
-  Connection: TextFieldCell
-  TableName: TextFieldCell
-  ConfigPath: TextFieldCell
+  Name: FieldMount
+  Description: FieldMount
+  Connection: FieldMount
+  TableName: FieldMount
+  ConfigPath: FieldMount
 }
 
 let fieldsFor(state: NewProjectState) : Fields = {
-  Name = textField("Payroll service", "", fun value -> state.Name <- value)
+  Name =
+    mountedField(fun () ->
+      textField("Payroll service", "", fun value -> state.Name <- value))
   Description =
-    textField(
-      "What this project tracks",
-      "",
-      fun value -> state.Description <- value
-    )
+    mountedField(fun () ->
+      textField(
+        "What this project tracks",
+        "",
+        fun value -> state.Description <- value
+      ))
   Connection =
-    textField(
-      "Data Source=./migrondi.db",
-      "",
-      fun value -> state.Connection <- value
-    )
+    mountedField(fun () ->
+      textField(
+        "Data Source=./migrondi.db",
+        "",
+        fun value -> state.Connection <- value
+      ))
   TableName =
-    textField("", state.TableName, fun value -> state.TableName <- value)
+    mountedField(fun () ->
+      textField("", state.TableName, fun value -> state.TableName <- value))
   ConfigPath =
-    textField(
-      "Path to a migrondi.json",
-      "",
-      fun value -> state.ConfigPath <- value
-    )
+    mountedField(fun () ->
+      textField(
+        "Path to a migrondi.json",
+        "",
+        fun value -> state.ConfigPath <- value
+      ))
 }
 
 let fieldRow(palette: Palette, label: string, child: Blob) : Blob =

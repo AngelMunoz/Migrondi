@@ -808,7 +808,7 @@ let listHeader
   (
     palette: Palette,
     state: DetailsState,
-    nameField: TextFieldCell,
+    nameField: FieldMount,
     onEvent: DetailsEvent -> unit
   ) : Blob =
   let title =
@@ -1062,7 +1062,7 @@ let body
   (
     palette: Palette,
     state: DetailsState,
-    nameField: TextFieldCell,
+    nameField: FieldMount,
     mountEditor: Migration -> Blob,
     onEvent: DetailsEvent -> unit
   ) : Blob =
@@ -1097,7 +1097,7 @@ let page
     palette: Palette,
     state: DetailsState,
     project: Project,
-    nameField: TextFieldCell,
+    nameField: FieldMount,
     onStepChange: Action<float>,
     mountEditor: Migration -> Blob,
     onEvent: DetailsEvent -> unit
@@ -1158,7 +1158,8 @@ let create<'env
   let onStepChange = Action<float>(fun value -> state.Step <- value)
 
   let nameField =
-    textField("new migration name", "", fun value -> state.NewName <- value)
+    mountedField(fun () ->
+      textField("new migration name", "", fun value -> state.NewName <- value))
 
   // One retained editor cell per migration, so drafts survive parent
   // rebuilds; evicted when the migration is saved, deleted, or discarded.

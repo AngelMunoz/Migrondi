@@ -188,7 +188,7 @@ let registerBar
   (
     palette: Palette,
     state: LandingState,
-    configField: TextFieldCell,
+    configField: FieldMount,
     onEvent: LandingEvent -> unit
   ) : Blob =
   Container(
@@ -258,8 +258,8 @@ let page
   (
     palette: Palette,
     state: LandingState,
-    configField: TextFieldCell,
-    searchField: TextFieldCell,
+    configField: FieldMount,
+    searchField: FieldMount,
     onEvent: LandingEvent -> unit
   ) : Blob =
   let localCount, virtualCount =
@@ -335,25 +335,27 @@ let create<'env
   // so typing never rebuilds the project list. Search commits (Enter or
   // focus loss), so it rebuilds once per search instead of per keystroke.
   let configField =
-    textField(
-      "Path to a migrondi.json",
-      "",
-      fun value -> state.ConfigPath <- value
-    )
+    mountedField(fun () ->
+      textField(
+        "Path to a migrondi.json",
+        "",
+        fun value -> state.ConfigPath <- value
+      ))
 
   // The commit callback needs the cell, but the field is created before the
   // object expression exists; the cell installs the refresh in Start.
   let mutable refreshAfterSearch = ignore
 
   let searchField =
-    textFieldWithCommit(
-      "Search projects (Enter)",
-      "",
-      ignore,
-      fun value ->
-        state.Query <- value
-        refreshAfterSearch()
-    )
+    mountedField(fun () ->
+      textFieldWithCommit(
+        "Search projects (Enter)",
+        "",
+        ignore,
+        fun value ->
+          state.Query <- value
+          refreshAfterSearch()
+      ))
 
   {
     new LandingCell() with

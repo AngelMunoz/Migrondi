@@ -336,12 +336,37 @@ let textField
   : TextFieldCell =
   textFieldWithCommit(placeholder, initial, onChange, ignore)
 
-// Mounts a field cell under a stable key after pushing the page's current
-// value into it: picker results and cleared forms repaint, keystrokes never
-// leave the field.
-let mountField(key: string, field: TextFieldCell, current: string) : Blob =
-  field.SetText current
-  Cell.Mount(Func<Cell>(fun () -> field :> Cell), key)
+/// Mounts one field under a key with the page's current value. A page
+/// creates one slot per field at cell birth and passes the slot to
+/// `mountField` on every build.
+type FieldMount = string * string -> Blob
+
+// Creates a mount slot for one field. Goo calls the mount factory only
+// when no retained cell can serve the mount, so the slot returns a fresh
+// cell, seeded from the page's current value, on that call alone; while
+// Goo retains the cell, the slot only pushes external value changes into
+// it through `SetText`. A disposed slot target receives the same push:
+// `Rebuild` on a disposed cell submits nowhere, so the push stays inert
+// until the factory replaces the slot target on the next mount.
+let mountedField(make: unit -> TextFieldCell) : FieldMount =
+  let mutable live: TextFieldCell voption = ValueNone
+
+  fun (key, current) ->
+    live |> ValueOption.iter(fun field -> field.SetText current)
+
+    Cell.Mount(
+      (fun () ->
+        let fresh = make()
+        fresh.SetText current
+        live <- ValueSome fresh
+        fresh :> Cell),
+      key
+    )
+
+// Mounts a field slot under a stable key: picker results and cleared
+// forms repaint, keystrokes never leave the field.
+let mountField(key: string, mount: FieldMount, current: string) : Blob =
+  mount(key, current)
 
 /// A vertical scroll area. Goo paints a scrollbar only when the axis owns
 /// authored Track and Thumb parts, so every scrolling pane goes through

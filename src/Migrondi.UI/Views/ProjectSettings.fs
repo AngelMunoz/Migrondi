@@ -192,28 +192,32 @@ let create<'env
   let onDriverSelect = fun id -> state.Driver <- id
 
   let nameField =
-    textField("Project name", state.Name, fun value -> state.Name <- value)
+    mountedField(fun () ->
+      textField("Project name", state.Name, fun value -> state.Name <- value))
 
   let descriptionField =
-    textField(
-      "Description (optional)",
-      state.Description,
-      fun value -> state.Description <- value
-    )
+    mountedField(fun () ->
+      textField(
+        "Description (optional)",
+        state.Description,
+        fun value -> state.Description <- value
+      ))
 
   let connectionField =
-    textField(
-      "Connection string",
-      state.Connection,
-      fun value -> state.Connection <- value
-    )
+    mountedField(fun () ->
+      textField(
+        "Connection string",
+        state.Connection,
+        fun value -> state.Connection <- value
+      ))
 
   let tableField =
-    textField(
-      "Table name",
-      state.TableName,
-      fun value -> state.TableName <- value
-    )
+    mountedField(fun () ->
+      textField(
+        "Table name",
+        state.TableName,
+        fun value -> state.TableName <- value
+      ))
 
   {
     new ProjectSettingsCell() with
