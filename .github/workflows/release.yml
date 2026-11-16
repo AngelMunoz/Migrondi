@@ -368,7 +368,7 @@ jobs:
           test -f "$cli_tarball"
           bash .github/flatpak/build-cli.sh "$cli_tarball"
           flatpak build-bundle \
-            --arch=arm64 \
+            --arch=aarch64 \
             --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
             "$FLATPAK_REPO" \
             "migrondi-$version-linux-arm64.flatpak" \
