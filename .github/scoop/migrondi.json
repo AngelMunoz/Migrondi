@@ -7,6 +7,10 @@
         "64bit": {
             "url": "https://github.com/AngelMunoz/Migrondi/releases/download/v@VERSION@/migrondi-@VERSION@-win-x64.zip",
             "hash": "@HASH@"
+        },
+        "arm64": {
+            "url": "https://github.com/AngelMunoz/Migrondi/releases/download/v@VERSION@/migrondi-@VERSION@-win-arm64.zip",
+            "hash": "@ARM64_HASH@"
         }
     },
     "bin": [
@@ -17,6 +21,12 @@
         "architecture": {
             "64bit": {
                 "url": "https://github.com/AngelMunoz/Migrondi/releases/download/v$version/migrondi-$version-win-x64.zip",
+                "hash": {
+                    "url": "$url.sha256"
+                }
+            },
+            "arm64": {
+                "url": "https://github.com/AngelMunoz/Migrondi/releases/download/v$version/migrondi-$version-win-arm64.zip",
                 "hash": {
                     "url": "$url.sha256"
                 }

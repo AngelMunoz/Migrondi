@@ -254,22 +254,28 @@ All server logs go to stderr, so stdout carries only MCP protocol messages and t
 
 ### Harness configuration example
 
-Point the harness at an absolute config path; no working directory is needed:
+Register the server once, with no project pinned — `--config` is optional:
 
 ```json
 {
   "mcpServers": {
     "migrondi": {
       "command": "migrondi",
-      "args": ["mcp", "--config", "/absolute/path/to/migrondi.json"]
+      "args": ["mcp"]
     }
   }
 }
 ```
 
-A single global registration (no `--config`, started from any directory) also works: every tool call carries the `configPath` of the project it targets, and `configPath: null` falls back to the server's working directory project.
+Every tool call then carries the `configPath` of the project it targets, and `configPath: null` falls back to the server's working directory project:
+
+```json
+{ "configPath": "/absolute/path/to/migrondi.json", "amount": null }
+```
+
+Pinning one project at startup with `--config <path>` is also supported; a per-call `configPath` still wins over it.
 
 ### Which host
 
-Use the CLI host (`migrondi mcp`) when an agent drives one project: pin it with `--config` or pass `configPath` per call. Use the GUI host (`Migrondi.UI --http`) when the projects to manage are the many projects registered in the desktop app. Both hosts serve the same result shapes for the shared migration tools; see the [Migrondi.UI MCP page](mcp-ui.md) for the GUI host's tools and client entry.
+Start with the CLI host (`migrondi mcp`): pin it with `--config` or pass `configPath` per call. Use the desktop app host (`migrondiui --http`) when the projects to work with are the ones registered in the desktop app. Both hosts serve the same result shapes for the shared migration tools; see the [MCP page](mcp.md) for the overview and the desktop host's tools and client entry.
 

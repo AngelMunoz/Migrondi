@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-16
+
+### Added
+
+- **Migrondi:** The CLI now installs on Windows ARM64 through Scoop (`migrondi.json` carries an `arm64` build beside `64bit`) and on Linux ARM64 through a Flatpak bundle (`migrondi-<version>-linux-arm64.flatpak`, plus the stable `migrondi-linux-arm64.flatpak` alias) built on an ARM runner. The UI still has no Windows or Linux ARM64 build, so its Scoop package and Flatpak bundle stay x64-only.
+- **Project:** Releases now publish a Flatpak channel: each release's bundles are imported into an OSTree repository kept on the `flatpak` branch and served with the docs site, so installing via the `.flatpakref` files registers the `migrondi` remote and `flatpak update` picks up every new release. Direct-install bundles still ride each release.
+- **Project:** The `migrondi-cli` agent skill now covers the `mcp` command, and the README shows how to install the Migrondi skills with `npx skills add AngelMunoz/Migrondi`. The MCP documentation is CLI-first and its harness examples register the server without `--config`, passing `configPath` per tool call.
+
 ## [2.0.0] - 2026-11-16
 
 ### Added

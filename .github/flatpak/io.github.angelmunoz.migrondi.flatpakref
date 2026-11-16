@@ -1,0 +1,10 @@
+[Flatpak Ref]
+Title=Migrondi
+Name=io.github.angelmunoz.migrondi
+Branch=stable
+Url=https://angelmunoz.github.io/Migrondi/flatpak/repo/
+RuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo
+SuggestRemoteName=migrondi
+IsRuntime=false
+Homepage=https://github.com/AngelMunoz/Migrondi
+Comment=SQL migrations runner: apply or roll back versioned .sql migrations

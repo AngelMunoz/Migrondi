@@ -9,7 +9,7 @@ Use this skill when embedding `Migrondi.Core` in an application instead of drivi
 
 ## Setup
 
-Install with `dotnet add package Migrondi.Core`.
+Install with `dotnet add package Migrondi.Core`. The library targets .NET 10 only, so the consuming application must target `net10.0` or later.
 
 ## Main entry point
 

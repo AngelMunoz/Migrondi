@@ -11,6 +11,9 @@ on:
       - Directory.Build.props
       - .config/dotnet-tools.json
       - .github/workflows/docs.yml
+  # The flatpak channel workflow dispatches this after publishing a
+  # new channel state, so the site re-serves the channel repo.
+  workflow_dispatch:
 
 # We need some permissions to publish to Github Pages
 permissions:
@@ -33,6 +36,18 @@ jobs:
         run: dotnet build -c Release
       - name: Generate the documentation
         run: dotnet fsdocs build --properties Configuration=Release
+      # The flatpak channel's ostree repo lives on the flatpak branch;
+      # serve it under /flatpak/repo beside the docs, with the
+      # .flatpakref files at the site root.
+      - name: Include the Flatpak channel
+        run: |
+          cp .github/flatpak/*.flatpakref output/
+          if git fetch origin flatpak; then
+            mkdir -p output/flatpak
+            git archive origin/flatpak repo | tar -x -C output/flatpak
+          else
+            echo "No flatpak channel branch yet; serving refs only."
+          fi
       - name: Upload documentation
         uses: actions/upload-pages-artifact@v3
         with:

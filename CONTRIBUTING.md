@@ -31,8 +31,8 @@ Releases are cut from `CHANGELOG.md`; the workflow reads the version and release
 
 1. Move the `[Unreleased]` entries into a new `## [<version>] - <date>` section and keep `[Unreleased]` in place.
 2. Push the change to the release branch (`vnext`) and wait for `.NET Core` to pass.
-3. Dispatch the **Create Release** workflow. Every job is skipped when the tag already exists.
-4. Verify the release: four NuGet packages (`Migrondi.Core`, `Migrondi.Mcp`, `Migrondi`, `MigrondiUI`), six CLI archives, three UI archives, their `.sha256` sidecars, the two Scoop manifests, and the Flatpak bundle (`migrondiui-<version>-linux-x64.flatpak` and the stable `migrondiui-linux-x64.flatpak`).
+3. Dispatch the **Create Release** workflow. Every job is skipped when the tag already exists. The run then dispatches the **Flatpak Channel** workflow, which imports the release bundles into the OSTree repository on the `flatpak` branch and re-dispatches **Docs** to serve it under `/flatpak/repo/`; the channel can also be rebuilt for any released version from its own dispatch.
+4. Verify the release: four NuGet packages (`Migrondi.Core`, `Migrondi.Mcp`, `Migrondi`, `MigrondiUI`), six CLI archives, three UI archives, their `.sha256` sidecars, the two Scoop manifests, and the Flatpak bundles (the GUI and the CLI for Linux x64, the CLI for Linux ARM64, each versioned and under its stable alias).
 
 NuGet publishing uses trusted publishing. The trusted publisher on nuget.org must name this repository and the `release.yml` workflow; the repository stores the NuGet account name as the `NUGET_USER` secret and no long-lived API key. The workflow requests `id-token: write` and exchanges the GitHub OIDC token with `NuGet/login@v1`.
 

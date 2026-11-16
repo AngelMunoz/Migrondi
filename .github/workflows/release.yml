@@ -188,11 +188,13 @@ jobs:
 
           sha256sum "$archive" > "$archive.sha256"
 
-          # Flatpak consumes the same folder as a tar.gz; the bundle job
-          # needs the flat archive, not a zip.
-          if [ "${{ matrix.rid }}" = "linux-x64" ]; then
-            tar -czf "migrondi-$version-linux-x64.tar.gz" -C publish .
-          fi
+          # Flatpak consumes the same folder as a tar.gz; the bundle jobs
+          # need the flat archive, not a zip.
+          case "${{ matrix.rid }}" in
+            linux-x64|linux-arm64)
+              tar -czf "migrondi-$version-${{ matrix.rid }}.tar.gz" -C publish .
+              ;;
+          esac
 
       - uses: actions/upload-artifact@v4
         with:
@@ -200,10 +202,10 @@ jobs:
           path: migrondi-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.zip*
 
       - uses: actions/upload-artifact@v4
-        if: matrix.rid == 'linux-x64'
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'linux-arm64'
         with:
-          name: cli-linux-x64-tar
-          path: migrondi-${{ needs.prepare.outputs.version }}-linux-x64.tar.gz
+          name: cli-${{ matrix.rid }}-tar
+          path: migrondi-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.tar.gz
 
   # The UI follows the Goo desktop targets: Win x64, Linux x64, and macOS
   # arm64 only. Goo ships native libraries per RID, so each RID publishes on
@@ -334,8 +336,51 @@ jobs:
             migrondiui-${{ needs.prepare.outputs.version }}-linux-x64.flatpak
             migrondi-${{ needs.prepare.outputs.version }}-linux-x64.flatpak
 
+  # The CLI also ships a Linux ARM64 bundle; flatpak-builder packages for
+  # the host architecture, so it builds on an ARM runner. The UI has no
+  # linux-arm64 build, so only the CLI gets this job.
+  flatpak-cli-arm64:
+    needs: [prepare, build-cli]
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-24.04-arm
+    env:
+      FLATPAK_REPO: ${{ github.workspace }}/flatpak-repo
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install flatpak-builder and the freedesktop runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak --user remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak --user install -y --noninteractive flathub \
+            org.freedesktop.Sdk//26.08 org.freedesktop.Platform//26.08
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-linux-arm64-tar
+          path: artifacts
+
+      - name: Build the ARM64 CLI Flatpak bundle
+        run: |
+          version="${{ needs.prepare.outputs.version }}"
+          cli_tarball="artifacts/migrondi-$version-linux-arm64.tar.gz"
+          test -f "$cli_tarball"
+          bash .github/flatpak/build-cli.sh "$cli_tarball"
+          flatpak build-bundle \
+            --arch=arm64 \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            "$FLATPAK_REPO" \
+            "migrondi-$version-linux-arm64.flatpak" \
+            io.github.angelmunoz.migrondi stable
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-cli-arm64
+          path: migrondi-${{ needs.prepare.outputs.version }}-linux-arm64.flatpak
+
   release:
-    needs: [prepare, pack, build-cli, build-ui, flatpak]
+    needs: [prepare, pack, build-cli, build-ui, flatpak, flatpak-cli-arm64]
     if: needs.prepare.outputs.exists == 'false'
     runs-on: ubuntu-latest
     # id-token lets NuGet/login exchange the workflow identity for a
@@ -379,6 +424,7 @@ jobs:
 
           test -f "artifacts/migrondiui-$version-linux-x64.flatpak" || fail "missing GUI Flatpak bundle"
           test -f "artifacts/migrondi-$version-linux-x64.flatpak" || fail "missing CLI Flatpak bundle"
+          test -f "artifacts/migrondi-$version-linux-arm64.flatpak" || fail "missing CLI ARM64 Flatpak bundle"
           test -f artifacts/RELEASE_NOTES.md || fail "missing release notes"
 
       # Scoop installs from the release itself; releases/latest/download/
@@ -393,9 +439,13 @@ jobs:
             artifacts/migrondiui-linux-x64.flatpak
           cp "artifacts/migrondi-$version-linux-x64.flatpak" \
             artifacts/migrondi-linux-x64.flatpak
+          cp "artifacts/migrondi-$version-linux-arm64.flatpak" \
+            artifacts/migrondi-linux-arm64.flatpak
 
           hash="$(cut -d' ' -f1 "artifacts/migrondi-$version-win-x64.zip.sha256")"
+          arm64_hash="$(cut -d' ' -f1 "artifacts/migrondi-$version-win-arm64.zip.sha256")"
           sed -e "s/@VERSION@/$version/g" -e "s/@HASH@/$hash/g" \
+            -e "s/@ARM64_HASH@/$arm64_hash/g" \
             .github/scoop/migrondi.json > artifacts/migrondi.json
 
           hash="$(cut -d' ' -f1 "artifacts/migrondiui-$version-win-x64.zip.sha256")"
@@ -440,3 +490,28 @@ jobs:
             artifacts/migrondi.json
             artifacts/migrondi-ui.json
             artifacts/*.nupkg
+
+  # The channel follows the release inside this same run: a release
+  # published by this workflow's token starts no other workflow
+  # event, but a dispatch is exempt from that rule, so this job
+  # starts the channel run by name. The channel runs on its own: its
+  # failure never marks the release red, and it retries by version
+  # through its own manual dispatch. When the tag already exists the
+  # release job is skipped and the dispatch still runs, so a missing
+  # channel heals itself.
+  channel:
+    needs: [prepare, release]
+    if: ${{ !cancelled() && needs.release.result != 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch the flatpak channel
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run flatpak-channel.yml \
+            --repo "${{ github.repository }}" \
+            --ref vnext \
+            -f version="${{ needs.prepare.outputs.version }}"

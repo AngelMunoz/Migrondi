@@ -3,8 +3,10 @@
 #
 # Local:  build-cli.sh <tarball>
 #   The tarball's name carries the version
-#   (migrondi-<version>-linux-x64.tar.gz); its hash and file://
-#   address fill the manifest.
+#   (migrondi-<version>-linux-x64.tar.gz or
+#   migrondi-<version>-linux-arm64.tar.gz); its hash and file://
+#   address fill the manifest. Build on a host of the tarball's
+#   architecture: flatpak-builder packages for the host arch.
 # CI:     build-cli.sh <version> <url> <sha256>
 #   The manifest embeds the release URL; flatpak-builder downloads it.
 set -euo pipefail
@@ -26,6 +28,7 @@ case $# in
 
     version="${name#migrondi-}"
     version="${version%-linux-x64.tar.gz}"
+    version="${version%-linux-arm64.tar.gz}"
 
     if [ -z "$version" ] || [ "$version" = "$name" ]; then
       echo "The tarball name carries no version: $name" >&2

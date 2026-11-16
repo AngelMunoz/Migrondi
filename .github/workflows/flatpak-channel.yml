@@ -1,0 +1,139 @@
+name: Flatpak Channel
+
+# Rebuilds the flatpak channel for one released version and pushes it
+# to the `flatpak` branch. The Docs workflow serves that branch's repo
+# under https://angelmunoz.github.io/Migrondi/flatpak/repo/, so installs
+# from the .flatpakref files get every later release through
+# `flatpak update`. The release workflow dispatches this after the
+# release exists; a manual dispatch rebuilds any released version by
+# name. Bundles still ride the release itself for direct installs.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Released version, without the v (example: 2.0.0)"
+        required: true
+        type: string
+# The flatpak branch is state: two channel runs must never push
+# against each other.
+concurrency:
+  group: flatpak-channel
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  channel:
+    runs-on: ubuntu-latest
+    env:
+      FLATPAK_REPO: ${{ github.workspace }}/channel/repo
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Resolve the version
+        run: |
+          v="${{ inputs.version || github.event.release.tag_name }}"
+          if [ -z "$v" ]; then
+            echo "No version: dispatch with the version input." >&2
+            exit 1
+          fi
+          echo "VERSION=${v#v}" >> "$GITHUB_ENV"
+
+      - name: Install flatpak
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak ostree
+
+      # The channel imports the bundles the release carries: the manual
+      # dispatch and the release flow take the same path, and a recovery
+      # run needs nothing but the version.
+      - name: Download the release bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "v${VERSION}" \
+            --pattern "migrondiui-${VERSION}-linux-x64.flatpak" \
+            --pattern "migrondi-${VERSION}-linux-x64.flatpak" \
+            --pattern "migrondi-${VERSION}-linux-arm64.flatpak" \
+            --dir artifacts
+
+      # The channel's ostree repository lives on the flatpak branch and
+      # only there; vnext never carries it. Each release builds on top
+      # of the previous state, so updates stay delta-sized.
+      - name: Fetch the channel repository
+        run: |
+          mkdir -p channel
+          if git fetch origin flatpak; then
+            git archive origin/flatpak repo | tar -x -C channel
+            # git cannot carry an ostree repo's empty directories, and
+            # build-update-repo needs refs/remotes to exist.
+            mkdir -p channel/repo/refs/remotes channel/repo/refs/mirrors channel/repo/tmp
+          else
+            echo "No channel branch yet; this release starts it."
+          fi
+
+      # build-import-bundle needs an existing repository; the first
+      # channel run creates it (later runs fetched it from the branch).
+      - name: Initialize the channel repository on first run
+        run: |
+          if [ ! -f channel/repo/config ]; then
+            ostree --repo=channel/repo init --mode=archive
+          fi
+
+      - name: Import the bundles into the channel repository
+        run: |
+          for bundle in artifacts/*.flatpak; do
+            flatpak build-import-bundle "$FLATPAK_REPO" "$bundle"
+          done
+
+      # Static deltas are not optional on a plain-HTTPS host: without
+      # them every update walks the object list one file at a time.
+      # Prune keeps the site under the 1 GB Pages cap.
+      - name: Update the channel repository
+        run: |
+          flatpak build-update-repo \
+            --generate-static-deltas --prune --prune-depth=2 \
+            channel/repo
+
+      - name: Publish the channel branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Publish from a scratch worktree, never from the build
+          # workspace: a fresh worktree holds no build outputs, so no
+          # untracked file can ever collide with the checkout, and the
+          # tip is rebuilt as repo/ only every time.
+          if git fetch origin flatpak; then
+            git worktree add --detach "$RUNNER_TEMP/publish" origin/flatpak
+            cd "$RUNNER_TEMP/publish"
+            git checkout -B flatpak
+          else
+            git worktree add --detach "$RUNNER_TEMP/publish"
+            cd "$RUNNER_TEMP/publish"
+            git checkout --orphan flatpak
+          fi
+          git rm -rf -q . || true
+          mkdir -p repo
+          cp -a "$GITHUB_WORKSPACE/channel/repo/." repo/
+          printf '%s\n' \
+            "Flatpak channel state for Migrondi. The Docs workflow" \
+            "serves repo/ at https://angelmunoz.github.io/Migrondi/flatpak/repo/." \
+            > README.md
+          git add -A
+          git commit -m "chore: flatpak channel v${VERSION}"
+          git push origin flatpak
+
+      # Pages here is workflow-built (the docs site), so the channel is
+      # served by re-running the Docs deploy, which copies this branch's
+      # repo into the site. A dispatch is exempt from the rule that a
+      # workflow's token starts no other workflow run.
+      - name: Dispatch the Docs deploy to serve the channel
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run docs.yml \
+            --repo "${{ github.repository }}" \
+            --ref vnext
