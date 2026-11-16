@@ -51,6 +51,7 @@
 - **Project:** Addressed the high-severity `SQLitePCLRaw.lib.e_sqlite3` vulnerability (GHSA-2m69-gcr7-jv3q) by overriding `SQLitePCLRaw.bundle_e_sqlite3` to `3.0.5` in central package management.
 - **Project:** Addressed the high-severity `System.Security.Cryptography.Pkcs` vulnerabilities (GHSA-846f-f764-76mx, GHSA-2fmv-rv2c-59x7) that Microsoft.Data.SqlClient pulled in, by overriding that package to `10.0.14` in central package management. No project reports a vulnerable package now.
 - **Migrondi.UI:** Local migration save, delete, and lookup now resolve the configured migrations directory and locate files by decoded content (falling back to the filename), instead of globbing the project root by name — pending local migrations always save instead of reporting `NotFound`. Saving a timestamped file also normalizes its `NAME` to the friendly name.
+- **MigrondiUI:** Virtual project migrations no longer show doubled timestamps (e.g. `1695829818636_CreateUsersTable_1695829818636.sql`). New migrations, imports, and exports store the friendly name and compose the filename once.
 
 ## [1.3.0] - 2026-06-27
 

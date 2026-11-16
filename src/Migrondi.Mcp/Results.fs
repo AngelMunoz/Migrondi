@@ -189,18 +189,37 @@ module McpResults =
           Json.object(List.singleton("error", Encode.string err))
 
   /// The on-disk file name of a migration. Decoded names from the standard
-  /// writers already carry the timestamp ("<timestamp>_<name>"), so the
-  /// leading prefix is stripped and the file name composes exactly once,
-  /// with the `.sql` extension the real file has. Hand-authored files
-  /// whose NAME line has no timestamp pass through unchanged.
+  /// writers already carry the timestamp ("<timestamp>_<name>"), and legacy
+  /// V0 imports carry it as a suffix ("<name>_<timestamp>"), so affixes
+  /// matching the row's own timestamp are stripped and the file name
+  /// composes exactly once, with the `.sql` extension the real file has.
+  /// Hand-authored files whose NAME line has no timestamp pass through
+  /// unchanged.
   let fileNameFor(timestamp: int64, name: string) =
-    let prefix = $"{timestamp}_"
-
-    let friendly =
-      if name.StartsWith(prefix, StringComparison.Ordinal) then
-        name.Substring(prefix.Length)
+    let withoutSql =
+      if name.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) then
+        name.Substring(0, name.Length - 4)
       else
         name
+
+    let prefix = $"{timestamp}_"
+
+    let withoutPrefix =
+      if withoutSql.StartsWith(prefix, StringComparison.Ordinal) then
+        withoutSql.Substring(prefix.Length)
+      else
+        withoutSql
+
+    let suffix = $"_{timestamp}"
+
+    let friendly =
+      if
+        withoutPrefix.EndsWith(suffix, StringComparison.Ordinal)
+        && withoutPrefix.Length > suffix.Length
+      then
+        withoutPrefix.Substring(0, withoutPrefix.Length - suffix.Length)
+      else
+        withoutPrefix
 
     $"{timestamp}_{friendly}.sql"
 

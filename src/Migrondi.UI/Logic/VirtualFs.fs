@@ -52,6 +52,40 @@ let parseVirtualProjectUri(uri: Uri) : VirtualProjectResource option =
 
     | _ -> None
 
+// Virtual migration names stay friendly: no leading/trailing timestamp, no
+// `.sql`. Core's RunNew wrote `NAME=<timestamp>_<friendly>(.sql)` and V0
+// imports stored `<friendly>_<timestamp>`; both recompose to doubled
+// filenames, so strip the row's own timestamp affixes before display/storage.
+let friendlyNameFor(timestamp: int64, name: string) : string =
+  let withoutSql =
+    if name.EndsWith(".sql", StringComparison.OrdinalIgnoreCase) then
+      name.Substring(0, name.Length - 4)
+    else
+      name
+
+  let rec strip(current: string) : string =
+    let prefix = $"{timestamp}_"
+    let suffix = $"_{timestamp}"
+
+    if current.StartsWith(prefix, StringComparison.Ordinal) then
+      strip(current.Substring(prefix.Length))
+    elif
+      current.EndsWith(suffix, StringComparison.Ordinal)
+      && current.Length > suffix.Length
+    then
+      strip(current.Substring(0, current.Length - suffix.Length))
+    else
+      current
+
+  let stripped = strip withoutSql
+
+  match MigrationName.Validate stripped with
+  | Ok clean when clean.Length > 0 -> clean
+  | _ -> withoutSql
+
+let fileNameFor(timestamp: int64, name: string) : string =
+  $"{timestamp}_{friendlyNameFor(timestamp, name)}.sql"
+
 let getVirtualFs
   (logger: ILogger<MigrondiUiFs>, createConnection: unit -> IDbConnection)
   : MigrondiUiFs =
@@ -132,6 +166,11 @@ let getVirtualFs
             return MiSerializer.Encode config
 
         | Some(Migration(projectId, migrationFileName)) ->
+          let uriTimestamp =
+            match Migration.ExtractFromFilename migrationFileName with
+            | Ok(_, timestamp) -> Some timestamp
+            | Error _ -> None
+
           let migrationName =
             match Migration.ExtractFromFilename migrationFileName with
             | Ok(name, _) -> name
@@ -156,7 +195,39 @@ let getVirtualFs
             ]
             |> Db.Async.querySingle mapMigration
 
-          match migration with
+          let! resolved =
+            match migration with
+            | Some _ -> task { return migration }
+            | None -> task {
+                match uriTimestamp with
+                | None -> return None
+                | Some timestamp ->
+                  let! byTimestamp =
+                    conn
+                    |> Db.newCommand
+                      "
+                      SELECT vm.name, vm.timestamp, vm.up_content, vm.down_content, vm.manual_transaction
+                      FROM virtual_migrations vm
+                      INNER JOIN virtual_projects vp ON vm.virtual_project_id = vp.id
+                      WHERE vp.id = @projectId AND vm.timestamp = @timestamp
+                      "
+                    |> Db.setCancellationToken ct
+                    |> Db.setParams [
+                      "projectId", sqlString projectId
+                      "timestamp", sqlInt64 timestamp
+                    ]
+                    |> Db.Async.querySingle mapMigration
+
+                  match byTimestamp with
+                  | Some m when
+                    friendlyNameFor(m.timestamp, m.name) =
+                      friendlyNameFor(timestamp, migrationName)
+                    ->
+                    return byTimestamp
+                  | _ -> return None
+              }
+
+          match resolved with
           | None -> return failwith $"Migration {migrationName} not found"
           | Some m -> return MiSerializer.Encode m
 
@@ -236,12 +307,13 @@ let getVirtualFs
             | Ok(name, _) -> name
             | Error _ -> migrationFileName.Replace(".sql", "")
 
-          let migration = MiSerializer.Decode(content, migrationName)
+          let decoded = MiSerializer.Decode(content, migrationName)
+          let friendly = friendlyNameFor(decoded.timestamp, decoded.name)
 
           use conn = createConnection()
           do! conn.TryOpenConnectionAsync(ct)
 
-          let! existingId =
+          let! byNameId =
             conn
             |> Db.newCommand
               "
@@ -257,23 +329,58 @@ let getVirtualFs
             ]
             |> Db.Async.querySingle(fun r -> r.ReadGuid "id")
 
-          match existingId with
+          let! fallbackId =
+            match byNameId with
+            | Some _ -> task { return None }
+            | None -> task {
+                let! byTimestamp =
+                  conn
+                  |> Db.newCommand
+                    "
+                    SELECT vm.id, vm.name
+                    FROM virtual_migrations vm
+                    INNER JOIN virtual_projects vp ON vm.virtual_project_id = vp.id
+                    WHERE vp.id = @projectId AND vm.timestamp = @timestamp
+                    "
+                  |> Db.setCancellationToken ct
+                  |> Db.setParams [
+                    "projectId", sqlString projectId
+                    "timestamp", sqlInt64 decoded.timestamp
+                  ]
+                  |> Db.Async.querySingle(fun r ->
+                    r.ReadGuid "id", r.ReadString "name")
+
+                match byTimestamp with
+                | Some(id, existingName) when
+                  friendlyNameFor(decoded.timestamp, existingName) = friendly
+                  ->
+                  return Some id
+                | _ -> return None
+              }
+
+          let targetId =
+            match byNameId with
+            | Some id -> Some id
+            | None -> fallbackId
+
+          match targetId with
           | Some existingId ->
             do!
               conn
               |> Db.newCommand
                 "
                 UPDATE virtual_migrations
-                SET timestamp = @timestamp, up_content = @upContent, down_content = @downContent, manual_transaction = @manualTransaction
+                SET name = @name, timestamp = @timestamp, up_content = @upContent, down_content = @downContent, manual_transaction = @manualTransaction
                 WHERE id = @id
                 "
               |> Db.setCancellationToken ct
               |> Db.setParams [
                 "id", sqlString existingId
-                "timestamp", sqlInt64 migration.timestamp
-                "upContent", sqlString migration.upContent
-                "downContent", sqlString migration.downContent
-                "manualTransaction", sqlBoolean migration.manualTransaction
+                "name", sqlString friendly
+                "timestamp", sqlInt64 decoded.timestamp
+                "upContent", sqlString decoded.upContent
+                "downContent", sqlString decoded.downContent
+                "manualTransaction", sqlBoolean decoded.manualTransaction
               ]
               |> Db.Async.exec
 
@@ -290,11 +397,11 @@ let getVirtualFs
               |> Db.setCancellationToken ct
               |> Db.setParams [
                 "id", sqlString(Guid.NewGuid())
-                "name", sqlString migration.name
-                "timestamp", sqlInt64 migration.timestamp
-                "upContent", sqlString migration.upContent
-                "downContent", sqlString migration.downContent
-                "manualTransaction", sqlBoolean migration.manualTransaction
+                "name", sqlString friendly
+                "timestamp", sqlInt64 decoded.timestamp
+                "upContent", sqlString decoded.upContent
+                "downContent", sqlString decoded.downContent
+                "manualTransaction", sqlBoolean decoded.manualTransaction
                 "projectId", sqlString projectId
               ]
               |> Db.Async.exec
@@ -342,7 +449,7 @@ let getVirtualFs
             return
               migrations
               |> List.map(fun (timestamp, name) ->
-                Uri($"{basePath}{timestamp}_{name}.sql"))
+                Uri($"{basePath}{fileNameFor(timestamp, name)}"))
               :> Uri seq
 
           | Some(ProjectConfig _) ->

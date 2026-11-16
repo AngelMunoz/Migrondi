@@ -176,7 +176,12 @@ type ProjectCollection
           let! ct = Async.CancellationToken
           let! content = File.ReadAllTextAsync(f.FullName, ct)
           logger.LogDebug("Found migration {migrationPath}", f.FullName)
-          return MiSerializer.Decode(content, f.Name)
+          let decoded = MiSerializer.Decode(content, f.Name)
+
+          let friendly =
+            VirtualFs.friendlyNameFor(decoded.timestamp, decoded.name)
+
+          return { decoded with name = friendly }
         })
         |> Async.Parallel
 
@@ -247,12 +252,18 @@ type ProjectCollection
           migrations
           |> List.map(fun (vm: VirtualMigration) -> asyncEx {
             let! ct = Async.CancellationToken
-            let content: string = MiSerializer.Encode(vm.ToMigration())
+            let friendly = VirtualFs.friendlyNameFor(vm.timestamp, vm.name)
+
+            let content: string =
+              MiSerializer.Encode {
+                vm.ToMigration() with
+                    name = friendly
+              }
 
             let migrationPath =
               Path.Combine(
                 migrationsDir.FullName,
-                $"{vm.timestamp}_{vm.name}.sql"
+                VirtualFs.fileNameFor(vm.timestamp, vm.name)
               )
 
             do! File.WriteAllTextAsync(migrationPath, content, ct)
