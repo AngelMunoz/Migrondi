@@ -1,4 +1,4 @@
-#r "../../src/Migrondi.Core/bin/Debug/net8.0/Migrondi.Core.dll"
+#r "../../src/Migrondi.Core/bin/Debug/net10.0/Migrondi.Core.dll"
 #r "nuget: Microsoft.Extensions.Logging.Console, 10.0.3"
 
 open Migrondi.Core
