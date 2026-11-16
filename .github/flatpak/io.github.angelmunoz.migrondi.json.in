@@ -1,0 +1,36 @@
+{
+    "id": "io.github.angelmunoz.migrondi",
+    "branch": "stable",
+    "runtime": "org.freedesktop.Platform",
+    "runtime-version": "26.08",
+    "sdk": "org.freedesktop.Sdk",
+    "command": "migrondi",
+    "finish-args": [
+        "--share=network",
+        "--filesystem=home"
+    ],
+    "modules": [
+        {
+            "name": "migrondi-cli",
+            "buildsystem": "simple",
+            "build-commands": [
+                "install -d /app/lib/migrondi",
+                "cp -a . /app/lib/migrondi/",
+                "rm -rf /app/lib/migrondi/files",
+                "install -Dm755 files/launcher/migrondi /app/bin/migrondi"
+            ],
+            "sources": [
+                {
+                    "type": "archive",
+                    "url": "@URL@",
+                    "sha256": "@HASH@"
+                },
+                {
+                    "type": "dir",
+                    "path": "files",
+                    "dest": "files"
+                }
+            ]
+        }
+    ]
+}

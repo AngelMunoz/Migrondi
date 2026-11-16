@@ -13,6 +13,7 @@
 - **Migrondi.UI:** The desktop app ships on the Goo rendering stack: projects list and management, virtual projects, migration apply/rollback/dry-run with step counts, a highlighted migration view with pending-migration editing, Navs routing, an OS-following dark/light theme, and an HTTP MCP host mode. The shell, project list, new-project flow, and project screen share one design system (palette tiers, button hierarchy, chips, page headers): runs are the only primary actions and ask before applying or rolling back, previews and step limits sit beside them, and each screen names its single next step.
 - **MigrondiUI:** The desktop app also ships as the `migrondiui` .NET tool: `dotnet tool install --global MigrondiUI` installs it, and `dnx MigrondiUI` runs it without an install.
 - **MigrondiUI:** Linux releases include a Flatpak bundle (`io.github.angelmunoz.migrondi.ui`) built from the same self-contained archive, so `flatpak install --bundle` installs the app and its launcher.
+- **Migrondi:** Linux releases include a separate Flatpak bundle (`io.github.angelmunoz.migrondi`) built from the CLI archive, so `flatpak install --bundle` installs the `migrondi` command on its own.
 - **Project:** Windows installs use Scoop manifests published with each release (`migrondi.json`, `migrondi-ui.json`), so `scoop install` and `scoop update` fetch and verify the archives.
 
 ### Changed

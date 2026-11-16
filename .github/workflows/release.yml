@@ -188,10 +188,22 @@ jobs:
 
           sha256sum "$archive" > "$archive.sha256"
 
+          # Flatpak consumes the same folder as a tar.gz; the bundle job
+          # needs the flat archive, not a zip.
+          if [ "${{ matrix.rid }}" = "linux-x64" ]; then
+            tar -czf "migrondi-$version-linux-x64.tar.gz" -C publish .
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: cli-${{ matrix.rid }}
           path: migrondi-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.zip*
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.rid == 'linux-x64'
+        with:
+          name: cli-linux-x64-tar
+          path: migrondi-${{ needs.prepare.outputs.version }}-linux-x64.tar.gz
 
   # The UI follows the Goo desktop targets: Win x64, Linux x64, and macOS
   # arm64 only. Goo ships native libraries per RID, so each RID publishes on
@@ -265,11 +277,11 @@ jobs:
           name: ui-${{ matrix.rid }}
           path: migrondiui-${{ needs.prepare.outputs.version }}-${{ matrix.rid }}.*
 
-  # The Flatpak bundle rides the release. The app keeps its database in
-  # LocalApplicationData, so the read-only /app tree holds only program
-  # files and migrations.
+  # The Flatpak bundles ride the release: one for the GUI, one for the
+  # CLI. The app keeps its database in LocalApplicationData, so the
+  # read-only /app tree holds only program files and migrations.
   flatpak:
-    needs: [prepare, build-ui]
+    needs: [prepare, build-ui, build-cli]
     if: needs.prepare.outputs.exists == 'false'
     runs-on: ubuntu-latest
     env:
@@ -290,22 +302,37 @@ jobs:
           name: ui-linux-x64
           path: artifacts
 
-      - name: Build the Flatpak bundle
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-linux-x64-tar
+          path: artifacts
+
+      - name: Build the Flatpak bundles
         run: |
           version="${{ needs.prepare.outputs.version }}"
-          tarball="artifacts/migrondiui-$version-linux-x64.tar.gz"
-          test -f "$tarball"
-          bash .github/flatpak/build.sh "$tarball"
+          ui_tarball="artifacts/migrondiui-$version-linux-x64.tar.gz"
+          cli_tarball="artifacts/migrondi-$version-linux-x64.tar.gz"
+          test -f "$ui_tarball"
+          test -f "$cli_tarball"
+          bash .github/flatpak/build.sh "$ui_tarball"
           flatpak build-bundle \
             --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
             "$FLATPAK_REPO" \
             "migrondiui-$version-linux-x64.flatpak" \
             io.github.angelmunoz.migrondi.ui stable
+          bash .github/flatpak/build-cli.sh "$cli_tarball"
+          flatpak build-bundle \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+            "$FLATPAK_REPO" \
+            "migrondi-$version-linux-x64.flatpak" \
+            io.github.angelmunoz.migrondi stable
 
       - uses: actions/upload-artifact@v4
         with:
           name: flatpak
-          path: migrondiui-${{ needs.prepare.outputs.version }}-linux-x64.flatpak
+          path: |
+            migrondiui-${{ needs.prepare.outputs.version }}-linux-x64.flatpak
+            migrondi-${{ needs.prepare.outputs.version }}-linux-x64.flatpak
 
   release:
     needs: [prepare, pack, build-cli, build-ui, flatpak]
@@ -350,7 +377,8 @@ jobs:
             test -f "artifacts/$package.$version.nupkg" || fail "missing package $package"
           done
 
-          test -f "artifacts/migrondiui-$version-linux-x64.flatpak" || fail "missing Flatpak bundle"
+          test -f "artifacts/migrondiui-$version-linux-x64.flatpak" || fail "missing GUI Flatpak bundle"
+          test -f "artifacts/migrondi-$version-linux-x64.flatpak" || fail "missing CLI Flatpak bundle"
           test -f artifacts/RELEASE_NOTES.md || fail "missing release notes"
 
       # Scoop installs from the release itself; releases/latest/download/
@@ -363,6 +391,8 @@ jobs:
           # releases/latest/download/ serves the newest stable name.
           cp "artifacts/migrondiui-$version-linux-x64.flatpak" \
             artifacts/migrondiui-linux-x64.flatpak
+          cp "artifacts/migrondi-$version-linux-x64.flatpak" \
+            artifacts/migrondi-linux-x64.flatpak
 
           hash="$(cut -d' ' -f1 "artifacts/migrondi-$version-win-x64.zip.sha256")"
           sed -e "s/@VERSION@/$version/g" -e "s/@HASH@/$hash/g" \
@@ -406,6 +436,7 @@ jobs:
             artifacts/migrondiui-*.zip
             artifacts/migrondiui-*.zip.sha256
             artifacts/migrondiui-*.flatpak
+            artifacts/migrondi-*.flatpak
             artifacts/migrondi.json
             artifacts/migrondi-ui.json
             artifacts/*.nupkg

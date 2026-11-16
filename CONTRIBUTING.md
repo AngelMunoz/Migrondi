@@ -47,10 +47,13 @@ dotnet pack src/Migrondi.UI/Migrondi.UI.fsproj -c Release -o nupkgs
 
 The desktop app packs as `MigrondiUI` with the `migrondiui` command. Its own database migrations ride the tool payload under `tools/net10.0/any/migrations`, because a .NET tool package has no content files.
 
-The Flatpak bundle builds from the Linux tarball:
+Each product builds its own Flatpak bundle from its Linux tarball:
 
 ```sh
 bash .github/flatpak/build.sh artifacts/migrondiui-<version>-linux-x64.tar.gz
+bash .github/flatpak/build-cli.sh artifacts/migrondi-<version>-linux-x64.tar.gz
 ```
+
+The GUI bundle installs as `io.github.angelmunoz.migrondi.ui`. The CLI bundle installs on its own as `io.github.angelmunoz.migrondi`, and `flatpak run io.github.angelmunoz.migrondi` runs the `migrondi` command.
 
 This needs `flatpak-builder` and the `org.freedesktop.Sdk//26.08` runtime. The app's database lives in the user's local application data folder, not in `/app`, because Flatpak mounts the app tree read-only.
