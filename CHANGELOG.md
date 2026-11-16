@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-16
+
 ### Added
 
 - **Migrondi:** The `mcp` server's tools are now stateless — every tool accepts a `configPath` argument to target any project from one registration (send `null` to use the startup binding), and two new tools join the surface: `init_project` creates a project in a directory (never deleting files) and `update_project_config` rewrites `migrondi.json` fields in place. `create_migration` also accepts `manualTransaction` for statements that cannot run inside a transaction.
@@ -45,6 +47,7 @@
 
 ### Fixed
 
+- **Migrondi:** The CLI now flushes its logger on exit, so log-then-exit errors (such as a rejected MCP transport) always reach stderr instead of being lost when the process ends before the console logger drains.
 - **MigrondiUI:** MCP mode (`--stdio`/`--http`) no longer writes log lines to stdout; all logs go to stderr, so MCP clients receive only protocol messages.
 - **Migrondi.Mcp:** Every tool that reports a migration (`list_migrations`, both dry runs, `run_migrations`, `run_rollback`, `get_migration`) now reports the same real file name (e.g. `1794436380501_add_users.sql`). Previously these results recomposed the timestamp onto the decoded name — which already carries it for standard-written files — producing doubled names like `1794436380501_1794436380501_add_users` that match no file on disk and broke handing identifiers to the CLI (`status`, `--to`). For virtual projects the file name also lacked the `.sql` suffix.
 - **Migrondi.Mcp:** The `create_migration` tool result now reports the migration's name (e.g. `add_users`) and its real file name (e.g. `1794436380501_add_users.sql`). Previously the file name was reported as the name and the timestamp was recomposed onto it, producing a doubled file name like `1794436380501_1794436380501_add_users.sql`; for virtual projects the file name also lacked the `.sql` suffix.

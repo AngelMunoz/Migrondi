@@ -27,7 +27,10 @@ let main argv =
   let useJson = argv |> Array.contains "[mi-json]"
 
   // setup services
-  let loggerFactory: ILoggerFactory =
+  // Disposed at exit so queued console output is flushed before the
+  // process ends; log-then-exit paths (e.g. rejected MCP transports)
+  // otherwise lose their final lines.
+  use loggerFactory: ILoggerFactory =
     if isMcp then
       McpLogging.createLoggerFactory LogLevel.Information
     else

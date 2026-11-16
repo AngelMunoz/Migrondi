@@ -158,6 +158,27 @@ type McpServerProcessTests() =
     Assert.AreEqual("", serverProcess.StandardOutput.ReadToEnd())
 
   [<TestMethod>]
+  member _.``rejected transport error reaches stderr when the working directory has a config``
+    ()
+    =
+    // Regression: with a valid config in the working directory no earlier
+    // log line warms the console logger queue, so a log-then-exit error
+    // was lost unless the logger factory was flushed on exit.
+    let projectDir, configPath, _, _ = McpTestHelpers.createE2EProject()
+
+    use serverProcess =
+      startServer $"mcp --stdio false --config \"{configPath}\"" (fun startInfo ->
+        startInfo.WorkingDirectory <- projectDir)
+
+    Assert.IsTrue(serverProcess.WaitForExit(15000))
+    Assert.AreNotEqual(0, serverProcess.ExitCode)
+
+    let stderr = serverProcess.StandardError.ReadToEnd()
+    StringAssert.Contains(stderr, "Only the stdio transport")
+
+    Assert.AreEqual("", serverProcess.StandardOutput.ReadToEnd())
+
+  [<TestMethod>]
   member _.``MIGRONDI_TABLE_NAME env var overrides the config file value``() =
     let _, configPath, _, _ = McpTestHelpers.createE2EProject()
 
