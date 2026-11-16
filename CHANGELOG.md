@@ -18,6 +18,8 @@
 ### Changed
 
 - **Migrondi:** **Breaking:** Binary releases are self-contained folders inside zip archives, not single-file executables, and no AOT build is used. Extract the archive and run `Migrondi` or `Migrondi.UI`.
+- **Migrondi.Core, Migrondi.Mcp:** **Breaking:** the libraries target `net10.0` only; `net8.0` support is gone, so consuming applications must upgrade to .NET 10 or later.
+- **Migrondi, MigrondiUI:** **Breaking:** the CLI and the desktop app target `net10.0` and `net11.0`; the `net8.0` and `net9.0` targets are gone. Tool installs need .NET 10 or later, and the release archives bundle the .NET 11 runtime.
 - **CI:** Releases publish to NuGet with trusted publishing and take the version from `CHANGELOG.md`. The run packs `Migrondi`, `MigrondiUI`, `Migrondi.Core`, and `Migrondi.Mcp`, and publishes CLI archives for six RIDs and UI archives for Windows x64, Linux x64, and macOS arm64.
 - **MigrondiUI:** The app database and virtual project files now live in the user's local application data folder instead of next to the executable. An existing database moves on first start, and app or tool updates no longer replace the data.
 
